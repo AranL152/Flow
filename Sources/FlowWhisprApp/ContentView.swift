@@ -9,33 +9,42 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    @State private var selectedTab: Tab = .record
-
-    enum Tab: String, CaseIterable {
-        case record = "Record"
-        case shortcuts = "Shortcuts"
-        case settings = "Settings"
-    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
+        ZStack {
+            VStack(spacing: 0) {
+                header
+                Divider()
 
-            Group {
-                switch selectedTab {
-                case .record:
-                    RecordView()
-                case .shortcuts:
-                    ShortcutsContentView()
-                case .settings:
-                    SettingsContentView()
+                Group {
+                    switch appState.selectedTab {
+                    case .record:
+                        RecordView()
+                    case .shortcuts:
+                        ShortcutsContentView()
+                    case .settings:
+                        SettingsContentView()
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: WindowSize.minWidth, minHeight: WindowSize.minHeight)
+            .background(FW.surfacePrimary)
+
+            if !appState.isOnboardingComplete {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+
+                OnboardingView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .padding(FW.spacing24)
+            }
         }
-        .frame(minWidth: WindowSize.minWidth, minHeight: WindowSize.minHeight)
-        .background(FW.surfacePrimary)
+        .onAppear {
+            if !appState.isOnboardingComplete {
+                WindowManager.openMainWindow()
+            }
+        }
     }
 
     // MARK: - Header
@@ -54,8 +63,8 @@ struct ContentView: View {
             Spacer()
 
             // Tab picker
-            Picker("", selection: $selectedTab) {
-                ForEach(Tab.allCases, id: \.self) { tab in
+            Picker("", selection: $appState.selectedTab) {
+                ForEach(AppTab.allCases, id: \.self) { tab in
                     Text(tab.rawValue).tag(tab)
                 }
             }

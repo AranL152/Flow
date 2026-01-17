@@ -13,6 +13,30 @@ struct RecordView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let errorMessage = appState.errorMessage {
+                banner(text: errorMessage, actionTitle: "Dismiss") {
+                    appState.clearError()
+                }
+                .padding(.horizontal, FW.spacing24)
+                .padding(.top, FW.spacing24)
+            }
+
+            if !appState.isConfigured {
+                banner(text: "Add your OpenAI API key to start recording.", actionTitle: "Open Settings") {
+                    appState.selectedTab = .settings
+                }
+                .padding(.horizontal, FW.spacing24)
+                .padding(.top, FW.spacing16)
+            }
+
+            if !appState.isAccessibilityEnabled {
+                banner(text: "Enable Accessibility to use the hotkey.", actionTitle: "Enable") {
+                    appState.requestAccessibilityPermission()
+                }
+                .padding(.horizontal, FW.spacing24)
+                .padding(.top, FW.spacing16)
+            }
+
             // hero waveform + record button
             heroSection
                 .padding(.horizontal, FW.spacing24)
@@ -65,7 +89,6 @@ struct RecordView: View {
                 .frame(minWidth: 160)
             }
             .buttonStyle(FWPrimaryButtonStyle(isRecording: appState.isRecording))
-            .disabled(!appState.isConfigured)
 
             // shortcut hint
             Text("Hotkey: \(appState.hotkey.displayName)")
@@ -199,6 +222,31 @@ struct RecordView: View {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(FW.textTertiary)
+        }
+    }
+
+    private func banner(text: String, actionTitle: String? = nil, action: (() -> Void)? = nil) -> some View {
+        HStack(spacing: FW.spacing12) {
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(FW.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let actionTitle, let action {
+                Button(actionTitle) {
+                    action()
+                }
+                .buttonStyle(FWSecondaryButtonStyle())
+            }
+        }
+        .padding(FW.spacing12)
+        .background {
+            RoundedRectangle(cornerRadius: FW.radiusSmall)
+                .fill(FW.surfaceElevated.opacity(0.6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: FW.radiusSmall)
+                        .strokeBorder(FW.accent.opacity(0.1), lineWidth: 1)
+                }
         }
     }
 

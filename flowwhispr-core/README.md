@@ -57,10 +57,6 @@ The C ABI is exposed in `src/ffi.rs` and provides a small set of lifecycle, reco
 - `flowwhispr_transcribe`
 - `flowwhispr_set_api_key` / `flowwhispr_set_completion_provider`
 
-See `src/ffi.rs` for the full symbol list and expected usage patterns.
+Flowwispr is a voice dictation app with AI formatting, shortcuts, and learning.
 
-## Build
-
-```sh
-cargo build
-```
+This directory contains the Rust core engine used by the app. The rest of the app lives in the parent directory.

@@ -35,6 +35,9 @@ final class AppState: ObservableObject {
     /// API key configured
     @Published var isConfigured = false
 
+    /// Current selected tab
+    @Published var selectedTab: AppTab = .record
+
     /// Current recording hotkey
     @Published var hotkey: Hotkey
     @Published var isCapturingHotkey = false
@@ -126,6 +129,10 @@ final class AppState: ObservableObject {
         if enabled {
             _ = globeKeyHandler?.startListening(prompt: false)
         }
+    }
+
+    func clearError() {
+        errorMessage = nil
     }
 
     func completeOnboarding() {
