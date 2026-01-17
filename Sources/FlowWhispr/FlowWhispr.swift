@@ -144,6 +144,27 @@ public final class FlowWhispr: @unchecked Sendable {
         return string
     }
 
+    /// Retry the last transcription using cached audio
+    /// - Parameter appName: Optional name of the current app for mode selection
+    /// - Returns: Processed text, or nil on failure
+    public func retryLastTranscription(appName: String? = nil) -> String? {
+        guard let handle = handle else { return nil }
+
+        let result: UnsafeMutablePointer<CChar>?
+        if let app = appName {
+            result = app.withCString { cApp in
+                flowwhispr_retry_last_transcription(handle, cApp)
+            }
+        } else {
+            result = flowwhispr_retry_last_transcription(handle, nil)
+        }
+
+        guard let cString = result else { return nil }
+        let string = String(cString: cString)
+        flowwhispr_free_string(cString)
+        return string
+    }
+
     // MARK: - Shortcuts
 
     /// Add a voice shortcut
@@ -343,6 +364,29 @@ public final class FlowWhispr: @unchecked Sendable {
             return nil
         }
         return json
+    }
+
+    /// Get recent transcriptions
+    /// - Parameter limit: Maximum number of items to return
+    public func recentTranscriptions(limit: Int = 50) -> [TranscriptionSummary] {
+        guard let handle = handle else { return [] }
+        guard let cString = flowwhispr_get_recent_transcriptions_json(handle, limit) else { return [] }
+        let jsonString = String(cString: cString)
+        flowwhispr_free_string(cString)
+
+        guard let data = jsonString.data(using: .utf8) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([TranscriptionSummary].self, from: data)) ?? []
+    }
+
+    /// Get the most recent error from the engine
+    public var lastError: String? {
+        guard let handle = handle else { return nil }
+        guard let cString = flowwhispr_get_last_error(handle) else { return nil }
+        let string = String(cString: cString)
+        flowwhispr_free_string(cString)
+        return string
     }
 
     /// Get all shortcuts as array of dictionaries

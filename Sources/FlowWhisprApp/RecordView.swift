@@ -12,53 +12,56 @@ struct RecordView: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let errorMessage = appState.errorMessage {
-                banner(text: errorMessage, actionTitle: "Dismiss") {
-                    appState.clearError()
+        ScrollView {
+            VStack(spacing: 0) {
+                if let errorMessage = appState.errorMessage {
+                    errorBanner(text: errorMessage)
+                        .padding(.horizontal, FW.spacing24)
+                        .padding(.top, FW.spacing24)
                 }
-                .padding(.horizontal, FW.spacing24)
-                .padding(.top, FW.spacing24)
-            }
 
-            if !appState.isConfigured {
-                banner(text: "Add your OpenAI API key to start recording.", actionTitle: "Open Settings") {
-                    appState.selectedTab = .settings
-                }
-                .padding(.horizontal, FW.spacing24)
-                .padding(.top, FW.spacing16)
-            }
-
-            if !appState.isAccessibilityEnabled {
-                banner(text: "Enable Accessibility to use the hotkey.", actionTitle: "Enable") {
-                    appState.requestAccessibilityPermission()
-                }
-                .padding(.horizontal, FW.spacing24)
-                .padding(.top, FW.spacing16)
-            }
-
-            // hero waveform + record button
-            heroSection
-                .padding(.horizontal, FW.spacing24)
-                .padding(.top, FW.spacing32)
-
-            // context bar
-            contextBar
-                .padding(.horizontal, FW.spacing24)
-                .padding(.top, FW.spacing24)
-
-            // output area
-            if let text = appState.lastTranscription {
-                outputSection(text)
+                if !appState.isConfigured {
+                    banner(text: "Add your OpenAI API key to start recording.", actionTitle: "Open Settings") {
+                        appState.selectedTab = .settings
+                    }
                     .padding(.horizontal, FW.spacing24)
                     .padding(.top, FW.spacing16)
+                }
+
+                if !appState.isAccessibilityEnabled {
+                    banner(text: "Enable Accessibility to use the hotkey.", actionTitle: "Enable") {
+                        appState.requestAccessibilityPermission()
+                    }
+                    .padding(.horizontal, FW.spacing24)
+                    .padding(.top, FW.spacing16)
+                }
+
+                // hero waveform + record button
+                heroSection
+                    .padding(.horizontal, FW.spacing24)
+                    .padding(.top, FW.spacing32)
+
+                // context bar
+                contextBar
+                    .padding(.horizontal, FW.spacing24)
+                    .padding(.top, FW.spacing24)
+
+                // output area
+                if let text = appState.lastTranscription {
+                    outputSection(text)
+                        .padding(.horizontal, FW.spacing24)
+                        .padding(.top, FW.spacing16)
+                }
+
+                // history
+                HistoryListView()
+                    .padding(.horizontal, FW.spacing24)
+                    .padding(.top, FW.spacing24)
+
+                // footer
+                footer
+                    .padding(FW.spacing16)
             }
-
-            Spacer()
-
-            // footer
-            footer
-                .padding(FW.spacing16)
         }
         .background(FW.surfacePrimary)
     }
@@ -238,6 +241,34 @@ struct RecordView: View {
                 }
                 .buttonStyle(FWSecondaryButtonStyle())
             }
+        }
+        .padding(FW.spacing12)
+        .background {
+            RoundedRectangle(cornerRadius: FW.radiusSmall)
+                .fill(FW.surfaceElevated.opacity(0.6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: FW.radiusSmall)
+                        .strokeBorder(FW.accent.opacity(0.1), lineWidth: 1)
+                }
+        }
+    }
+
+    private func errorBanner(text: String) -> some View {
+        HStack(spacing: FW.spacing12) {
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(FW.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button("Retry") {
+                appState.retryLastTranscription()
+            }
+            .buttonStyle(FWSecondaryButtonStyle())
+
+            Button("Dismiss") {
+                appState.clearError()
+            }
+            .buttonStyle(FWSecondaryButtonStyle())
         }
         .padding(FW.spacing12)
         .background {

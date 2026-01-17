@@ -27,7 +27,7 @@ use crate::providers::{
 };
 use crate::shortcuts::ShortcutsEngine;
 use crate::storage::Storage;
-use crate::types::{Shortcut, Transcription};
+use crate::types::{Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus};
 
 /// Opaque handle to the FlowWhispr engine
 pub struct FlowWhisprHandle {
@@ -48,7 +48,10 @@ pub struct FlowWhisprHandle {
 #[derive(Serialize)]
 struct TranscriptionSummary {
     id: String,
+    status: TranscriptionStatus,
     text: String,
+    error: Option<String>,
+    duration_ms: u64,
     created_at: String,
     app_name: Option<String>,
 }
@@ -62,6 +65,11 @@ fn set_last_error(handle: &FlowWhisprHandle, message: impl Into<String>) {
 
 fn clear_last_error(handle: &FlowWhisprHandle) {
     *handle.last_error.lock() = None;
+}
+
+fn estimate_duration_ms(bytes: usize, sample_rate: u32) -> u64 {
+    let samples = bytes / 2;
+    (samples as u64 * 1000) / sample_rate as u64
 }
 
 // ============ Lifecycle ============
@@ -274,6 +282,13 @@ fn transcribe_with_audio(
         error!("Failed to save transcription: {}", e);
     }
 
+    let mut history =
+        TranscriptionHistoryEntry::success(completion.text.clone(), record.duration_ms);
+    history.app_context = record.app_context.clone();
+    if let Err(e) = handle.storage.save_history_entry(&history) {
+        error!("Failed to save transcription history: {}", e);
+    }
+
     Ok(completion.text)
 }
 
@@ -319,6 +334,7 @@ pub extern "C" fn flowwhispr_transcribe(
         None
     };
 
+    let duration_ms = estimate_duration_ms(audio_data.len(), 16000);
     *handle.last_audio.lock() = Some(audio_data.clone());
     let result = transcribe_with_audio(handle, audio_data, app);
 
@@ -334,7 +350,12 @@ pub extern "C" fn flowwhispr_transcribe(
         Err(e) => {
             let message = format!("Transcription failed: {e}");
             error!("{message}");
-            set_last_error(handle, message);
+            set_last_error(handle, message.clone());
+            let mut history = TranscriptionHistoryEntry::failure(message, duration_ms);
+            history.app_context = handle.app_tracker.current_app();
+            if let Err(e) = handle.storage.save_history_entry(&history) {
+                error!("Failed to save transcription history: {}", e);
+            }
             ptr::null_mut()
         }
     }
@@ -349,9 +370,9 @@ pub extern "C" fn flowwhispr_retry_last_transcription(
 ) -> *mut c_char {
     let handle = unsafe { &*handle };
     let audio_data = {
-        let mut last_audio = handle.last_audio.lock();
-        match last_audio.take() {
-            Some(data) => data,
+        let last_audio = handle.last_audio.lock();
+        match last_audio.as_ref() {
+            Some(data) => data.clone(),
             None => {
                 set_last_error(handle, "No previous recording to retry");
                 return ptr::null_mut();
@@ -368,11 +389,13 @@ pub extern "C" fn flowwhispr_retry_last_transcription(
         None
     };
 
+    let duration_ms = estimate_duration_ms(audio_data.len(), 16000);
     let result = transcribe_with_audio(handle, audio_data, app);
 
     match result {
         Ok(text) => {
             clear_last_error(handle);
+            *handle.last_audio.lock() = None;
             match CString::new(text) {
                 Ok(cstr) => cstr.into_raw(),
                 Err(_) => ptr::null_mut(),
@@ -381,7 +404,12 @@ pub extern "C" fn flowwhispr_retry_last_transcription(
         Err(e) => {
             let message = format!("Transcription failed: {e}");
             error!("{message}");
-            set_last_error(handle, message);
+            set_last_error(handle, message.clone());
+            let mut history = TranscriptionHistoryEntry::failure(message, duration_ms);
+            history.app_context = handle.app_tracker.current_app();
+            if let Err(e) = handle.storage.save_history_entry(&history) {
+                error!("Failed to save transcription history: {}", e);
+            }
             ptr::null_mut()
         }
     }
@@ -621,14 +649,23 @@ pub extern "C" fn flowwhispr_set_api_key(
     let handle = unsafe { &mut *handle };
 
     let key = match unsafe { CStr::from_ptr(api_key) }.to_str() {
-        Ok(s) => s.to_string(),
-        Err(_) => return false,
+        Ok(s) => s.trim().to_string(),
+        Err(_) => {
+            set_last_error(handle, "Invalid API key");
+            return false;
+        }
     };
+
+    if key.is_empty() {
+        set_last_error(handle, "API key is empty");
+        return false;
+    }
 
     // reinitialize providers with new key
     handle.transcription = Arc::new(OpenAITranscriptionProvider::new(Some(key.clone())));
     handle.completion = Arc::new(OpenAICompletionProvider::new(Some(key)));
 
+    clear_last_error(handle);
     true
 }
 
@@ -786,6 +823,62 @@ pub extern "C" fn flowwhispr_get_stats_json(handle: *mut FlowWhisprHandle) -> *m
     match CString::new(stats.to_string()) {
         Ok(cstr) => cstr.into_raw(),
         Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Get recent transcriptions as JSON (caller must free with flowwhispr_free_string)
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwhispr_get_recent_transcriptions_json(
+    handle: *mut FlowWhisprHandle,
+    limit: usize,
+) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    let transcriptions = match handle.storage.get_recent_history(limit) {
+        Ok(items) => items,
+        Err(e) => {
+            error!("Failed to load transcriptions: {}", e);
+            return ptr::null_mut();
+        }
+    };
+
+    let summaries: Vec<TranscriptionSummary> = transcriptions
+        .into_iter()
+        .map(|item| TranscriptionSummary {
+            id: item.id.to_string(),
+            status: item.status,
+            text: item.text,
+            error: item.error,
+            duration_ms: item.duration_ms,
+            created_at: item.created_at.to_rfc3339(),
+            app_name: item.app_context.map(|ctx| ctx.app_name),
+        })
+        .collect();
+
+    let json = match serde_json::to_string(&summaries) {
+        Ok(value) => value,
+        Err(e) => {
+            error!("Failed to serialize transcriptions: {}", e);
+            return ptr::null_mut();
+        }
+    };
+
+    match CString::new(json) {
+        Ok(cstr) => cstr.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Get the last error message (caller must free with flowwhispr_free_string)
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwhispr_get_last_error(handle: *mut FlowWhisprHandle) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    let message = handle.last_error.lock().clone();
+    match message {
+        Some(text) => match CString::new(text) {
+            Ok(cstr) => cstr.into_raw(),
+            Err(_) => ptr::null_mut(),
+        },
+        None => ptr::null_mut(),
     }
 }
 

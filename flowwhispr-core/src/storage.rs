@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::error::Result;
 use crate::types::{
     AnalyticsEvent, AppCategory, AppContext, Correction, CorrectionSource, EventType, Shortcut,
-    Transcription, WritingMode,
+    Transcription, TranscriptionHistoryEntry, TranscriptionStatus, WritingMode,
 };
 
 /// Storage backend using SQLite
@@ -50,6 +50,19 @@ impl Storage {
                 raw_text TEXT NOT NULL,
                 processed_text TEXT NOT NULL,
                 confidence REAL NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                app_name TEXT,
+                bundle_id TEXT,
+                window_title TEXT,
+                app_category TEXT,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS transcription_history (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                text TEXT NOT NULL,
+                error TEXT,
                 duration_ms INTEGER NOT NULL,
                 app_name TEXT,
                 bundle_id TEXT,
@@ -108,6 +121,7 @@ impl Storage {
             CREATE INDEX IF NOT EXISTS idx_transcriptions_created ON transcriptions(created_at);
             CREATE INDEX IF NOT EXISTS idx_shortcuts_trigger ON shortcuts(trigger);
             CREATE INDEX IF NOT EXISTS idx_corrections_original ON corrections(original);
+            CREATE INDEX IF NOT EXISTS idx_transcription_history_created ON transcription_history(created_at);
             CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
             CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
             CREATE INDEX IF NOT EXISTS idx_style_samples_app ON style_samples(app_name);
@@ -205,6 +219,100 @@ impl Storage {
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(transcriptions)
+    }
+
+    /// Save a transcription history entry
+    pub fn save_history_entry(&self, entry: &TranscriptionHistoryEntry) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            r#"
+            INSERT INTO transcription_history (id, status, text, error, duration_ms,
+                                               app_name, bundle_id, window_title, app_category, created_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "#,
+            params![
+                entry.id.to_string(),
+                match entry.status {
+                    TranscriptionStatus::Success => "success",
+                    TranscriptionStatus::Failed => "failed",
+                },
+                entry.text,
+                entry.error,
+                entry.duration_ms as i64,
+                entry.app_context.as_ref().map(|c| &c.app_name),
+                entry.app_context.as_ref().and_then(|c| c.bundle_id.as_ref()),
+                entry
+                    .app_context
+                    .as_ref()
+                    .and_then(|c| c.window_title.as_ref()),
+                entry
+                    .app_context
+                    .as_ref()
+                    .map(|c| format!("{:?}", c.category)),
+                entry.created_at.to_rfc3339(),
+            ],
+        )?;
+        debug!("Saved transcription history {}", entry.id);
+        Ok(())
+    }
+
+    /// Get recent transcription history entries
+    pub fn get_recent_history(&self, limit: usize) -> Result<Vec<TranscriptionHistoryEntry>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, status, text, error, duration_ms,
+                   app_name, bundle_id, window_title, app_category, created_at
+            FROM transcription_history
+            ORDER BY created_at DESC
+            LIMIT ?1
+            "#,
+        )?;
+
+        let entries = stmt
+            .query_map([limit as i64], |row| {
+                let id: String = row.get(0)?;
+                let status_str: String = row.get(1)?;
+                let app_name: Option<String> = row.get(5)?;
+                let bundle_id: Option<String> = row.get(6)?;
+                let window_title: Option<String> = row.get(7)?;
+                let app_category_str: Option<String> = row.get(8)?;
+                let created_at_str: String = row.get(9)?;
+
+                let app_context = app_name.map(|name| {
+                    let category = app_category_str
+                        .as_ref()
+                        .and_then(|s| parse_app_category(s))
+                        .unwrap_or(AppCategory::Unknown);
+                    AppContext {
+                        app_name: name,
+                        bundle_id,
+                        window_title,
+                        category,
+                    }
+                });
+
+                let status = match status_str.as_str() {
+                    "success" => TranscriptionStatus::Success,
+                    "failed" => TranscriptionStatus::Failed,
+                    _ => TranscriptionStatus::Failed,
+                };
+
+                Ok(TranscriptionHistoryEntry {
+                    id: Uuid::parse_str(&id).unwrap_or_else(|_| Uuid::new_v4()),
+                    status,
+                    text: row.get(2)?,
+                    error: row.get(3)?,
+                    duration_ms: row.get::<_, i64>(4)? as u64,
+                    app_context,
+                    created_at: DateTime::parse_from_rfc3339(&created_at_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(entries)
     }
 
     // ========== Shortcut methods ==========

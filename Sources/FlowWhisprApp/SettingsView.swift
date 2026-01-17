@@ -31,9 +31,7 @@ struct SettingsContentView: View {
 struct APISettingsSection: View {
     @EnvironmentObject var appState: AppState
     @State private var openAIKey = ""
-    @State private var anthropicKey = ""
     @State private var showOpenAIKey = false
-    @State private var showAnthropicKey = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing16) {
@@ -73,43 +71,6 @@ struct APISettingsSection: View {
                 }
 
                 Text("Required for transcription")
-                    .font(.caption)
-                    .foregroundStyle(FW.textTertiary)
-            }
-
-            // Anthropic
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("Anthropic (Claude)")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(FW.textPrimary)
-
-                HStack {
-                    Group {
-                        if showAnthropicKey {
-                            TextField("sk-ant-...", text: $anthropicKey)
-                        } else {
-                            SecureField("sk-ant-...", text: $anthropicKey)
-                        }
-                    }
-                    .textFieldStyle(.roundedBorder)
-                    .font(FW.fontMonoSmall)
-
-                    Button {
-                        showAnthropicKey.toggle()
-                    } label: {
-                        Image(systemName: showAnthropicKey ? "eye.slash" : "eye")
-                    }
-                    .buttonStyle(.borderless)
-
-                    Button("Save") {
-                        appState.setAnthropicKey(anthropicKey)
-                        anthropicKey = ""
-                    }
-                    .buttonStyle(FWSecondaryButtonStyle())
-                    .disabled(anthropicKey.isEmpty)
-                }
-
-                Text("Optional, for enhanced text processing")
                     .font(.caption)
                     .foregroundStyle(FW.textTertiary)
             }

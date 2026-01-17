@@ -55,6 +55,12 @@ bool flowwhispr_is_recording(FlowWhisprHandle* handle);
 /// @return Processed text (caller must free with flowwhispr_free_string), or NULL on failure
 char* flowwhispr_transcribe(FlowWhisprHandle* handle, const char* app_name);
 
+/// Retry the last transcription using cached audio
+/// @param handle Engine handle
+/// @param app_name Name of the current app (for mode selection), or NULL
+/// @return Processed text (caller must free with flowwhispr_free_string), or NULL on failure
+char* flowwhispr_retry_last_transcription(FlowWhisprHandle* handle, const char* app_name);
+
 // ============ Shortcuts ============
 
 /// Add a voice shortcut
@@ -176,6 +182,12 @@ uint8_t flowwhispr_get_style_suggestion(FlowWhisprHandle* handle);
 /// @return JSON string (caller must free with flowwhispr_free_string)
 char* flowwhispr_get_stats_json(FlowWhisprHandle* handle);
 
+/// Get recent transcriptions as JSON
+/// @param handle Engine handle
+/// @param limit Maximum number of transcriptions to return
+/// @return JSON string (caller must free with flowwhispr_free_string)
+char* flowwhispr_get_recent_transcriptions_json(FlowWhisprHandle* handle, size_t limit);
+
 /// Get all shortcuts as JSON
 /// @param handle Engine handle
 /// @return JSON string (caller must free with flowwhispr_free_string)
@@ -200,6 +212,13 @@ bool flowwhispr_set_completion_provider(FlowWhisprHandle* handle, uint8_t provid
 /// @param handle Engine handle
 /// @return 0 = OpenAI, 1 = Anthropic, 255 = Unknown
 uint8_t flowwhispr_get_completion_provider(FlowWhisprHandle* handle);
+
+// ============ Error Handling ============
+
+/// Get the last error message
+/// @param handle Engine handle
+/// @return Error string (caller must free with flowwhispr_free_string) or NULL if none
+char* flowwhispr_get_last_error(FlowWhisprHandle* handle);
 
 #ifdef __cplusplus
 }

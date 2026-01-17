@@ -32,6 +32,10 @@ final class AppState: ObservableObject {
     /// Current app category
     @Published var currentCategory: AppCategory = .unknown
 
+    /// Recent transcriptions
+    @Published var history: [TranscriptionSummary] = []
+    @Published var retryableHistoryId: String?
+
     /// API key configured
     @Published var isConfigured = false
 
@@ -56,6 +60,7 @@ final class AppState: ObservableObject {
     private var globeKeyHandler: GlobeKeyHandler?
     private var hotkeyCaptureMonitor: Any?
     private var appActiveObserver: NSObjectProtocol?
+    private var mediaPauseState = MediaPauseState()
 
     private static let onboardingKey = "onboardingComplete"
 
@@ -70,6 +75,7 @@ final class AppState: ObservableObject {
         setupLifecycleObserver()
         setupWorkspaceObserver()
         updateCurrentApp()
+        refreshHistory()
     }
 
     func cleanup() {
@@ -133,6 +139,15 @@ final class AppState: ObservableObject {
 
     func clearError() {
         errorMessage = nil
+    }
+
+    func refreshHistory(limit: Int = 50) {
+        history = engine.recentTranscriptions(limit: limit)
+        if let latest = history.first, latest.status == .failed {
+            retryableHistoryId = latest.id
+        } else {
+            retryableHistoryId = nil
+        }
     }
 
     func completeOnboarding() {
@@ -231,6 +246,7 @@ final class AppState: ObservableObject {
             return
         }
 
+        pauseMediaPlayback()
         if engine.startRecording() {
             isRecording = true
             recordingDuration = 0
@@ -243,7 +259,8 @@ final class AppState: ObservableObject {
                 }
             }
         } else {
-            errorMessage = "Failed to start recording"
+            errorMessage = engine.lastError ?? "Failed to start recording"
+            resumeMediaPlayback()
         }
     }
 
@@ -253,6 +270,7 @@ final class AppState: ObservableObject {
 
         let duration = engine.stopRecording()
         isRecording = false
+        resumeMediaPlayback()
 
         if duration > 0 {
             transcribe()
@@ -265,11 +283,33 @@ final class AppState: ObservableObject {
             await MainActor.run {
                 if let text = result {
                     lastTranscription = text
+                    errorMessage = nil
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
                     pasteText()
+                    refreshHistory()
                 } else {
-                    errorMessage = "Transcription failed"
+                    errorMessage = engine.lastError ?? "Transcription failed"
+                    refreshHistory()
+                }
+            }
+        }
+    }
+
+    func retryLastTranscription() {
+        Task {
+            let result = engine.retryLastTranscription(appName: currentApp)
+            await MainActor.run {
+                if let text = result {
+                    lastTranscription = text
+                    errorMessage = nil
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                    pasteText()
+                    refreshHistory()
+                } else {
+                    errorMessage = engine.lastError ?? "Retry failed"
+                    refreshHistory()
                 }
             }
         }
@@ -290,20 +330,13 @@ final class AppState: ObservableObject {
     // MARK: - Settings
 
     func setApiKey(_ key: String) {
-        if engine.setApiKey(key) {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if engine.setApiKey(trimmed) {
             isConfigured = engine.isConfigured
             errorMessage = nil
         } else {
-            errorMessage = "Failed to set API key"
-        }
-    }
-
-    func setAnthropicKey(_ key: String) {
-        if engine.setAnthropicKey(key) {
-            isConfigured = true
-            errorMessage = nil
-        } else {
-            errorMessage = "Failed to set Anthropic API key"
+            isConfigured = engine.isConfigured
+            errorMessage = engine.lastError ?? "Failed to set API key"
         }
     }
 
@@ -332,5 +365,63 @@ final class AppState: ObservableObject {
     var totalMinutes: Int {
         let ms = (engine.stats?["total_duration_ms"] as? Int) ?? 0
         return ms / 60000
+    }
+
+    private struct MediaPauseState {
+        var musicWasPlaying = false
+        var spotifyWasPlaying = false
+    }
+
+    private func pauseMediaPlayback() {
+        mediaPauseState.musicWasPlaying = pauseIfPlaying(app: "Music")
+        mediaPauseState.spotifyWasPlaying = pauseIfPlaying(app: "Spotify")
+    }
+
+    private func resumeMediaPlayback() {
+        if mediaPauseState.musicWasPlaying {
+            resumeApp(app: "Music")
+        }
+        if mediaPauseState.spotifyWasPlaying {
+            resumeApp(app: "Spotify")
+        }
+        mediaPauseState = MediaPauseState()
+    }
+
+    private func pauseIfPlaying(app: String) -> Bool {
+        let script = """
+        tell application \"\(app)\"
+            if it is running then
+                if player state is playing then
+                    pause
+                    return \"playing\"
+                end if
+            end if
+        end tell
+        return \"\"
+        """
+
+        return runAppleScript(script) == "playing"
+    }
+
+    private func resumeApp(app: String) {
+        let script = """
+        tell application \"\(app)\"
+            if it is running then
+                play
+            end if
+        end tell
+        """
+
+        _ = runAppleScript(script)
+    }
+
+    private func runAppleScript(_ script: String) -> String? {
+        guard let appleScript = NSAppleScript(source: script) else { return nil }
+        var error: NSDictionary?
+        let result = appleScript.executeAndReturnError(&error)
+        if error != nil {
+            return nil
+        }
+        return result.stringValue
     }
 }

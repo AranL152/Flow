@@ -90,6 +90,52 @@ pub struct Transcription {
     pub created_at: DateTime<Utc>,
 }
 
+/// Status for transcription history entries
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TranscriptionStatus {
+    Success,
+    Failed,
+}
+
+/// A transcription history entry (success or failure)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TranscriptionHistoryEntry {
+    pub id: TranscriptionId,
+    pub status: TranscriptionStatus,
+    pub text: String,
+    pub error: Option<String>,
+    pub duration_ms: u64,
+    pub app_context: Option<AppContext>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl TranscriptionHistoryEntry {
+    pub fn success(text: String, duration_ms: u64) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            status: TranscriptionStatus::Success,
+            text,
+            error: None,
+            duration_ms,
+            app_context: None,
+            created_at: Utc::now(),
+        }
+    }
+
+    pub fn failure(error: String, duration_ms: u64) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            status: TranscriptionStatus::Failed,
+            text: String::new(),
+            error: Some(error),
+            duration_ms,
+            app_context: None,
+            created_at: Utc::now(),
+        }
+    }
+}
+
 impl Transcription {
     pub fn new(
         raw_text: String,
