@@ -9,11 +9,67 @@ import CFlowWhispr
 import Foundation
 
 /// Writing modes for text style adjustment
-public enum WritingMode: UInt8, Sendable {
+public enum WritingMode: UInt8, Sendable, CaseIterable {
     case formal = 0
     case casual = 1
     case veryCasual = 2
     case excited = 3
+
+    public var displayName: String {
+        switch self {
+        case .formal: return "Formal"
+        case .casual: return "Casual"
+        case .veryCasual: return "Very Casual"
+        case .excited: return "Excited"
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .formal: return "Professional with full punctuation"
+        case .casual: return "Conversational but clear"
+        case .veryCasual: return "Lowercase, minimal punctuation"
+        case .excited: return "Energetic with exclamation!"
+        }
+    }
+}
+
+/// App categories for mode suggestions
+public enum AppCategory: UInt8, Sendable {
+    case email = 0
+    case slack = 1
+    case code = 2
+    case documents = 3
+    case social = 4
+    case browser = 5
+    case terminal = 6
+    case unknown = 7
+
+    public var displayName: String {
+        switch self {
+        case .email: return "Email"
+        case .slack: return "Chat"
+        case .code: return "Code"
+        case .documents: return "Documents"
+        case .social: return "Social"
+        case .browser: return "Browser"
+        case .terminal: return "Terminal"
+        case .unknown: return "Other"
+        }
+    }
+}
+
+/// Completion provider options
+public enum CompletionProvider: UInt8, Sendable {
+    case openAI = 0
+    case anthropic = 1
+
+    public var displayName: String {
+        switch self {
+        case .openAI: return "OpenAI GPT"
+        case .anthropic: return "Anthropic Claude"
+        }
+    }
 }
 
 /// Main interface to the FlowWhispr engine
@@ -197,5 +253,140 @@ public final class FlowWhispr: @unchecked Sendable {
         return apiKey.withCString { cKey in
             flowwhispr_set_api_key(handle, cKey)
         }
+    }
+
+    // MARK: - App Tracking
+
+    /// Set the currently active app
+    /// - Parameters:
+    ///   - appName: Name of the app
+    ///   - bundleId: Optional bundle identifier
+    ///   - windowTitle: Optional window title
+    /// - Returns: Suggested writing mode for the app
+    @discardableResult
+    public func setActiveApp(name appName: String, bundleId: String? = nil, windowTitle: String? = nil) -> WritingMode {
+        guard let handle = handle else { return .casual }
+
+        let rawMode = appName.withCString { cName in
+            if let bid = bundleId {
+                return bid.withCString { cBid in
+                    if let title = windowTitle {
+                        return title.withCString { cTitle in
+                            flowwhispr_set_active_app(handle, cName, cBid, cTitle)
+                        }
+                    } else {
+                        return flowwhispr_set_active_app(handle, cName, cBid, nil)
+                    }
+                }
+            } else {
+                if let title = windowTitle {
+                    return title.withCString { cTitle in
+                        flowwhispr_set_active_app(handle, cName, nil, cTitle)
+                    }
+                } else {
+                    return flowwhispr_set_active_app(handle, cName, nil, nil)
+                }
+            }
+        }
+
+        return WritingMode(rawValue: rawMode) ?? .casual
+    }
+
+    /// Get the current app's category
+    public var currentAppCategory: AppCategory {
+        guard let handle = handle else { return .unknown }
+        let rawValue = flowwhispr_get_app_category(handle)
+        return AppCategory(rawValue: rawValue) ?? .unknown
+    }
+
+    /// Get the current app name
+    public var currentAppName: String? {
+        guard let handle = handle else { return nil }
+        guard let cString = flowwhispr_get_current_app(handle) else { return nil }
+        let string = String(cString: cString)
+        flowwhispr_free_string(cString)
+        return string
+    }
+
+    // MARK: - Style Learning
+
+    /// Report edited text to learn user's style
+    /// - Parameter editedText: The text after user edits
+    /// - Returns: true on success
+    public func learnStyle(editedText: String) -> Bool {
+        guard let handle = handle else { return false }
+        return editedText.withCString { cText in
+            flowwhispr_learn_style(handle, cText)
+        }
+    }
+
+    /// Get suggested mode based on learned style for current app
+    /// - Returns: Suggested mode or nil if not enough data
+    public var styleSuggestion: WritingMode? {
+        guard let handle = handle else { return nil }
+        let rawValue = flowwhispr_get_style_suggestion(handle)
+        if rawValue == 255 { return nil }
+        return WritingMode(rawValue: rawValue)
+    }
+
+    // MARK: - Extended Stats
+
+    /// Get stats as a dictionary
+    public var stats: [String: Any]? {
+        guard let handle = handle else { return nil }
+        guard let cString = flowwhispr_get_stats_json(handle) else { return nil }
+        let jsonString = String(cString: cString)
+        flowwhispr_free_string(cString)
+
+        guard let data = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return json
+    }
+
+    /// Get all shortcuts as array of dictionaries
+    public var shortcuts: [[String: Any]]? {
+        guard let handle = handle else { return nil }
+        guard let cString = flowwhispr_get_shortcuts_json(handle) else { return nil }
+        let jsonString = String(cString: cString)
+        flowwhispr_free_string(cString)
+
+        guard let data = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return nil
+        }
+        return json
+    }
+
+    // MARK: - Provider Configuration
+
+    /// Set the Anthropic API key and switch to Anthropic
+    /// - Parameter apiKey: The Anthropic API key
+    /// - Returns: true on success
+    public func setAnthropicKey(_ apiKey: String) -> Bool {
+        guard let handle = handle else { return false }
+        return apiKey.withCString { cKey in
+            flowwhispr_set_anthropic_key(handle, cKey)
+        }
+    }
+
+    /// Set the completion provider
+    /// - Parameters:
+    ///   - provider: The provider to use
+    ///   - apiKey: The API key for the provider
+    /// - Returns: true on success
+    public func setCompletionProvider(_ provider: CompletionProvider, apiKey: String) -> Bool {
+        guard let handle = handle else { return false }
+        return apiKey.withCString { cKey in
+            flowwhispr_set_completion_provider(handle, provider.rawValue, cKey)
+        }
+    }
+
+    /// Get the current completion provider
+    public var completionProvider: CompletionProvider? {
+        guard let handle = handle else { return nil }
+        let rawValue = flowwhispr_get_completion_provider(handle)
+        return CompletionProvider(rawValue: rawValue)
     }
 }

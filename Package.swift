@@ -13,6 +13,13 @@ let package = Package(
             name: "FlowWhispr",
             targets: ["FlowWhispr"]
         ),
+        .executable(
+            name: "FlowWhisprApp",
+            targets: ["FlowWhisprApp"]
+        ),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.0.0"),
     ],
     targets: [
         // C wrapper for the Rust FFI
@@ -38,6 +45,15 @@ let package = Package(
             name: "FlowWhispr",
             dependencies: ["CFlowWhispr"],
             path: "Sources/FlowWhispr"
+        ),
+        // macOS App
+        .executableTarget(
+            name: "FlowWhisprApp",
+            dependencies: [
+                "FlowWhispr",
+                "KeyboardShortcuts",
+            ],
+            path: "Sources/FlowWhisprApp"
         ),
     ]
 )

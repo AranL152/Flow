@@ -136,6 +136,71 @@ bool flowwhispr_is_configured(FlowWhisprHandle* handle);
 /// @return true on success
 bool flowwhispr_set_api_key(FlowWhisprHandle* handle, const char* api_key);
 
+// ============ App Tracking ============
+
+/// Set the currently active app
+/// @param handle Engine handle
+/// @param app_name Name of the app
+/// @param bundle_id Bundle ID (can be NULL)
+/// @param window_title Window title (can be NULL)
+/// @return Suggested writing mode (0=Formal, 1=Casual, 2=VeryCasual, 3=Excited)
+uint8_t flowwhispr_set_active_app(FlowWhisprHandle* handle, const char* app_name, const char* bundle_id, const char* window_title);
+
+/// Get the current app's category
+/// @param handle Engine handle
+/// @return Category (0=Email, 1=Slack, 2=Code, 3=Documents, 4=Social, 5=Browser, 6=Terminal, 7=Unknown)
+uint8_t flowwhispr_get_app_category(FlowWhisprHandle* handle);
+
+/// Get current app name
+/// @param handle Engine handle
+/// @return App name (caller must free with flowwhispr_free_string)
+char* flowwhispr_get_current_app(FlowWhisprHandle* handle);
+
+// ============ Style Learning ============
+
+/// Report edited text to learn user's style
+/// @param handle Engine handle
+/// @param edited_text The edited text
+/// @return true on success
+bool flowwhispr_learn_style(FlowWhisprHandle* handle, const char* edited_text);
+
+/// Get suggested mode based on learned style
+/// @param handle Engine handle
+/// @return Mode (0-3) or 255 if no suggestion
+uint8_t flowwhispr_get_style_suggestion(FlowWhisprHandle* handle);
+
+// ============ Extended Stats ============
+
+/// Get user stats as JSON
+/// @param handle Engine handle
+/// @return JSON string (caller must free with flowwhispr_free_string)
+char* flowwhispr_get_stats_json(FlowWhisprHandle* handle);
+
+/// Get all shortcuts as JSON
+/// @param handle Engine handle
+/// @return JSON string (caller must free with flowwhispr_free_string)
+char* flowwhispr_get_shortcuts_json(FlowWhisprHandle* handle);
+
+// ============ Provider Configuration ============
+
+/// Set Anthropic API key and switch to Anthropic
+/// @param handle Engine handle
+/// @param api_key Anthropic API key
+/// @return true on success
+bool flowwhispr_set_anthropic_key(FlowWhisprHandle* handle, const char* api_key);
+
+/// Set completion provider
+/// @param handle Engine handle
+/// @param provider 0 = OpenAI, 1 = Anthropic
+/// @param api_key API key for the provider
+/// @return true on success
+bool flowwhispr_set_completion_provider(FlowWhisprHandle* handle, uint8_t provider, const char* api_key);
+
+/// Get current completion provider
+/// @param handle Engine handle
+/// @return 0 = OpenAI, 1 = Anthropic, 255 = Unknown
+uint8_t flowwhispr_get_completion_provider(FlowWhisprHandle* handle);
+
 #ifdef __cplusplus
 }
 #endif
