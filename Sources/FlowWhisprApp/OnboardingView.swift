@@ -187,7 +187,7 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(FWSecondaryButtonStyle())
 
-                    Button("Use Globe Key") {
+                    Button("Use Fn Key") {
                         appState.setHotkey(Hotkey.defaultHotkey)
                     }
                     .buttonStyle(FWSecondaryButtonStyle())

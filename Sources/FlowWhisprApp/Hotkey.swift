@@ -39,7 +39,7 @@ struct Hotkey: Equatable {
     var displayName: String {
         switch kind {
         case .globe:
-            return "Globe key"
+            return "Fn key"
         case .custom(_, let modifiers, let keyLabel):
             return "\(modifiers.displayString)\(keyLabel)"
         }

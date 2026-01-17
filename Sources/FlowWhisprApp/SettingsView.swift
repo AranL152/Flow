@@ -142,11 +142,11 @@ struct AccessibilitySection: View {
                 HStack(spacing: FW.spacing8) {
                     Text("🌐")
                         .font(.title2)
-                    Text("Globe key is the default hotkey")
+                    Text("Fn key is the default hotkey")
                         .font(.subheadline.weight(.medium))
                 }
 
-                Text("Press the globe key (🌐) or your custom hotkey to start or stop recording. This requires Accessibility permission.")
+                Text("Press the Fn key or your custom hotkey to start or stop recording. This requires Accessibility permission.")
                     .font(.caption)
                     .foregroundStyle(FW.textSecondary)
 
@@ -179,7 +179,7 @@ struct AccessibilitySection: View {
                     }
                     .buttonStyle(FWSecondaryButtonStyle())
 
-                    Button("Use Globe Key") {
+                    Button("Use Fn Key") {
                         appState.setHotkey(Hotkey.defaultHotkey)
                     }
                     .buttonStyle(FWSecondaryButtonStyle())

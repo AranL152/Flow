@@ -2,7 +2,7 @@
 // GlobeKeyHandler.swift
 // FlowWhispr
 //
-// Captures the recording hotkey (globe key or custom) using a CGEvent tap.
+// Captures the recording hotkey (Fn key or custom) using a CGEvent tap.
 // Requires "Accessibility" permission in System Settings > Privacy & Security.
 //
 
@@ -11,7 +11,6 @@ import Carbon.HIToolbox
 import Foundation
 
 final class GlobeKeyHandler {
-    private let tapThresholdSeconds: CFTimeInterval = 0.4
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var onHotkeyPressed: (@Sendable () -> Void)?
@@ -19,7 +18,6 @@ final class GlobeKeyHandler {
 
     private var isFunctionDown = false
     private var functionUsedAsModifier = false
-    private var functionDownAt: CFAbsoluteTime = 0
 
     init(hotkey: Hotkey, onHotkeyPressed: @escaping @Sendable () -> Void) {
         self.hotkey = hotkey
@@ -40,7 +38,6 @@ final class GlobeKeyHandler {
         self.hotkey = hotkey
         isFunctionDown = false
         functionUsedAsModifier = false
-        functionDownAt = 0
     }
 
     @discardableResult
@@ -97,7 +94,10 @@ final class GlobeKeyHandler {
                 handleFunctionFlagChange(event)
             case .keyDown:
                 if isFunctionDown {
+                    let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+                    if keycode != Int64(kVK_Function) {
                     functionUsedAsModifier = true
+                    }
                 }
             default:
                 break
@@ -110,23 +110,19 @@ final class GlobeKeyHandler {
     }
 
     private func handleFunctionFlagChange(_ event: CGEvent) {
-        let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-        guard keycode == Int64(kVK_Function) else { return }
+        let hasFn = event.flags.contains(.maskSecondaryFn)
+        guard hasFn != isFunctionDown else { return }
 
-        let isDown = event.flags.contains(.maskSecondaryFn)
-        if isDown {
+        if hasFn {
             isFunctionDown = true
             functionUsedAsModifier = false
-            functionDownAt = CFAbsoluteTimeGetCurrent()
             return
         }
 
         guard isFunctionDown else { return }
-        let pressDuration = CFAbsoluteTimeGetCurrent() - functionDownAt
-        let shouldTrigger = !functionUsedAsModifier && pressDuration <= tapThresholdSeconds
         isFunctionDown = false
 
-        if shouldTrigger {
+        if !functionUsedAsModifier {
             fireHotkey()
         }
     }
