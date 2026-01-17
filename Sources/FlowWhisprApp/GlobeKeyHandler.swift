@@ -2,94 +2,163 @@
 // GlobeKeyHandler.swift
 // FlowWhispr
 //
-// Captures the globe key (🌐) using IOHIDManager.
-// The globe key is Apple's vendor-specific HID at usage page 0xFF, usage 0x03.
-// Requires "Input Monitoring" permission in System Settings > Privacy & Security.
+// Captures the recording hotkey (globe key or custom) using a CGEvent tap.
+// Requires "Accessibility" permission in System Settings > Privacy & Security.
 //
 
+import ApplicationServices
+import Carbon.HIToolbox
 import Foundation
-@preconcurrency import IOKit
-@preconcurrency import IOKit.hid
 
-@MainActor
 final class GlobeKeyHandler {
-    // nonisolated(unsafe) because IOHIDManager isn't Sendable but we only access it from main thread
-    nonisolated(unsafe) private var manager: IOHIDManager?
-    private var onGlobeKeyPressed: (@Sendable () -> Void)?
-    private var callbackWrapper: CallbackWrapper?
+    private let tapThresholdSeconds: CFTimeInterval = 0.4
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    private var onHotkeyPressed: (@Sendable () -> Void)?
+    private var hotkey: Hotkey
 
-    init(onGlobeKeyPressed: @escaping @Sendable () -> Void) {
-        self.onGlobeKeyPressed = onGlobeKeyPressed
-        setupHIDManager()
-    }
+    private var isFunctionDown = false
+    private var functionUsedAsModifier = false
+    private var functionDownAt: CFAbsoluteTime = 0
 
-    private func setupHIDManager() {
-        manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
-        guard let manager else { return }
-
-        // Match all keyboards
-        let matchingDict: [String: Any] = [
-            kIOHIDDeviceUsagePageKey as String: kHIDPage_GenericDesktop,
-            kIOHIDDeviceUsageKey as String: kHIDUsage_GD_Keyboard
-        ]
-        IOHIDManagerSetDeviceMatching(manager, matchingDict as CFDictionary)
-
-        // Capture the callback in a way that's safe for cross-isolation
-        let callback = self.onGlobeKeyPressed
-        let wrappedCallback: GlobeKeyCallback = { usagePage, usage, intValue in
-            // Apple Globe Key: usage page 0xFF (AppleVendor Top Case), usage 0x03 (KeyboardFn)
-            // intValue == 1 means key press, 0 means release
-            if usagePage == 0xFF && usage == 0x03 && intValue == 1 {
-                callback?()
-            }
-        }
-
-        // Store the callback wrapper so it stays alive
-        callbackWrapper = CallbackWrapper(wrappedCallback)
-        let context = Unmanaged.passUnretained(callbackWrapper!).toOpaque()
-        IOHIDManagerRegisterInputValueCallback(manager, globeKeyHIDCallback, context)
-
-        // Schedule with run loop
-        IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-        IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+    init(hotkey: Hotkey, onHotkeyPressed: @escaping @Sendable () -> Void) {
+        self.hotkey = hotkey
+        self.onHotkeyPressed = onHotkeyPressed
+        startListening(prompt: false)
     }
 
     deinit {
-        if let manager {
-            IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+        }
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         }
     }
-}
 
-// Type alias for the callback closure
-private typealias GlobeKeyCallback = @Sendable (UInt32, UInt32, CFIndex) -> Void
+    func updateHotkey(_ hotkey: Hotkey) {
+        self.hotkey = hotkey
+        isFunctionDown = false
+        functionUsedAsModifier = false
+        functionDownAt = 0
+    }
 
-// Wrapper class to hold the callback for passing through C void pointer
-private final class CallbackWrapper: @unchecked Sendable {
-    let callback: GlobeKeyCallback
+    @discardableResult
+    func startListening(prompt: Bool) -> Bool {
+        guard accessibilityTrusted(prompt: prompt) else { return false }
+        guard eventTap == nil else { return true }
 
-    init(_ callback: @escaping GlobeKeyCallback) {
-        self.callback = callback
+        let eventMask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
+        guard let eventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: CGEventMask(eventMask),
+            callback: globeKeyEventTapCallback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            return false
+        }
+
+        self.eventTap = eventTap
+        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
+        self.runLoopSource = runLoopSource
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: eventTap, enable: true)
+        return true
+    }
+
+    static func isAccessibilityAuthorized() -> Bool {
+        accessibilityTrusted(prompt: false)
+    }
+
+    private static func accessibilityTrusted(prompt: Bool) -> Bool {
+        let promptKey = "AXTrustedCheckOptionPrompt" as CFString
+        let options = [promptKey: prompt] as CFDictionary
+        return AXIsProcessTrustedWithOptions(options)
+    }
+
+    private func accessibilityTrusted(prompt: Bool) -> Bool {
+        Self.accessibilityTrusted(prompt: prompt)
+    }
+
+    fileprivate func handleEvent(type: CGEventType, event: CGEvent) {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let eventTap {
+                CGEvent.tapEnable(tap: eventTap, enable: true)
+            }
+            return
+        }
+
+        switch hotkey.kind {
+        case .globe:
+            switch type {
+            case .flagsChanged:
+                handleFunctionFlagChange(event)
+            case .keyDown:
+                if isFunctionDown {
+                    functionUsedAsModifier = true
+                }
+            default:
+                break
+            }
+        case .custom:
+            if type == .keyDown, matchesCustomHotkey(event) {
+                fireHotkey()
+            }
+        }
+    }
+
+    private func handleFunctionFlagChange(_ event: CGEvent) {
+        let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+        guard keycode == Int64(kVK_Function) else { return }
+
+        let isDown = event.flags.contains(.maskSecondaryFn)
+        if isDown {
+            isFunctionDown = true
+            functionUsedAsModifier = false
+            functionDownAt = CFAbsoluteTimeGetCurrent()
+            return
+        }
+
+        guard isFunctionDown else { return }
+        let pressDuration = CFAbsoluteTimeGetCurrent() - functionDownAt
+        let shouldTrigger = !functionUsedAsModifier && pressDuration <= tapThresholdSeconds
+        isFunctionDown = false
+
+        if shouldTrigger {
+            fireHotkey()
+        }
+    }
+
+    private func matchesCustomHotkey(_ event: CGEvent) -> Bool {
+        guard case .custom(let keyCode, let modifiers, _) = hotkey.kind else { return false }
+
+        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if isRepeat { return false }
+
+        let eventKeyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        guard eventKeyCode == keyCode else { return false }
+
+        return Hotkey.modifiersMatch(modifiers, eventFlags: event.flags)
+    }
+
+    private func fireHotkey() {
+        onHotkeyPressed?()
     }
 }
 
-// C callback function for IOHIDManager
-private func globeKeyHIDCallback(
-    context: UnsafeMutableRawPointer?,
-    result: IOReturn,
-    sender: UnsafeMutableRawPointer?,
-    value: IOHIDValue
-) {
-    guard let context else { return }
-    let wrapper = Unmanaged<CallbackWrapper>.fromOpaque(context).takeUnretainedValue()
-
-    let element = IOHIDValueGetElement(value)
-    let usagePage = IOHIDElementGetUsagePage(element)
-    let usage = IOHIDElementGetUsage(element)
-    let intValue = IOHIDValueGetIntegerValue(value)
-
-    // Call the wrapped callback on the main thread
-    DispatchQueue.main.async {
-        wrapper.callback(usagePage, usage, intValue)
+private func globeKeyEventTapCallback(
+    proxy: CGEventTapProxy,
+    type: CGEventType,
+    event: CGEvent,
+    refcon: UnsafeMutableRawPointer?
+) -> Unmanaged<CGEvent>? {
+    guard let refcon else {
+        return Unmanaged.passUnretained(event)
     }
+
+    let handler = Unmanaged<GlobeKeyHandler>.fromOpaque(refcon).takeUnretainedValue()
+    handler.handleEvent(type: type, event: event)
+    return Unmanaged.passUnretained(event)
 }

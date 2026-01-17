@@ -5,6 +5,7 @@
 // Settings content view with sections for API, general settings, and about.
 //
 
+import AppKit
 import FlowWhispr
 import SwiftUI
 
@@ -16,7 +17,7 @@ struct SettingsContentView: View {
                 Divider()
                 GeneralSettingsSection()
                 Divider()
-                InputMonitoringSection()
+                AccessibilitySection()
                 Divider()
                 AboutSection()
             }
@@ -167,9 +168,10 @@ struct GeneralSettingsSection: View {
     }
 }
 
-// MARK: - Input Monitoring
+// MARK: - Accessibility
+struct AccessibilitySection: View {
+    @EnvironmentObject var appState: AppState
 
-struct InputMonitoringSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing16) {
             Label("Keyboard", systemImage: "keyboard")
@@ -179,21 +181,59 @@ struct InputMonitoringSection: View {
                 HStack(spacing: FW.spacing8) {
                     Text("🌐")
                         .font(.title2)
-                    Text("Globe key toggles recording")
+                    Text("Globe key is the default hotkey")
                         .font(.subheadline.weight(.medium))
                 }
 
-                Text("Press the globe key (🌐) on your keyboard to start/stop recording. This requires Input Monitoring permission.")
+                Text("Press the globe key (🌐) or your custom hotkey to start or stop recording. This requires Accessibility permission.")
                     .font(.caption)
                     .foregroundStyle(FW.textSecondary)
 
                 Button("Open Privacy Settings") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                         NSWorkspace.shared.open(url)
                     }
                 }
                 .buttonStyle(FWSecondaryButtonStyle())
                 .padding(.top, FW.spacing4)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: FW.spacing8) {
+                Text("Recording hotkey")
+                    .font(.subheadline.weight(.medium))
+
+                Text("Current: \(appState.hotkey.displayName)")
+                    .font(.caption)
+                    .foregroundStyle(FW.textSecondary)
+
+                HStack(spacing: FW.spacing12) {
+                    Button(appState.isCapturingHotkey ? "Press keys..." : "Change Hotkey") {
+                        if appState.isCapturingHotkey {
+                            appState.endHotkeyCapture()
+                        } else {
+                            appState.beginHotkeyCapture()
+                        }
+                    }
+                    .buttonStyle(FWSecondaryButtonStyle())
+
+                    Button("Use Globe Key") {
+                        appState.setHotkey(Hotkey.defaultHotkey)
+                    }
+                    .buttonStyle(FWSecondaryButtonStyle())
+                }
+
+                if appState.isCapturingHotkey {
+                    Text("Press a key combination, or Esc to cancel.")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                }
+            }
+        }
+        .onDisappear {
+            if appState.isCapturingHotkey {
+                appState.endHotkeyCapture()
             }
         }
     }

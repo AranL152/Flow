@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import FlowWhispr
 import Foundation
@@ -34,6 +35,12 @@ final class AppState: ObservableObject {
     /// API key configured
     @Published var isConfigured = false
 
+    /// Current recording hotkey
+    @Published var hotkey: Hotkey
+    @Published var isCapturingHotkey = false
+    @Published var isAccessibilityEnabled = false
+    @Published var isOnboardingComplete: Bool
+
     /// Error message to display
     @Published var errorMessage: String?
 
@@ -44,12 +51,20 @@ final class AppState: ObservableObject {
     private var workspaceObserver: NSObjectProtocol?
     private var recordingTimer: Timer?
     private var globeKeyHandler: GlobeKeyHandler?
+    private var hotkeyCaptureMonitor: Any?
+    private var appActiveObserver: NSObjectProtocol?
+
+    private static let onboardingKey = "onboardingComplete"
 
     init() {
         self.engine = FlowWhispr()
         self.isConfigured = engine.isConfigured
+        self.hotkey = Hotkey.load()
+        self.isOnboardingComplete = UserDefaults.standard.bool(forKey: Self.onboardingKey)
+        self.isAccessibilityEnabled = GlobeKeyHandler.isAccessibilityAuthorized()
 
         setupGlobeKey()
+        setupLifecycleObserver()
         setupWorkspaceObserver()
         updateCurrentApp()
     }
@@ -59,18 +74,94 @@ final class AppState: ObservableObject {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
             workspaceObserver = nil
         }
+        if let observer = appActiveObserver {
+            NotificationCenter.default.removeObserver(observer)
+            appActiveObserver = nil
+        }
         recordingTimer?.invalidate()
         recordingTimer = nil
+        endHotkeyCapture()
     }
 
     // MARK: - Globe Key
 
     private func setupGlobeKey() {
-        globeKeyHandler = GlobeKeyHandler { [weak self] in
+        globeKeyHandler = GlobeKeyHandler(hotkey: hotkey) { [weak self] in
             Task { @MainActor in
                 self?.toggleRecording()
             }
         }
+    }
+
+    private func setupLifecycleObserver() {
+        appActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshAccessibilityStatus()
+            }
+        }
+    }
+
+    func setHotkey(_ hotkey: Hotkey) {
+        self.hotkey = hotkey
+        hotkey.save()
+        globeKeyHandler?.updateHotkey(hotkey)
+    }
+
+    func requestAccessibilityPermission() {
+        let started = globeKeyHandler?.startListening(prompt: true) ?? false
+        if started {
+            isAccessibilityEnabled = true
+        } else {
+            refreshAccessibilityStatus()
+        }
+    }
+
+    func refreshAccessibilityStatus() {
+        let enabled = GlobeKeyHandler.isAccessibilityAuthorized()
+        isAccessibilityEnabled = enabled
+        if enabled {
+            _ = globeKeyHandler?.startListening(prompt: false)
+        }
+    }
+
+    func completeOnboarding() {
+        isOnboardingComplete = true
+        UserDefaults.standard.set(true, forKey: Self.onboardingKey)
+    }
+
+    func beginHotkeyCapture() {
+        guard hotkeyCaptureMonitor == nil else { return }
+        isCapturingHotkey = true
+
+        hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            Task { @MainActor in
+                self?.handleHotkeyCapture(event)
+            }
+            return nil
+        }
+    }
+
+    func endHotkeyCapture() {
+        if let monitor = hotkeyCaptureMonitor {
+            NSEvent.removeMonitor(monitor)
+            hotkeyCaptureMonitor = nil
+        }
+        isCapturingHotkey = false
+    }
+
+    private func handleHotkeyCapture(_ event: NSEvent) {
+        let modifiers = Hotkey.Modifiers.from(nsFlags: event.modifierFlags)
+        if event.keyCode == UInt16(kVK_Escape), modifiers.isEmpty {
+            endHotkeyCapture()
+            return
+        }
+
+        setHotkey(Hotkey.from(event: event))
+        endHotkeyCapture()
     }
 
     // MARK: - Workspace Observer

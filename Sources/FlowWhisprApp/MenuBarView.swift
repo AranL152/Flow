@@ -13,7 +13,7 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack {
-            Button(appState.isRecording ? "Stop Recording (🌐)" : "Start Recording (🌐)") {
+            Button(appState.isRecording ? "Stop Recording (\(appState.hotkey.displayName))" : "Start Recording (\(appState.hotkey.displayName))") {
                 appState.toggleRecording()
             }
             .disabled(!appState.isConfigured)
@@ -44,8 +44,7 @@ struct MenuBarView: View {
             Divider()
 
             Button("Open FlowWhispr") {
-                NSApp.windows.first?.makeKeyAndOrderFront(nil)
-                NSApp.activate(ignoringOtherApps: true)
+                WindowManager.openMainWindow()
             }
 
             Divider()

@@ -68,7 +68,7 @@ struct RecordView: View {
             .disabled(!appState.isConfigured)
 
             // shortcut hint
-            Text("🌐 Globe key")
+            Text("Hotkey: \(appState.hotkey.displayName)")
                 .font(FW.fontMonoSmall)
                 .foregroundStyle(FW.textTertiary)
         }
