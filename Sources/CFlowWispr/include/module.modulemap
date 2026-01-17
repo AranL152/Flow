@@ -1,0 +1,5 @@
+module CFlowWispr {
+    header "flowwispr.h"
+    link "flowwispr_core"
+    export *
+}

@@ -4,31 +4,31 @@
 import PackageDescription
 
 let package = Package(
-    name: "FlowWhispr",
+    name: "FlowWispr",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .library(
-            name: "FlowWhispr",
-            targets: ["FlowWhispr"]
+            name: "FlowWispr",
+            targets: ["FlowWispr"]
         ),
         .executable(
-            name: "FlowWhisprApp",
-            targets: ["FlowWhisprApp"]
+            name: "FlowWisprApp",
+            targets: ["FlowWisprApp"]
         ),
     ],
     targets: [
         // C wrapper for the Rust FFI
         .target(
-            name: "CFlowWhispr",
-            path: "Sources/CFlowWhispr",
+            name: "CFlowWispr",
+            path: "Sources/CFlowWispr",
             publicHeadersPath: "include",
             linkerSettings: [
                 // Link to the Rust static library
                 .unsafeFlags([
-                    "-L", "flowwhispr-core/target/debug",
-                    "-lflowwhispr_core"
+                    "-L", "flowwispr-core/target/debug",
+                    "-lflowwispr_core"
                 ]),
                 // System frameworks needed by the Rust library
                 .linkedFramework("CoreAudio"),
@@ -39,17 +39,17 @@ let package = Package(
         ),
         // Swift wrapper
         .target(
-            name: "FlowWhispr",
-            dependencies: ["CFlowWhispr"],
-            path: "Sources/FlowWhispr"
+            name: "FlowWispr",
+            dependencies: ["CFlowWispr"],
+            path: "Sources/FlowWispr"
         ),
         // macOS App
         .executableTarget(
-            name: "FlowWhisprApp",
+            name: "FlowWisprApp",
             dependencies: [
-                "FlowWhispr",
+                "FlowWispr",
             ],
-            path: "Sources/FlowWhisprApp"
+            path: "Sources/FlowWisprApp"
         ),
     ]
 )
