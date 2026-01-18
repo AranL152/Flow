@@ -21,6 +21,7 @@ struct SettingsContentView: View {
                 APIKeysSection()
                 GeneralSection()
                 KeyboardSection()
+                StatsSection()
 
                 Divider()
                     .background(FW.border)
@@ -67,8 +68,24 @@ private struct TranscriptionSection: View {
                             }
                     }
                 }
+
             }
             .fwSection()
+        }
+        .onAppear {
+            loadCurrentMode()
+        }
+    }
+
+    private func loadCurrentMode() {
+        if let mode = appState.engine.getTranscriptionMode() {
+            switch mode {
+            case .local(let model):
+                useLocalTranscription = true
+                selectedWhisperModel = model
+            case .remote:
+                useLocalTranscription = false
+            }
         }
     }
 }
@@ -77,8 +94,8 @@ private struct WhisperModelPicker: View {
     @Binding var selection: WhisperModel
 
     private let models: [(WhisperModel, String, String)] = [
-        (.fast, "Fast", "Tiny model (~39MB). Quick but less accurate."),
-        (.balanced, "Balanced", "Base model (~142MB). Good tradeoff."),
+        (.fast, "Fast", "Tiny (~39MB). Quick, less accurate."),
+        (.balanced, "Balanced", "Base (~142MB). Good tradeoff."),
         (.quality, "Quality", "Distil-medium (~400MB). Best accuracy.")
     ]
 
@@ -337,6 +354,58 @@ private struct KeyboardSection: View {
             }
             .fwSection()
         }
+    }
+}
+
+// MARK: - Stats Section
+
+private struct StatsSection: View {
+    @EnvironmentObject var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FW.spacing12) {
+            Text("Stats")
+                .fwSectionHeader()
+
+            HStack(spacing: FW.spacing16) {
+                statItem(
+                    icon: "brain.head.profile",
+                    value: "\(appState.engine.correctionCount)",
+                    label: "Corrections"
+                )
+                statItem(
+                    icon: "clock",
+                    value: "\(appState.totalMinutes)",
+                    label: "Minutes"
+                )
+                statItem(
+                    icon: "text.word.spacing",
+                    value: "\(appState.totalWordsDictated)",
+                    label: "Words"
+                )
+            }
+            .fwSection()
+        }
+    }
+
+    private func statItem(icon: String, value: String, label: String) -> some View {
+        HStack(spacing: FW.spacing8) {
+            Image(systemName: icon)
+                .font(.body)
+                .foregroundStyle(FW.accent)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(FW.textPrimary)
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(FW.textMuted)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
