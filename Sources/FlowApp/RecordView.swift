@@ -105,7 +105,7 @@ struct RecordView: View {
     // MARK: - Stats Section
 
     private var statsSection: some View {
-        HStack(spacing: FW.spacing16) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: FW.spacing12)], spacing: FW.spacing12) {
             statCard(
                 icon: "mic.fill",
                 iconColor: FW.accent,
@@ -117,7 +117,7 @@ struct RecordView: View {
                 icon: "textformat",
                 iconColor: FW.accent,
                 value: "\(appState.totalWordsDictated)",
-                label: "Words dictated"
+                label: "Words"
             )
 
             statCard(
@@ -148,9 +148,8 @@ struct RecordView: View {
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(FW.textSecondary)
+                    .fixedSize(horizontal: true, vertical: false)
             }
-
-            Spacer()
         }
         .padding(FW.spacing16)
         .fwSection()
