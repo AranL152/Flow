@@ -611,17 +611,12 @@ public final class Flow: @unchecked Sendable {
 
     // MARK: - Cloud Transcription Provider
 
-    /// Set the cloud transcription provider with API key
-    /// - Parameters:
-    ///   - provider: The cloud transcription provider to use
-    ///   - apiKey: The API key for the provider
+    /// Set the cloud transcription provider
+    /// - Parameter provider: The cloud transcription provider to use
     /// - Returns: true on success
-    public func setCloudTranscriptionProvider(_ provider: CloudTranscriptionProvider, apiKey: String) -> Bool {
+    public func setCloudTranscriptionProvider(_ provider: CloudTranscriptionProvider) -> Bool {
         guard let handle = handle else { return false }
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedKey.withCString { cKey in
-            flow_set_cloud_transcription_provider(handle, provider.rawValue, cKey)
-        }
+        return flow_set_cloud_transcription_provider(handle, provider.rawValue)
     }
 
     /// Get the current cloud transcription provider
@@ -629,17 +624,6 @@ public final class Flow: @unchecked Sendable {
         guard let handle = handle else { return nil }
         let rawValue = flow_get_cloud_transcription_provider(handle)
         return CloudTranscriptionProvider(rawValue: rawValue)
-    }
-
-    /// Get API key for a cloud transcription provider in masked form
-    /// - Parameter provider: The provider to get the key for
-    /// - Returns: Masked API key (e.g., "sk-••••••••") or nil if not set
-    public func getMaskedCloudTranscriptionApiKey(for provider: CloudTranscriptionProvider) -> String? {
-        guard let handle = handle else { return nil }
-        guard let cString = flow_get_cloud_transcription_api_key(handle, provider.rawValue) else { return nil }
-        let string = String(cString: cString)
-        flow_free_string(cString)
-        return string
     }
 
     // Configuration persistence is handled in the core database.

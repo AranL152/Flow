@@ -246,23 +246,16 @@ bool flow_enable_local_whisper(FlowHandle* handle, uint8_t model);
 
 // ============ Cloud Transcription Provider ============
 
-/// Set cloud transcription provider with API key (saves both)
+/// Set cloud transcription provider (saves preference)
 /// @param handle Engine handle
 /// @param provider 0 = OpenAI, 1 = Base10
-/// @param api_key API key for the provider
 /// @return true on success
-bool flow_set_cloud_transcription_provider(FlowHandle* handle, uint8_t provider, const char* api_key);
+bool flow_set_cloud_transcription_provider(FlowHandle* handle, uint8_t provider);
 
 /// Get current cloud transcription provider
 /// @param handle Engine handle
 /// @return 0 = OpenAI, 1 = Base10, 255 = Unknown
 uint8_t flow_get_cloud_transcription_provider(FlowHandle* handle);
-
-/// Get API key for a cloud transcription provider in masked form
-/// @param handle Engine handle
-/// @param provider 0 = OpenAI, 1 = Base10
-/// @return Masked API key string (caller must free with flow_free_string) or NULL if not set
-char* flow_get_cloud_transcription_api_key(FlowHandle* handle, uint8_t provider);
 
 // ============ Error Handling ============
 
