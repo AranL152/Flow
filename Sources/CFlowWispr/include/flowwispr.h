@@ -226,6 +226,18 @@ uint8_t flowwispr_get_completion_provider(FlowWhisprHandle* handle);
 /// @return true on success, false on failure
 bool flowwispr_set_transcription_mode(FlowWhisprHandle* handle, bool use_local, uint8_t whisper_model);
 
+/// Get current transcription mode settings
+/// @param handle Engine handle
+/// @param out_use_local Output parameter for use_local flag
+/// @param out_whisper_model Output parameter for whisper_model (0-4)
+/// @return true on success, false on database error
+bool flowwispr_get_transcription_mode(FlowWhisprHandle* handle, bool* out_use_local, uint8_t* out_whisper_model);
+
+/// Check if a Whisper model is currently being downloaded/initialized
+/// @param handle Engine handle
+/// @return true if model download/initialization is in progress
+bool flowwispr_is_model_loading(FlowWhisprHandle* handle);
+
 /// Legacy: Enable local Whisper transcription with Metal acceleration
 /// @param handle Engine handle
 /// @param model Whisper model: 0 = Tiny (39MB), 1 = Base (142MB), 2 = Small (466MB)

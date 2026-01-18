@@ -20,6 +20,7 @@ final class AppState: ObservableObject {
     /// Current recording state
     @Published var isRecording = false
     @Published var isProcessing = false
+    @Published var isInitializingModel = false
 
     /// Last transcribed text
     @Published var lastTranscription: String?
@@ -58,8 +59,11 @@ final class AppState: ObservableObject {
     /// Workspace observer for app changes
     private var workspaceObserver: NSObjectProtocol?
     private var recordingTimer: Timer?
+    private var modelLoadingTimer: Timer?
     private var globeKeyHandler: GlobeKeyHandler?
     private var hotkeyCaptureMonitor: Any?
+    private var hotkeyFlagsMonitor: Any?
+    private var pendingModifierCapture: Hotkey.ModifierKey?
     private var appActiveObserver: NSObjectProtocol?
     private var appInactiveObserver: NSObjectProtocol?
     private var mediaPauseState = MediaPauseState()
@@ -78,6 +82,7 @@ final class AppState: ObservableObject {
         setupGlobeKey()
         setupLifecycleObserver()
         setupWorkspaceObserver()
+        setupModelLoadingPoller()
         updateCurrentApp()
         refreshHistory()
     }
@@ -97,6 +102,8 @@ final class AppState: ObservableObject {
         }
         recordingTimer?.invalidate()
         recordingTimer = nil
+        modelLoadingTimer?.invalidate()
+        modelLoadingTimer = nil
         endHotkeyCapture()
         recordingIndicator?.hide()
     }
@@ -148,6 +155,20 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func setupModelLoadingPoller() {
+        // Poll model loading state every 0.5 seconds
+        modelLoadingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let isLoading = self.engine.isModelLoading()
+                if self.isInitializingModel != isLoading {
+                    self.isInitializingModel = isLoading
+                    self.updateRecordingIndicatorVisibility()
+                }
+            }
+        }
+    }
+
     func setHotkey(_ hotkey: Hotkey) {
         self.hotkey = hotkey
         hotkey.save()
@@ -160,6 +181,9 @@ final class AppState: ObservableObject {
         switch hotkey.kind {
         case .globe:
             properties["type"] = "globe"
+        case .modifierOnly(let modifier):
+            properties["type"] = "modifierOnly"
+            properties["modifier"] = modifier.rawValue
         case .custom(let keyCode, let modifiers, let keyLabel):
             properties["type"] = "custom"
             properties["key_code"] = keyCode
@@ -217,14 +241,24 @@ final class AppState: ObservableObject {
     }
 
     func beginHotkeyCapture() {
-        guard hotkeyCaptureMonitor == nil else { return }
+        guard hotkeyCaptureMonitor == nil, hotkeyFlagsMonitor == nil else { return }
         isCapturingHotkey = true
+        pendingModifierCapture = nil
 
+        // Monitor for key+modifier combos
         hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
             Task { @MainActor [weak self] in
-                self?.handleHotkeyCapture(event)
+                self?.handleHotkeyKeyCapture(event)
             }
             return nil
+        }
+
+        // Monitor for modifier-only hotkeys
+        hotkeyFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
+            Task { @MainActor [weak self] in
+                self?.handleHotkeyFlagsCapture(event)
+            }
+            return event
         }
     }
 
@@ -233,10 +267,17 @@ final class AppState: ObservableObject {
             NSEvent.removeMonitor(monitor)
             hotkeyCaptureMonitor = nil
         }
+        if let monitor = hotkeyFlagsMonitor {
+            NSEvent.removeMonitor(monitor)
+            hotkeyFlagsMonitor = nil
+        }
         isCapturingHotkey = false
+        pendingModifierCapture = nil
     }
 
-    private func handleHotkeyCapture(_ event: NSEvent) {
+    private func handleHotkeyKeyCapture(_ event: NSEvent) {
+        pendingModifierCapture = nil // Key pressed, cancel any pending modifier capture
+
         let modifiers = Hotkey.Modifiers.from(nsFlags: event.modifierFlags)
         if event.keyCode == UInt16(kVK_Escape), modifiers.isEmpty {
             endHotkeyCapture()
@@ -245,6 +286,41 @@ final class AppState: ObservableObject {
 
         setHotkey(Hotkey.from(event: event))
         endHotkeyCapture()
+    }
+
+    private func handleHotkeyFlagsCapture(_ event: NSEvent) {
+        // Detect single modifier press/release for modifier-only hotkeys
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // Map NSEvent flags to our ModifierKey
+        let modifierMappings: [(NSEvent.ModifierFlags, Hotkey.ModifierKey)] = [
+            (.option, .option),
+            (.shift, .shift),
+            (.control, .control),
+            (.command, .command)
+        ]
+
+        // Count how many modifiers are currently pressed
+        var pressedModifier: Hotkey.ModifierKey?
+        var count = 0
+        for (flag, key) in modifierMappings {
+            if flags.contains(flag) {
+                pressedModifier = key
+                count += 1
+            }
+        }
+
+        if count == 1, let modifier = pressedModifier {
+            // Single modifier pressed, start pending capture
+            pendingModifierCapture = modifier
+        } else if count == 0, let pending = pendingModifierCapture {
+            // All modifiers released, if we had a pending single modifier, capture it
+            setHotkey(Hotkey(kind: .modifierOnly(pending)))
+            endHotkeyCapture()
+        } else {
+            // Multiple modifiers or no modifiers, cancel pending
+            pendingModifierCapture = nil
+        }
     }
 
     // MARK: - Workspace Observer
@@ -485,7 +561,7 @@ final class AppState: ObservableObject {
     }
 
     private func updateRecordingIndicatorVisibility() {
-        if isRecording || isProcessing {
+        if isRecording || isProcessing || isInitializingModel {
             ensureRecordingIndicator()
             recordingIndicator?.show()
         } else {

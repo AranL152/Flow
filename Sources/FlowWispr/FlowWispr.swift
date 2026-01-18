@@ -76,25 +76,32 @@ public enum CompletionProvider: UInt8, Sendable {
 
 /// Whisper model sizes for local transcription
 public enum WhisperModel: UInt8, Sendable {
-    case tiny = 0
-    case base = 1
-    case small = 2
+    case turbo = 0     // Quantized tiny (~15MB) - blazing fast
+    case fast = 1      // Tiny (~39MB)
+    case balanced = 2  // Base (~142MB)
+    case quality = 3   // Distil-medium (~400MB) - recommended
+    case best = 4      // Distil-large-v3 (~750MB)
 
     public var displayName: String {
         switch self {
-        case .tiny: return "Tiny (39MB)"
-        case .base: return "Base (142MB)"
-        case .small: return "Small (466MB)"
+        case .turbo: return "Turbo"
+        case .fast: return "Fast"
+        case .balanced: return "Balanced"
+        case .quality: return "Quality"
+        case .best: return "Best"
         }
     }
 
     public var sizeDescription: String {
         switch self {
-        case .tiny: return "Fastest, least accurate"
-        case .base: return "Good balance"
-        case .small: return "Better accuracy"
+        case .turbo: return "~15MB, quantized, blazing fast"
+        case .fast: return "~39MB, good speed"
+        case .balanced: return "~142MB, balanced"
+        case .quality: return "~400MB, recommended"
+        case .best: return "~750MB, highest accuracy"
         }
     }
+
 }
 
 /// Transcription mode: local or remote
@@ -535,6 +542,33 @@ public final class FlowWispr: @unchecked Sendable {
     @available(*, deprecated, message: "Use setTranscriptionMode(.local(model:)) instead")
     public func enableLocalWhisper(_ model: WhisperModel) -> Bool {
         return setTranscriptionMode(.local(model: model))
+    }
+
+    /// Get current transcription mode settings from database
+    /// - Returns: TranscriptionMode (local with model or remote), or nil on error
+    public func getTranscriptionMode() -> TranscriptionMode? {
+        guard let handle = handle else { return nil }
+
+        var useLocal: Bool = false
+        var whisperModel: UInt8 = 3 // default to quality
+
+        guard flowwispr_get_transcription_mode(handle, &useLocal, &whisperModel) else {
+            return nil
+        }
+
+        if useLocal {
+            let model = WhisperModel(rawValue: whisperModel) ?? .quality
+            return .local(model: model)
+        } else {
+            return .remote
+        }
+    }
+
+    /// Check if a Whisper model is currently being downloaded/initialized
+    /// - Returns: true if model download is in progress
+    public func isModelLoading() -> Bool {
+        guard let handle = handle else { return false }
+        return flowwispr_is_model_loading(handle)
     }
 
     // Configuration persistence is handled in the core database.

@@ -27,7 +27,7 @@ final class RecordingIndicatorWindow {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
-        panel.setFrame(NSRect(x: 0, y: 0, width: 200, height: 32), display: false)
+        panel.setFrame(NSRect(x: 0, y: 0, width: 260, height: 32), display: false)
 
         self.window = panel
         positionWindow()
@@ -79,6 +79,20 @@ private struct RecordingIndicatorView: View {
                     .tint(.white.opacity(0.9))
                     .transition(.opacity)
             }
+
+            if appState.isInitializingModel {
+                HStack(spacing: FW.spacing6) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                        .tint(.white.opacity(0.9))
+
+                    Text("Initializing Whisper model...")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .transition(.opacity)
+            }
         }
         .padding(.horizontal, FW.spacing12)
         .padding(.vertical, FW.spacing6)
@@ -92,6 +106,7 @@ private struct RecordingIndicatorView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: appState.isRecording)
         .animation(.easeInOut(duration: 0.2), value: appState.isProcessing)
+        .animation(.easeInOut(duration: 0.2), value: appState.isInitializingModel)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
                 pulse = true
