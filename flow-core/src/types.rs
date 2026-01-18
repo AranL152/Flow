@@ -42,16 +42,16 @@ impl WritingMode {
     pub fn prompt_modifier(&self) -> &'static str {
         match self {
             Self::Formal => {
-                "Rewrite the message in a formal, professional tone. Replace casual phrases like \"gonna\", \"wanna\", \"5 min\" with proper equivalents like \"going to\", \"want to\", \"five minutes\". Use complete sentences, proper grammar, and polished language suitable for a work colleague or boss. Transform slang into professional alternatives."
+                "Format in formal, professional tone. Replace casual phrases like \"gonna\", \"wanna\", \"5 min\" with proper equivalents. Use complete sentences and correct grammar. Output EXACTLY as it would be typed—nothing more, nothing else."
             }
             Self::Casual => {
-                "Rewrite the message in a friendly, conversational tone. Keep contractions, use natural language, but ensure it's clear and warm. Suitable for family members. Add a friendly touch if appropriate."
+                "Format in conversational, friendly tone. Keep contractions and natural phrasing. Output EXACTLY as it would be typed. Do NOT add commentary, responses, or anything beyond the reformatted text."
             }
             Self::VeryCasual => {
-                "Rewrite the message in a very casual, texting style. Use lowercase, abbreviations like \"gonna\", \"rn\", \"sry\". Keep it brief and informal like a text to a close friend. Skip formalities."
+                "Format in casual texting style. Use lowercase, abbreviations like \"gonna\", \"rn\", \"sry\". Keep it brief. Output EXACTLY as it would be typed—nothing else."
             }
             Self::Excited => {
-                "Rewrite the message with enthusiasm and warmth! Add exclamation marks, express affection. Make it sound loving and excited, like texting a partner you adore!"
+                "Format with enthusiasm. Add exclamation marks where natural. Output EXACTLY as it would be typed—nothing more."
             }
         }
     }

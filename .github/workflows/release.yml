@@ -46,13 +46,16 @@ jobs:
         with:
           workspaces: flow-core
 
-      - name: Build Rust libraries (parallel)
+      - name: Build Rust library for Apple Silicon (aarch64)
         run: |
           cd flow-core
-          cargo build --release --target aarch64-apple-darwin &
-          cargo build --release --target x86_64-apple-darwin &
-          wait
+          cargo build --release --target aarch64-apple-darwin
           ls -lh target/aarch64-apple-darwin/release/libflow.a
+
+      - name: Build Rust library for Intel (x86_64)
+        run: |
+          cd flow-core
+          cargo build --release --target x86_64-apple-darwin
           ls -lh target/x86_64-apple-darwin/release/libflow.a
 
       - name: Create universal Rust library
@@ -66,12 +69,14 @@ jobs:
           echo "Universal library created:"
           lipo -info target/release/libflow.a
 
-      - name: Build Swift binaries (parallel)
+      - name: Build Swift for Apple Silicon (arm64)
         run: |
-          swift build -c release --arch arm64 &
-          swift build -c release --arch x86_64 &
-          wait
+          swift build -c release --arch arm64
           cp .build/arm64-apple-macosx/release/Flow .build/Flow-arm64
+
+      - name: Build Swift for Intel (x86_64)
+        run: |
+          swift build -c release --arch x86_64
           cp .build/x86_64-apple-macosx/release/Flow .build/Flow-x86_64
 
       - name: Create Swift universal binary

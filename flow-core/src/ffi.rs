@@ -130,12 +130,26 @@ fn load_persisted_configuration(handle: &mut FlowHandle) {
         .ok()
         .flatten();
 
-    // Load saved provider preference
-    let saved_provider = handle
+    // Load saved provider preferences
+    let saved_completion_provider = handle
         .storage
         .get_setting(SETTING_COMPLETION_PROVIDER)
         .ok()
         .flatten();
+
+    let saved_cloud_transcription = handle
+        .storage
+        .get_setting(SETTING_CLOUD_TRANSCRIPTION_PROVIDER)
+        .ok()
+        .flatten();
+
+    let use_local_transcription = handle
+        .storage
+        .get_setting(SETTING_USE_LOCAL_TRANSCRIPTION)
+        .ok()
+        .flatten()
+        .map(|s| s == "true")
+        .unwrap_or(false);
 
     // Log what we found for debugging
     tracing::info!("Loading persisted config:");
@@ -155,26 +169,54 @@ fn load_persisted_configuration(handle: &mut FlowHandle) {
             "NONE"
         }
     );
-    tracing::info!("  Saved provider: {:?}", saved_provider);
+    tracing::info!(
+        "  Saved completion provider: {:?}",
+        saved_completion_provider
+    );
+    tracing::info!(
+        "  Saved cloud transcription: {:?}",
+        saved_cloud_transcription
+    );
+    tracing::info!("  Use local transcription: {}", use_local_transcription);
 
-    // Initialize providers based on saved preference
-    match saved_provider.as_deref() {
+    // Initialize completion provider based on saved preference
+    match saved_completion_provider.as_deref() {
         Some("gemini") => {
-            debug!("Restoring Gemini provider from database");
-            handle.transcription = Arc::new(GeminiTranscriptionProvider::new(gemini_key.clone()));
-            handle.completion = Arc::new(GeminiCompletionProvider::new(gemini_key));
+            debug!("Restoring Gemini completion provider from database");
+            handle.completion = Arc::new(GeminiCompletionProvider::new(gemini_key.clone()));
         }
         Some("openrouter") => {
-            debug!("Restoring OpenRouter provider from database");
-            // OpenRouter doesn't do transcription, use OpenAI for that
-            handle.transcription = Arc::new(OpenAITranscriptionProvider::new(openai_key));
+            debug!("Restoring OpenRouter completion provider from database");
             handle.completion = Arc::new(OpenRouterCompletionProvider::new(openrouter_key));
         }
         _ => {
-            // Default to OpenAI or if "openai" was explicitly saved
-            debug!("Restoring OpenAI provider from database");
-            handle.transcription = Arc::new(OpenAITranscriptionProvider::new(openai_key.clone()));
-            handle.completion = Arc::new(OpenAICompletionProvider::new(openai_key));
+            debug!("Restoring OpenAI completion provider from database");
+            handle.completion = Arc::new(OpenAICompletionProvider::new(openai_key.clone()));
+        }
+    }
+
+    // Initialize transcription provider separately
+    if use_local_transcription {
+        // Local whisper will be initialized by flow_set_transcription_mode
+        // For now, set a placeholder that will be replaced
+        debug!("Local transcription enabled, will be initialized separately");
+        handle.transcription = Arc::new(Base10TranscriptionProvider::new(None));
+    } else {
+        // Cloud transcription - check which provider
+        match saved_cloud_transcription.as_deref() {
+            Some("openai") => {
+                debug!("Restoring OpenAI transcription provider from database");
+                handle.transcription = Arc::new(OpenAITranscriptionProvider::new(openai_key));
+            }
+            Some("gemini") => {
+                debug!("Restoring Gemini transcription provider from database");
+                handle.transcription = Arc::new(GeminiTranscriptionProvider::new(gemini_key));
+            }
+            _ => {
+                // Default to Base10 (no API key needed, uses proxy)
+                debug!("Using Base10 transcription provider (default)");
+                handle.transcription = Arc::new(Base10TranscriptionProvider::new(None));
+            }
         }
     }
 }
@@ -1474,17 +1516,11 @@ pub extern "C" fn flow_set_transcription_mode(
             .get_setting(SETTING_CLOUD_TRANSCRIPTION_PROVIDER)
         {
             Ok(Some(name)) => name,
-            _ => "openai".to_string(), // default to OpenAI
+            _ => "base10".to_string(), // default to Base10
         };
 
         match cloud_provider.as_str() {
-            "base10" => {
-                // Base10 uses a proxy that handles auth, no API key needed
-                handle.transcription = Arc::new(Base10TranscriptionProvider::new(None));
-                debug!("Enabled Base10 remote transcription");
-            }
-            _ => {
-                // Default to OpenAI (includes "openai" and any unknown value)
+            "openai" => {
                 if let Ok(Some(key)) = handle.storage.get_setting(SETTING_OPENAI_API_KEY) {
                     handle.transcription = Arc::new(OpenAITranscriptionProvider::new(Some(key)));
                     debug!("Enabled OpenAI remote transcription");
@@ -1492,6 +1528,12 @@ pub extern "C" fn flow_set_transcription_mode(
                     set_last_error(handle, "OpenAI API key not configured");
                     return false;
                 }
+            }
+            _ => {
+                // Default to Base10 (includes "base10" and any unknown value)
+                // Base10 uses a proxy that handles auth, no API key needed
+                handle.transcription = Arc::new(Base10TranscriptionProvider::new(None));
+                debug!("Enabled Base10 remote transcription");
             }
         }
     }
@@ -1876,7 +1918,7 @@ pub extern "C" fn flow_set_cloud_transcription_provider(
 }
 
 /// Get the current cloud transcription provider
-/// Returns: 0 = OpenAI, 1 = Base10, 255 = Unknown/not set
+/// Returns: 0 = OpenAI, 1 = Base10
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_get_cloud_transcription_provider(handle: *mut FlowHandle) -> u8 {
     let handle = unsafe { &*handle };
@@ -1888,8 +1930,8 @@ pub extern "C" fn flow_get_cloud_transcription_provider(handle: *mut FlowHandle)
         Ok(Some(name)) => match name.as_str() {
             "openai" => 0,
             "base10" => 1,
-            _ => 0, // default to OpenAI
+            _ => 1, // default to Base10
         },
-        _ => 0, // default to OpenAI
+        _ => 1, // default to Base10
     }
 }

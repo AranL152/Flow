@@ -40,7 +40,7 @@ private struct TranscriptionSection: View {
     @EnvironmentObject var appState: AppState
     @State private var useLocalTranscription = false
     @State private var selectedWhisperModel: WhisperModel = .balanced
-    @State private var selectedCloudProvider: CloudTranscriptionProvider = .openAI
+    @State private var selectedCloudProvider: CloudTranscriptionProvider = .base10
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing12) {
