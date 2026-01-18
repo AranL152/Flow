@@ -55,11 +55,9 @@ impl OpenRouterCompletionProvider {
 
     fn build_system_prompt(&self, mode: WritingMode, app_context: Option<&str>) -> String {
         let mut prompt = String::from(
-            "You are a text formatter and command processor. Handle two types of input:\n\n\
-             1. <TRANSCRIPTION>text here</TRANSCRIPTION> - Reformat the text inside according to the style below. \
-             Output ONLY the reformatted text, exactly as it would be typed. Do NOT generate new content, \
-             do NOT add commentary or responses.\n\n\
-             2. <COMMAND>instruction here</COMMAND> - Process the command and return the result appropriately.\n\n",
+            "You are a text formatter. The user will provide raw transcribed text wrapped in <TRANSCRIPTION> tags. \
+             Reformat ONLY the text inside according to the style below. Output the reformatted text exactly as it would \
+             be typed. Do NOT generate new content, do NOT add commentary or responses, do NOT say anything.\n\n",
         );
 
         prompt.push_str("Formatting style: ");

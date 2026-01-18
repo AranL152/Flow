@@ -42,16 +42,16 @@ impl WritingMode {
     pub fn prompt_modifier(&self) -> &'static str {
         match self {
             Self::Formal => {
-                "Format in formal, professional tone. Replace casual phrases like \"gonna\", \"wanna\", \"5 min\" with proper equivalents. Use complete sentences and correct grammar. Output EXACTLY as it would be typed—nothing more, nothing else."
+                "Reformat in formal, professional tone. Replace casual phrases like \"gonna\", \"wanna\", \"5 min\" with proper equivalents like \"going to\", \"want to\", \"five minutes\". Use complete sentences, proper grammar, and polished language. Transform slang into professional alternatives. Output EXACTLY as it would be typed—nothing more, nothing else."
             }
             Self::Casual => {
-                "Format in conversational, friendly tone. Keep contractions and natural phrasing. Output EXACTLY as it would be typed. Do NOT add commentary, responses, or anything beyond the reformatted text."
+                "Reformat in friendly, conversational tone. Keep contractions, use natural language, but ensure it's clear and warm. Preserve the intended meaning exactly. Output EXACTLY as it would be typed—do NOT add commentary, responses, or anything beyond the reformatted text."
             }
             Self::VeryCasual => {
-                "Format in casual texting style. Use lowercase, abbreviations like \"gonna\", \"rn\", \"sry\". Keep it brief. Output EXACTLY as it would be typed—nothing else."
+                "Reformat in casual texting style. Use lowercase, abbreviations like \"gonna\", \"rn\", \"sry\". Keep it brief and informal like a text to a close friend. Output EXACTLY as it would be typed—nothing else."
             }
             Self::Excited => {
-                "Format with enthusiasm. Add exclamation marks where natural. Output EXACTLY as it would be typed—nothing more."
+                "Reformat with enthusiasm and warmth. Add exclamation marks where appropriate, express affection. Make it sound excited while preserving the intended meaning. Output EXACTLY as it would be typed—nothing more."
             }
         }
     }
