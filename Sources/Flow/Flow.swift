@@ -67,7 +67,7 @@ public enum CompletionProvider: UInt8, Sendable {
 
     public var displayName: String {
         switch self {
-        case .openAI: return "OpenAI GPT"
+        case .openAI: return "OpenAI"
         case .gemini: return "Gemini"
         case .openRouter: return "OpenRouter"
         }

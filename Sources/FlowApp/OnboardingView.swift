@@ -64,17 +64,18 @@ struct OnboardingView: View {
     }
 
     private var header: some View {
-        VStack(spacing: FW.spacing8) {
+        VStack(spacing: FW.spacing12) {
             Image(systemName: "waveform")
                 .font(.system(size: 36, weight: .semibold))
-                .foregroundStyle(FW.accentGradient)
+                .foregroundStyle(FW.accent)
 
             Text(step.title)
                 .font(.title2.weight(.semibold))
+                .foregroundStyle(FW.textPrimary)
 
             Text("Step \(stepIndex + 1) of \(Step.allCases.count)")
                 .font(FW.fontMonoSmall)
-                .foregroundStyle(FW.textTertiary)
+                .foregroundStyle(FW.textMuted)
         }
     }
 
@@ -82,49 +83,53 @@ struct OnboardingView: View {
     private var content: some View {
         switch step {
         case .welcome:
-            VStack(alignment: .leading, spacing: FW.spacing12) {
+            VStack(alignment: .leading, spacing: FW.spacing16) {
                 Text("Flow turns quick dictation into clean text, fast.")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(FW.textSecondary)
 
-                VStack(alignment: .leading, spacing: FW.spacing8) {
-                    labelRow(icon: "mic.fill", text: "Record from anywhere with a single hotkey")
-                    labelRow(icon: "bolt.fill", text: "Instant transcription and paste")
-                    labelRow(icon: "text.badge.checkmark", text: "Custom shortcuts and writing modes")
+                VStack(alignment: .leading, spacing: FW.spacing12) {
+                    featureRow(icon: "mic.fill", text: "Record from anywhere with a single hotkey")
+                    featureRow(icon: "bolt.fill", text: "Instant transcription and paste")
+                    featureRow(icon: "text.badge.checkmark", text: "Custom shortcuts and writing modes")
                 }
             }
 
         case .apiKey:
             VStack(alignment: .leading, spacing: FW.spacing16) {
                 Text("Add your OpenAI API key to enable transcription.")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(FW.textSecondary)
 
-                SecureField("sk-...", text: $openAIKey)
-                    .textFieldStyle(.roundedBorder)
-                    .font(FW.fontMonoSmall)
-                    .focused($focusedField, equals: .apiKey)
-                    .onSubmit {
+                FWSecureField(
+                    text: $openAIKey,
+                    placeholder: "sk-...",
+                    onSubmit: {
                         if !openAIKey.isEmpty {
                             handleAdvance()
                         }
                     }
+                )
 
                 if appState.isConfigured {
-                    Text("API key saved")
-                        .font(.caption)
-                        .foregroundStyle(FW.success)
+                    HStack(spacing: FW.spacing6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption)
+                        Text("API key saved")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(FW.success)
                 } else {
                     Text("You can add this later in Settings, but recording will be disabled until you do.")
                         .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
+                        .foregroundStyle(FW.textMuted)
                 }
             }
 
         case .accessibility:
             VStack(alignment: .leading, spacing: FW.spacing16) {
                 Text("To listen for your hotkey, Flow needs Accessibility access. You control this anytime in System Settings.")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(FW.textSecondary)
 
                 HStack(spacing: FW.spacing8) {
@@ -133,7 +138,7 @@ struct OnboardingView: View {
                         .frame(width: 8, height: 8)
 
                     Text(appState.isAccessibilityEnabled ? "Accessibility enabled" : "Accessibility not enabled")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(appState.isAccessibilityEnabled ? FW.success : FW.warning)
                 }
 
@@ -155,25 +160,24 @@ struct OnboardingView: View {
                     appState.refreshAccessibilityStatus()
                 }
                 .buttonStyle(FWGhostButtonStyle())
-                .font(.caption)
 
                 Text("You can continue without it, but hotkeys will not work.")
                     .font(.caption)
-                    .foregroundStyle(FW.textTertiary)
+                    .foregroundStyle(FW.textMuted)
             }
 
         case .hotkey:
             VStack(alignment: .leading, spacing: FW.spacing16) {
                 Text("Choose a hotkey for starting and stopping recording. Fn defaults to press-and-hold.")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(FW.textSecondary)
 
                 HStack(spacing: FW.spacing8) {
                     Text("Current:")
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
+                        .font(.subheadline)
+                        .foregroundStyle(FW.textMuted)
                     Text(appState.hotkey.displayName)
-                        .font(FW.fontMonoSmall)
+                        .font(FW.fontMono)
                         .foregroundStyle(FW.textPrimary)
                 }
 
@@ -196,7 +200,7 @@ struct OnboardingView: View {
                 if appState.isCapturingHotkey {
                     Text("Press a key combination, or Esc to cancel.")
                         .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
+                        .foregroundStyle(FW.textMuted)
                 }
             }
         }
@@ -209,6 +213,7 @@ struct OnboardingView: View {
             }
             .buttonStyle(FWGhostButtonStyle())
             .disabled(step == .welcome)
+            .opacity(step == .welcome ? 0.5 : 1)
 
             Spacer()
 
@@ -245,13 +250,15 @@ struct OnboardingView: View {
         step = Step(rawValue: min(step.rawValue + 1, Step.allCases.count - 1)) ?? step
     }
 
-    private func labelRow(icon: String, text: String) -> some View {
-        HStack(spacing: FW.spacing8) {
+    private func featureRow(icon: String, text: String) -> some View {
+        HStack(spacing: FW.spacing12) {
             Image(systemName: icon)
-                .font(.caption)
+                .font(.body)
                 .foregroundStyle(FW.accent)
+                .frame(width: 24)
+
             Text(text)
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(FW.textPrimary)
         }
     }

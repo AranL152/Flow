@@ -16,73 +16,71 @@ struct RecordView: View {
             VStack(spacing: 0) {
                 // Header section
                 headerSection
-                    .padding(.horizontal, FW.spacing24)
-                    .padding(.top, FW.spacing24)
+                    .padding(.horizontal, FW.spacing32)
+                    .padding(.top, FW.spacing32)
                     .padding(.bottom, FW.spacing24)
 
                 // Stats bars
                 statsSection
-                    .padding(.horizontal, FW.spacing24)
+                    .padding(.horizontal, FW.spacing32)
                     .padding(.bottom, FW.spacing24)
 
                 if let errorMessage = appState.errorMessage {
                     errorBanner(text: errorMessage)
-                        .padding(.horizontal, FW.spacing24)
-                        .padding(.top, FW.spacing24)
+                        .padding(.horizontal, FW.spacing32)
+                        .padding(.bottom, FW.spacing16)
                 }
 
                 if !appState.isConfigured {
-                    banner(text: "Add your OpenAI API key to start recording.", actionTitle: "Open Settings") {
+                    banner(text: "Add your API key to start recording.", actionTitle: "Open Settings") {
                         appState.selectedTab = .settings
                     }
-                    .padding(.horizontal, FW.spacing24)
-                    .padding(.top, FW.spacing16)
+                    .padding(.horizontal, FW.spacing32)
+                    .padding(.bottom, FW.spacing16)
                 }
 
                 if !appState.isAccessibilityEnabled {
                     banner(text: "Enable Accessibility to use the hotkey.", actionTitle: "Enable") {
                         appState.requestAccessibilityPermission()
                     }
-                    .padding(.horizontal, FW.spacing24)
-                    .padding(.top, FW.spacing16)
+                    .padding(.horizontal, FW.spacing32)
+                    .padding(.bottom, FW.spacing16)
                 }
 
-                // hero waveform + record button
+                // Hero waveform + record button
                 heroSection
-                    .padding(.horizontal, FW.spacing24)
-                    .padding(.top, FW.spacing32)
+                    .padding(.horizontal, FW.spacing32)
+                    .padding(.top, FW.spacing8)
 
-                // context bar
+                // Context bar
                 contextBar
-                    .padding(.horizontal, FW.spacing24)
+                    .padding(.horizontal, FW.spacing32)
                     .padding(.top, FW.spacing24)
 
-                // output area
+                // Output area
                 if let text = appState.lastTranscription {
                     outputSection(text)
-                        .padding(.horizontal, FW.spacing24)
+                        .padding(.horizontal, FW.spacing32)
                         .padding(.top, FW.spacing16)
                 }
 
-                // history
+                // History
                 HistoryListView()
-                    .padding(.horizontal, FW.spacing24)
+                    .padding(.horizontal, FW.spacing32)
                     .padding(.top, FW.spacing24)
 
-                // footer
-                footer
-                    .padding(FW.spacing16)
+                Spacer(minLength: FW.spacing32)
             }
         }
-        .background(FW.surfacePrimary)
+        .background(FW.background)
     }
 
     // MARK: - Header Section
 
     private var headerSection: some View {
         HStack {
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("Good evening")
+            VStack(alignment: .leading, spacing: FW.spacing4) {
+                Text(greeting)
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(FW.textPrimary)
 
@@ -90,6 +88,17 @@ struct RecordView: View {
                     .font(.body)
                     .foregroundStyle(FW.textSecondary)
             }
+
+            Spacer()
+        }
+    }
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5 ..< 12: return "Good morning"
+        case 12 ..< 17: return "Good afternoon"
+        default: return "Good evening"
         }
     }
 
@@ -97,111 +106,66 @@ struct RecordView: View {
 
     private var statsSection: some View {
         HStack(spacing: FW.spacing16) {
-            // Today stat
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                HStack(spacing: FW.spacing8) {
-                    Image(systemName: "mic.fill")
-                        .font(.body)
-                        .foregroundStyle(.blue)
-                        .frame(width: 40, height: 40)
-                        .background {
-                            Circle()
-                                .fill(Color.blue.opacity(0.15))
-                        }
+            statCard(
+                icon: "mic.fill",
+                iconColor: FW.accent,
+                value: "\(appState.todayTranscriptions)",
+                label: "Today"
+            )
 
-                    VStack(alignment: .leading, spacing: FW.spacing4) {
-                        Text("\(appState.todayTranscriptions)")
-                            .font(.title2.weight(.semibold))
-                            .foregroundStyle(FW.textPrimary)
+            statCard(
+                icon: "textformat",
+                iconColor: FW.accent,
+                value: "\(appState.totalWordsDictated)",
+                label: "Words dictated"
+            )
 
-                        Text("Today")
-                            .font(.caption)
-                            .foregroundStyle(FW.textSecondary)
-                    }
-
-                    Spacer()
-                }
-            }
-            .padding(FW.spacing16)
-            .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(FW.surfaceElevated.opacity(0.5))
-            }
-
-            // Words dictated stat
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                HStack(spacing: FW.spacing8) {
-                    Image(systemName: "textformat")
-                        .font(.body)
-                        .foregroundStyle(FW.accent)
-                        .frame(width: 40, height: 40)
-                        .background {
-                            Circle()
-                                .fill(FW.accent.opacity(0.15))
-                        }
-
-                    VStack(alignment: .leading, spacing: FW.spacing4) {
-                        Text("\(appState.totalWordsDictated)")
-                            .font(.title2.weight(.semibold))
-                            .foregroundStyle(FW.textPrimary)
-
-                        Text("Words dictated")
-                            .font(.caption)
-                            .foregroundStyle(FW.textSecondary)
-                    }
-
-                    Spacer()
-                }
-            }
-            .padding(FW.spacing16)
-            .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(FW.surfaceElevated.opacity(0.5))
-            }
-
-            // Total stat
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                HStack(spacing: FW.spacing8) {
-                    Image(systemName: "clock.fill")
-                        .font(.body)
-                        .foregroundStyle(.gray)
-                        .frame(width: 40, height: 40)
-                        .background {
-                            Circle()
-                                .fill(Color.gray.opacity(0.15))
-                        }
-
-                    VStack(alignment: .leading, spacing: FW.spacing4) {
-                        Text("\(appState.totalMinutes)")
-                            .font(.title2.weight(.semibold))
-                            .foregroundStyle(FW.textPrimary)
-
-                        Text("Total minutes")
-                            .font(.caption)
-                            .foregroundStyle(FW.textSecondary)
-                    }
-
-                    Spacer()
-                }
-            }
-            .padding(FW.spacing16)
-            .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(FW.surfaceElevated.opacity(0.5))
-            }
+            statCard(
+                icon: "clock.fill",
+                iconColor: FW.textMuted,
+                value: "\(appState.totalMinutes)",
+                label: "Minutes"
+            )
         }
+    }
+
+    private func statCard(icon: String, iconColor: Color, value: String, label: String) -> some View {
+        HStack(spacing: FW.spacing12) {
+            Image(systemName: icon)
+                .font(.body)
+                .foregroundStyle(iconColor)
+                .frame(width: 36, height: 36)
+                .background {
+                    Circle()
+                        .fill(iconColor.opacity(0.1))
+                }
+
+            VStack(alignment: .leading, spacing: FW.spacing2) {
+                Text(value)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(FW.textPrimary)
+
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(FW.textSecondary)
+            }
+
+            Spacer()
+        }
+        .padding(FW.spacing16)
+        .fwSection()
     }
 
     // MARK: - Hero Section
 
     private var heroSection: some View {
         VStack(spacing: FW.spacing24) {
-            // waveform visualization
+            // Waveform visualization
             WaveformView(isRecording: appState.isRecording, audioLevel: appState.smoothedAudioLevel)
                 .frame(height: 80)
                 .padding(.horizontal, FW.spacing16)
 
-            // big record button
+            // Big record button
             Button(action: { appState.toggleRecording() }) {
                 if appState.isRecording {
                     HStack(spacing: FW.spacing12) {
@@ -216,45 +180,39 @@ struct RecordView: View {
                         .font(.system(size: 18, weight: .semibold))
                 }
             }
-            .frame(width: 220)
-            .frame(height: 56)
-            .foregroundStyle(appState.isRecording ? .white : FW.accent)
-            .background(appState.isRecording ? FW.recording : Color(red: 1, green: 1, blue: 1))
-            .cornerRadius(20)
+            .frame(width: 200)
+            .frame(height: 52)
+            .foregroundStyle(appState.isRecording ? .white : FW.textPrimary)
+            .background {
+                RoundedRectangle(cornerRadius: FW.radiusLarge)
+                    .fill(appState.isRecording ? FW.danger : FW.surface)
+            }
             .overlay {
-                RoundedRectangle(cornerRadius: 20)
-                    .strokeBorder(appState.isRecording ? FW.recording : FW.accent, lineWidth: 2)
+                RoundedRectangle(cornerRadius: FW.radiusLarge)
+                    .strokeBorder(appState.isRecording ? FW.danger : FW.accent, lineWidth: 2)
             }
             .buttonStyle(.plain)
 
-            // shortcut hint
+            // Shortcut hint
             if case .globe = appState.hotkey.kind {
                 Text("Hold \(appState.hotkey.displayName) to record")
                     .font(FW.fontMonoSmall)
-                    .foregroundStyle(FW.textTertiary)
+                    .foregroundStyle(FW.textMuted)
             } else {
                 Text("Hotkey: \(appState.hotkey.displayName)")
                     .font(FW.fontMonoSmall)
-                    .foregroundStyle(FW.textTertiary)
+                    .foregroundStyle(FW.textMuted)
             }
         }
         .padding(FW.spacing24)
-        .background {
-            RoundedRectangle(cornerRadius: FW.radiusMedium)
-                .fill(FW.surfaceElevated.opacity(0.5))
-                .overlay {
-                    RoundedRectangle(cornerRadius: FW.radiusMedium)
-                        .strokeBorder(FW.accent.opacity(0.1), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.05), radius: 6, y: 3)
-        }
+        .fwSection()
     }
 
     // MARK: - Context Bar
 
     private var contextBar: some View {
         HStack(spacing: FW.spacing16) {
-            // target app (the app we're configuring, not Flow)
+            // Target app
             HStack(spacing: FW.spacing8) {
                 Image(systemName: "app.fill")
                     .font(.caption)
@@ -268,7 +226,7 @@ struct RecordView: View {
 
             Spacer()
 
-            // mode picker
+            // Mode picker
             Menu {
                 ForEach(WritingMode.allCases, id: \.self) { mode in
                     Button {
@@ -292,7 +250,7 @@ struct RecordView: View {
                 }
                 .foregroundStyle(FW.accent)
                 .padding(.horizontal, FW.spacing12)
-                .padding(.vertical, FW.spacing4)
+                .padding(.vertical, FW.spacing6)
                 .background {
                     RoundedRectangle(cornerRadius: FW.radiusSmall)
                         .fill(FW.accent.opacity(0.1))
@@ -303,7 +261,11 @@ struct RecordView: View {
         .padding(FW.spacing12)
         .background {
             RoundedRectangle(cornerRadius: FW.radiusSmall)
-                .fill(FW.surfaceElevated.opacity(0.5))
+                .fill(FW.surface)
+                .overlay {
+                    RoundedRectangle(cornerRadius: FW.radiusSmall)
+                        .strokeBorder(FW.border, lineWidth: 1)
+                }
         }
     }
 
@@ -314,7 +276,7 @@ struct RecordView: View {
             HStack {
                 Text("Output")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(FW.textTertiary)
+                    .foregroundStyle(FW.textMuted)
 
                 Spacer()
 
@@ -339,47 +301,21 @@ struct RecordView: View {
                 .padding(FW.spacing12)
                 .background {
                     RoundedRectangle(cornerRadius: FW.radiusSmall)
-                        .fill(FW.surfaceElevated.opacity(0.5))
+                        .fill(FW.surface)
                         .overlay {
                             RoundedRectangle(cornerRadius: FW.radiusSmall)
-                                .strokeBorder(FW.accent.opacity(0.2), lineWidth: 1)
+                                .strokeBorder(FW.border, lineWidth: 1)
                         }
                 }
         }
     }
 
-    // MARK: - Footer
-
-    private var footer: some View {
-        HStack {
-            Spacer()
-
-            HStack(spacing: FW.spacing16) {
-                statItem(value: "\(appState.totalTranscriptions)", label: "transcriptions")
-
-                if appState.totalMinutes > 0 {
-                    statItem(value: "\(appState.totalMinutes)", label: "minutes")
-                }
-            }
-        }
-    }
-
-    private func statItem(value: String, label: String) -> some View {
-        HStack(spacing: FW.spacing4) {
-            Text(value)
-                .font(FW.fontMonoSmall.weight(.medium))
-                .foregroundStyle(FW.textPrimary)
-
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(FW.textTertiary)
-        }
-    }
+    // MARK: - Banners
 
     private func banner(text: String, actionTitle: String? = nil, action: (() -> Void)? = nil) -> some View {
         HStack(spacing: FW.spacing12) {
             Text(text)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(FW.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -390,21 +326,24 @@ struct RecordView: View {
                 .buttonStyle(FWSecondaryButtonStyle())
             }
         }
-        .padding(FW.spacing12)
+        .padding(FW.spacing16)
         .background {
             RoundedRectangle(cornerRadius: FW.radiusSmall)
-                .fill(FW.surfaceElevated.opacity(0.6))
+                .fill(FW.surface)
                 .overlay {
                     RoundedRectangle(cornerRadius: FW.radiusSmall)
-                        .strokeBorder(FW.accent.opacity(0.1), lineWidth: 1)
+                        .strokeBorder(FW.warning.opacity(0.3), lineWidth: 1)
                 }
         }
     }
 
     private func errorBanner(text: String) -> some View {
         HStack(spacing: FW.spacing12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(FW.danger)
+
             Text(text)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(FW.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -416,15 +355,15 @@ struct RecordView: View {
             Button("Dismiss") {
                 appState.clearError()
             }
-            .buttonStyle(FWSecondaryButtonStyle())
+            .buttonStyle(FWGhostButtonStyle())
         }
-        .padding(FW.spacing12)
+        .padding(FW.spacing16)
         .background {
             RoundedRectangle(cornerRadius: FW.radiusSmall)
-                .fill(FW.surfaceElevated.opacity(0.6))
+                .fill(FW.surface)
                 .overlay {
                     RoundedRectangle(cornerRadius: FW.radiusSmall)
-                        .strokeBorder(FW.accent.opacity(0.1), lineWidth: 1)
+                        .strokeBorder(FW.danger.opacity(0.3), lineWidth: 1)
                 }
         }
     }

@@ -16,15 +16,16 @@ struct ShortcutsContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // header
+            // Header
             HStack {
-                VStack(alignment: .leading, spacing: FW.spacing2) {
+                VStack(alignment: .leading, spacing: FW.spacing4) {
                     Text("Voice Shortcuts")
-                        .font(.title3.weight(.semibold))
+                        .font(.title.weight(.bold))
+                        .foregroundStyle(FW.textPrimary)
 
                     Text("Expand phrases while dictating")
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
+                        .font(.body)
+                        .foregroundStyle(FW.textSecondary)
                 }
 
                 Spacer()
@@ -32,31 +33,35 @@ struct ShortcutsContentView: View {
                 Button {
                     showingAddSheet = true
                 } label: {
-                    HStack(spacing: FW.spacing4) {
+                    HStack(spacing: FW.spacing6) {
                         Image(systemName: "plus")
                         Text("Add")
                     }
                 }
                 .buttonStyle(FWSecondaryButtonStyle())
             }
-            .padding(FW.spacing24)
+            .padding(FW.spacing32)
 
-            Divider()
+            // Separator
+            Rectangle()
+                .fill(FW.border)
+                .frame(height: 1)
 
-            // list
+            // List
             if shortcuts.isEmpty {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: FW.spacing8) {
+                    LazyVStack(spacing: FW.spacing12) {
                         ForEach(shortcuts) { shortcut in
                             shortcutRow(shortcut)
                         }
                     }
-                    .padding(FW.spacing24)
+                    .padding(FW.spacing32)
                 }
             }
         }
+        .background(FW.background)
         .sheet(isPresented: $showingAddSheet) {
             AddShortcutSheet(
                 trigger: $newTrigger,
@@ -71,17 +76,18 @@ struct ShortcutsContentView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: FW.spacing16) {
+        VStack(spacing: FW.spacing20) {
             Image(systemName: "text.badge.plus")
                 .font(.system(size: 48))
-                .foregroundStyle(FW.textTertiary)
+                .foregroundStyle(FW.textMuted)
 
-            VStack(spacing: FW.spacing4) {
+            VStack(spacing: FW.spacing8) {
                 Text("No shortcuts yet")
                     .font(.headline)
+                    .foregroundStyle(FW.textPrimary)
 
                 Text("Add shortcuts to quickly expand phrases")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(FW.textSecondary)
             }
 
@@ -94,14 +100,14 @@ struct ShortcutsContentView: View {
     }
 
     private func shortcutRow(_ shortcut: ShortcutItem) -> some View {
-        HStack(spacing: FW.spacing12) {
+        HStack(spacing: FW.spacing16) {
             VStack(alignment: .leading, spacing: FW.spacing4) {
                 Text(shortcut.trigger)
                     .font(.headline)
                     .foregroundStyle(FW.accent)
 
                 Text(shortcut.replacement)
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(FW.textSecondary)
                     .lineLimit(2)
             }
@@ -111,12 +117,12 @@ struct ShortcutsContentView: View {
             if shortcut.useCount > 0 {
                 Text("\(shortcut.useCount)")
                     .font(FW.fontMonoSmall)
-                    .foregroundStyle(FW.textTertiary)
+                    .foregroundStyle(FW.textMuted)
                     .padding(.horizontal, FW.spacing8)
                     .padding(.vertical, FW.spacing4)
                     .background {
                         Capsule()
-                            .fill(FW.surfaceElevated)
+                            .fill(FW.background)
                     }
             }
 
@@ -124,15 +130,12 @@ struct ShortcutsContentView: View {
                 deleteShortcut(shortcut)
             } label: {
                 Image(systemName: "trash")
-                    .foregroundStyle(FW.recording.opacity(0.8))
+                    .foregroundStyle(FW.danger.opacity(0.8))
             }
             .buttonStyle(.plain)
         }
-        .padding(FW.spacing12)
-        .background {
-            RoundedRectangle(cornerRadius: FW.radiusSmall)
-                .fill(FW.surfaceElevated.opacity(0.5))
-        }
+        .padding(FW.spacing16)
+        .fwSection()
     }
 
     private func refreshShortcuts() {
@@ -183,38 +186,37 @@ struct AddShortcutSheet: View {
 
     var body: some View {
         VStack(spacing: FW.spacing24) {
-            // header
-            VStack(spacing: FW.spacing4) {
+            // Header
+            VStack(spacing: FW.spacing8) {
                 Text("Add Shortcut")
                     .font(.title3.weight(.semibold))
+                    .foregroundStyle(FW.textPrimary)
 
                 Text("Say the trigger phrase to expand it")
-                    .font(.caption)
-                    .foregroundStyle(FW.textTertiary)
+                    .font(.body)
+                    .foregroundStyle(FW.textSecondary)
             }
 
-            // form
+            // Form
             VStack(spacing: FW.spacing16) {
-                VStack(alignment: .leading, spacing: FW.spacing4) {
+                VStack(alignment: .leading, spacing: FW.spacing8) {
                     Text("Trigger")
-                        .font(.caption.weight(.medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(FW.textSecondary)
 
-                    TextField("e.g., 'my email'", text: $trigger)
-                        .textFieldStyle(.roundedBorder)
+                    FWTextField(text: $trigger, placeholder: "e.g., 'my email'")
                 }
 
-                VStack(alignment: .leading, spacing: FW.spacing4) {
+                VStack(alignment: .leading, spacing: FW.spacing8) {
                     Text("Replacement")
-                        .font(.caption.weight(.medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(FW.textSecondary)
 
-                    TextField("e.g., 'hello@example.com'", text: $replacement)
-                        .textFieldStyle(.roundedBorder)
+                    FWTextField(text: $replacement, placeholder: "e.g., 'hello@example.com'")
                 }
             }
 
-            // buttons
+            // Buttons
             HStack {
                 Button("Cancel") {
                     onCancel()
@@ -230,10 +232,12 @@ struct AddShortcutSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(FWPrimaryButtonStyle())
                 .disabled(trigger.isEmpty || replacement.isEmpty)
+                .opacity(trigger.isEmpty || replacement.isEmpty ? 0.5 : 1)
             }
         }
         .padding(FW.spacing24)
-        .frame(width: 360)
+        .frame(width: 400)
+        .background(FW.surface)
     }
 }
 

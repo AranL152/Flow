@@ -31,7 +31,7 @@ let package = Package(
     ],
     products: [
         .library(
-            name: "Flow",
+            name: "libflow",
             targets: ["Flow"]
         ),
         .executable(

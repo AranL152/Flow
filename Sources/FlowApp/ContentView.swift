@@ -18,7 +18,7 @@ struct ContentView: View {
                 // Sidebar
                 VStack(alignment: .leading, spacing: 0) {
                     // Logo
-                    HStack(spacing: 8) {
+                    HStack(spacing: FW.spacing8) {
                         if let iconURL = Bundle.module.url(forResource: "app-icon-old", withExtension: "png"),
                            let nsImage = NSImage(contentsOf: iconURL) {
                             Image(nsImage: nsImage)
@@ -28,33 +28,35 @@ struct ContentView: View {
                         }
 
                         Text("Flow")
-                            .font(.title2.weight(.semibold))
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(FW.textPrimary)
                     }
                     .frame(height: 50)
-                    .padding(.horizontal, 12)
-
-                    Divider()
+                    .padding(.horizontal, FW.spacing16)
 
                     // Navigation items
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: FW.spacing4) {
                         ForEach(AppTab.allCases, id: \.self) { tab in
                             navigationItem(tab)
                         }
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 8)
+                    .padding(.top, FW.spacing12)
+                    .padding(.horizontal, FW.spacing12)
 
                     Spacer()
 
                     // Status indicator at bottom
                     statusIndicator
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
-
-                    Divider()
+                        .padding(.horizontal, FW.spacing12)
+                        .padding(.bottom, FW.spacing16)
                 }
                 .frame(width: 200)
-                .background(FW.surfacePrimary)
+                .background(FW.surface)
+
+                // Subtle separator
+                Rectangle()
+                    .fill(FW.border)
+                    .frame(width: 1)
 
                 // Content area
                 VStack(spacing: 0) {
@@ -71,12 +73,12 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(minWidth: WindowSize.minWidth - 200, minHeight: WindowSize.minHeight)
-                .background(FW.surfacePrimary)
+                .background(FW.background)
             }
             .frame(minWidth: WindowSize.minWidth, minHeight: WindowSize.minHeight)
 
             if !appState.isOnboardingComplete {
-                Color.black.opacity(0.3)
+                Color.black.opacity(0.5)
                     .ignoresSafeArea()
 
                 OnboardingView()
@@ -100,36 +102,31 @@ struct ContentView: View {
                 "tab": tab.rawValue
             ])
         }) {
-            HStack(spacing: 12) {
+            HStack(spacing: FW.spacing12) {
                 Image(systemName: tab.icon)
                     .font(.body)
                     .frame(width: 20)
-                
+
                 Text(tab.rawValue)
                     .font(.body)
 
                 Spacer()
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
-        .background {
-            if appState.selectedTab == tab {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(FW.accentGradient.opacity(0.1))
-            } else if hoveredTab == tab {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(FW.surfaceElevated.opacity(0.6))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, FW.spacing12)
+            .padding(.vertical, 10)
+            .background {
+                if appState.selectedTab == tab {
+                    RoundedRectangle(cornerRadius: FW.radiusSmall)
+                        .fill(FW.accent.opacity(0.15))
+                } else if hoveredTab == tab {
+                    RoundedRectangle(cornerRadius: FW.radiusSmall)
+                        .fill(FW.border.opacity(0.5))
+                }
             }
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
-        .if(appState.selectedTab == tab) { view in
-            view.foregroundStyle(FW.accentGradient)
-        }
-        .if(appState.selectedTab != tab) { view in
-            view.foregroundStyle(FW.textSecondary)
-        }
+        .foregroundStyle(appState.selectedTab == tab ? FW.accent : FW.textSecondary)
         .buttonStyle(.plain)
         .onHover { hovering in
             if hovering {
@@ -144,7 +141,7 @@ struct ContentView: View {
     }
 
     private var statusIndicator: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: FW.spacing8) {
             Circle()
                 .fill(appState.isConfigured ? FW.success : FW.warning)
                 .frame(width: 8, height: 8)
@@ -155,11 +152,15 @@ struct ContentView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, FW.spacing12)
+        .padding(.vertical, FW.spacing8)
         .background {
-            RoundedRectangle(cornerRadius: 6)
-                .fill((appState.isConfigured ? FW.success : FW.warning).opacity(0.1))
+            RoundedRectangle(cornerRadius: FW.radiusSmall)
+                .fill(FW.background)
+                .overlay {
+                    RoundedRectangle(cornerRadius: FW.radiusSmall)
+                        .strokeBorder(FW.border, lineWidth: 1)
+                }
         }
     }
 }

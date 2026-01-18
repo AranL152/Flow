@@ -2,7 +2,7 @@
 // SettingsView.swift
 // Flow
 //
-// Settings content view with sections for API, general settings, and about.
+// Clean, minimal settings with vertical sections. Swedish minimalism vibes.
 //
 
 import AppKit
@@ -12,230 +12,41 @@ import SwiftUI
 struct SettingsContentView: View {
     var body: some View {
         ScrollView {
-            VStack(spacing: FW.spacing24) {
-                APISettingsSection()
+            VStack(alignment: .leading, spacing: FW.spacing24) {
+                Text("Settings")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(FW.textPrimary)
+
+                TranscriptionSection()
+                APIKeysSection()
+                GeneralSection()
+                KeyboardSection()
+
                 Divider()
-                GeneralSettingsSection()
-                Divider()
-                AccessibilitySection()
-                Divider()
-                LearningStatsSection()
-                Divider()
-                AboutSection()
+                    .background(FW.border)
+
+                AboutFooter()
             }
-            .padding(FW.spacing24)
+            .padding(FW.spacing32)
         }
+        .background(FW.background)
     }
 }
 
-// MARK: - API Settings
+// MARK: - Transcription Section
 
-struct APISettingsSection: View {
+private struct TranscriptionSection: View {
     @EnvironmentObject var appState: AppState
-    @State private var openAIKey = ""
-    @State private var showOpenAIKey = false
-    @State private var geminiKey = ""
-    @State private var showGeminiKey = false
-    @State private var openRouterKey = ""
-    @State private var showOpenRouterKey = false
-    @State private var selectedProvider: CompletionProvider = .openAI
     @State private var useLocalTranscription = false
-    @State private var selectedWhisperModel: WhisperModel = .quality
-    @State private var existingOpenAIKey: String?
-    @State private var existingGeminiKey: String?
-    @State private var existingOpenRouterKey: String?
+    @State private var selectedWhisperModel: WhisperModel = .balanced
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FW.spacing16) {
-            Label("API Keys", systemImage: "key")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: FW.spacing12) {
+            Text("Transcription")
+                .fwSectionHeader()
 
-            // Provider Selection
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("Active Provider")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(FW.textPrimary)
-
-                Picker("", selection: $selectedProvider) {
-                    ForEach([CompletionProvider.openAI, CompletionProvider.gemini, CompletionProvider.openRouter], id: \.rawValue) { provider in
-                        Text(provider.displayName).tag(provider)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .onChange(of: selectedProvider) { _, newProvider in
-                    // Switch provider using saved API key from database
-                    if !appState.engine.switchCompletionProvider(newProvider) {
-                        // Switch failed, revert selection
-                        if let current = appState.engine.completionProvider {
-                            selectedProvider = current
-                        }
-                        appState.errorMessage = appState.engine.lastError ?? "Failed to switch provider. Make sure you've saved an API key for \(newProvider.displayName)."
-                    } else {
-                        appState.isConfigured = appState.engine.isConfigured
-                        appState.errorMessage = nil
-                    }
-                }
-                .onAppear {
-                    // Load current provider
-                    if let current = appState.engine.completionProvider {
-                        selectedProvider = current
-                    }
-                }
-
-                if let current = appState.engine.completionProvider {
-                    Text("Currently using: \(current.displayName)")
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
-                }
-            }
-
-            Divider()
-
-            // OpenAI
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("OpenAI (Whisper)")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(FW.textPrimary)
-
-                HStack {
-                    Group {
-                        if showOpenAIKey {
-                            TextField("sk-...", text: $openAIKey)
-                        } else {
-                            SecureField("sk-...", text: $openAIKey)
-                        }
-                    }
-                    .textFieldStyle(.roundedBorder)
-                    .font(FW.fontMonoSmall)
-
-                    Button {
-                        showOpenAIKey.toggle()
-                    } label: {
-                        Image(systemName: showOpenAIKey ? "eye.slash" : "eye")
-                    }
-                    .buttonStyle(.borderless)
-
-                    Button("Save") {
-                        appState.setApiKey(openAIKey, for: .openAI)
-                        // Refresh the masked key display
-                        existingOpenAIKey = appState.engine.maskedOpenAIKey
-                        openAIKey = ""
-                    }
-                    .buttonStyle(FWSecondaryButtonStyle())
-                    .disabled(openAIKey.isEmpty)
-                }
-
-                if let existing = existingOpenAIKey {
-                    Text("Currently configured: \(existing)")
-                        .font(.caption)
-                        .foregroundStyle(FW.success)
-                } else {
-                    Text("Required for transcription")
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
-                }
-            }
-
-            // Gemini
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("Gemini")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(FW.textPrimary)
-
-                HStack {
-                    Group {
-                        if showGeminiKey {
-                            TextField("AI...", text: $geminiKey)
-                        } else {
-                            SecureField("AI...", text: $geminiKey)
-                        }
-                    }
-                    .textFieldStyle(.roundedBorder)
-                    .font(FW.fontMonoSmall)
-
-                    Button {
-                        showGeminiKey.toggle()
-                    } label: {
-                        Image(systemName: showGeminiKey ? "eye.slash" : "eye")
-                    }
-                    .buttonStyle(.borderless)
-
-                    Button("Save") {
-                        appState.setApiKey(geminiKey, for: .gemini)
-                        // Refresh the masked key display
-                        existingGeminiKey = appState.engine.maskedGeminiKey
-                        geminiKey = ""
-                    }
-                    .buttonStyle(FWSecondaryButtonStyle())
-                    .disabled(geminiKey.isEmpty)
-                }
-
-                if let existing = existingGeminiKey {
-                    Text("Currently configured: \(existing)")
-                        .font(.caption)
-                        .foregroundStyle(FW.success)
-                } else {
-                    Text("Alternative provider for transcription and completion")
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
-                }
-            }
-
-            // OpenRouter
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("OpenRouter")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(FW.textPrimary)
-
-                HStack {
-                    Group {
-                        if showOpenRouterKey {
-                            TextField("sk-or-v1-...", text: $openRouterKey)
-                        } else {
-                            SecureField("sk-or-v1-...", text: $openRouterKey)
-                        }
-                    }
-                    .textFieldStyle(.roundedBorder)
-                    .font(FW.fontMonoSmall)
-
-                    Button {
-                        showOpenRouterKey.toggle()
-                    } label: {
-                        Image(systemName: showOpenRouterKey ? "eye.slash" : "eye")
-                    }
-                    .buttonStyle(.borderless)
-
-                    Button("Save") {
-                        appState.setApiKey(openRouterKey, for: .openRouter)
-                        // Refresh the masked key display
-                        existingOpenRouterKey = appState.engine.maskedOpenRouterKey
-                        openRouterKey = ""
-                    }
-                    .buttonStyle(FWSecondaryButtonStyle())
-                    .disabled(openRouterKey.isEmpty)
-                }
-
-                if let existing = existingOpenRouterKey {
-                    Text("Currently configured: \(existing)")
-                        .font(.caption)
-                        .foregroundStyle(FW.success)
-                } else {
-                    Text("Access multiple LLM providers (Llama, Claude, GPT, etc.)")
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
-                }
-            }
-
-            Divider()
-
-            // Transcription Mode
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("Transcription")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(FW.textPrimary)
-
-                Toggle("Use local Whisper (privacy, no API costs)", isOn: $useLocalTranscription)
+            VStack(spacing: FW.spacing16) {
+                FWToggle(isOn: $useLocalTranscription, label: "Local Whisper")
                     .onChange(of: useLocalTranscription) { _, newValue in
                         if newValue {
                             _ = appState.engine.setTranscriptionMode(.local(model: selectedWhisperModel))
@@ -246,357 +57,320 @@ struct APISettingsSection: View {
 
                 if useLocalTranscription {
                     VStack(alignment: .leading, spacing: FW.spacing8) {
-                        Text("Model Size")
-                            .font(.caption)
+                        Text("Model")
+                            .font(.subheadline)
                             .foregroundStyle(FW.textSecondary)
 
-                        Picker("", selection: $selectedWhisperModel) {
-                            ForEach([WhisperModel.turbo, WhisperModel.fast, WhisperModel.balanced, WhisperModel.quality, WhisperModel.best], id: \.rawValue) { model in
-                                HStack {
-                                    VStack(alignment: .leading) {
-                                        HStack(spacing: 4) {
-                                            Text(model.displayName)
-                                            if model == .quality {
-                                                Text("Recommended")
-                                                    .font(.caption2)
-                                                    .padding(.horizontal, 4)
-                                                    .padding(.vertical, 1)
-                                                    .background(FW.accent.opacity(0.2))
-                                                    .foregroundStyle(FW.accent)
-                                                    .cornerRadius(4)
-                                            }
-                                        }
-                                        Text(model.sizeDescription)
-                                            .font(.caption2)
-                                            .foregroundStyle(FW.textTertiary)
-                                    }
-                                }
-                                .tag(model)
+                        WhisperModelPicker(selection: $selectedWhisperModel)
+                            .onChange(of: selectedWhisperModel) { _, newModel in
+                                _ = appState.engine.setTranscriptionMode(.local(model: newModel))
                             }
-                        }
-                        .pickerStyle(.radioGroup)
-                        .onChange(of: selectedWhisperModel) { _, newModel in
-                            _ = appState.engine.setTranscriptionMode(.local(model: newModel))
-                        }
-
-                        Text("Model will be downloaded when selected")
-                            .font(.caption2)
-                            .foregroundStyle(FW.textTertiary)
                     }
-                    .padding(.leading, 20)
-                } else {
-                    Text("Using cloud provider (\(selectedProvider.displayName))")
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
                 }
             }
+            .fwSection()
+        }
+    }
+}
 
-            // Status
-            HStack(spacing: FW.spacing8) {
-                Circle()
-                    .fill(appState.isConfigured ? FW.success : FW.warning)
-                    .frame(width: 10, height: 10)
+private struct WhisperModelPicker: View {
+    @Binding var selection: WhisperModel
 
-                Text(appState.isConfigured ? "API configured" : "API key required")
-                    .foregroundStyle(appState.isConfigured ? FW.success : FW.warning)
+    private let models: [(WhisperModel, String, String)] = [
+        (.fast, "Fast", "Tiny model (~39MB). Quick but less accurate."),
+        (.balanced, "Balanced", "Base model (~142MB). Good tradeoff."),
+        (.quality, "Quality", "Distil-medium (~400MB). Best accuracy.")
+    ]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(models, id: \.0) { model, label, tooltip in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selection = model
+                    }
+                } label: {
+                    Text(label)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(selection == model ? FW.textPrimary : FW.textSecondary)
+                        .padding(.horizontal, FW.spacing16)
+                        .padding(.vertical, FW.spacing8)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            if selection == model {
+                                RoundedRectangle(cornerRadius: FW.radiusSmall - 2)
+                                    .fill(FW.surface)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(tooltip)
             }
-            .padding(.top, FW.spacing8)
+        }
+        .padding(3)
+        .background {
+            RoundedRectangle(cornerRadius: FW.radiusSmall)
+                .fill(FW.background)
+        }
+    }
+}
+
+// MARK: - API Keys Section
+
+private struct APIKeysSection: View {
+    @EnvironmentObject var appState: AppState
+    @State private var openAIKey = ""
+    @State private var geminiKey = ""
+    @State private var openRouterKey = ""
+    @State private var selectedProvider: CompletionProvider = .openAI
+    @State private var existingOpenAIKey: String?
+    @State private var existingGeminiKey: String?
+    @State private var existingOpenRouterKey: String?
+    @State private var showSavedFeedback = false
+
+    private var currentProviderHasKey: Bool {
+        currentExistingKey != nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FW.spacing12) {
+            Text("API Keys")
+                .fwSectionHeader()
+
+            VStack(spacing: FW.spacing20) {
+                VStack(alignment: .leading, spacing: FW.spacing12) {
+                    Text("Provider")
+                        .font(.subheadline)
+                        .foregroundStyle(FW.textSecondary)
+
+                    FWSegmentedControl(
+                        selection: $selectedProvider,
+                        options: [CompletionProvider.openAI, CompletionProvider.gemini, CompletionProvider.openRouter],
+                        label: { $0.displayName }
+                    )
+                    .onChange(of: selectedProvider) { _, newProvider in
+                        _ = appState.engine.switchCompletionProvider(newProvider)
+                        appState.isConfigured = appState.engine.isConfigured
+                        showSavedFeedback = false
+                    }
+                }
+
+                APIKeyInput(
+                    provider: selectedProvider,
+                    key: currentKeyBinding,
+                    hasExistingKey: currentProviderHasKey,
+                    showSavedFeedback: $showSavedFeedback,
+                    onSave: saveCurrentKey
+                )
+
+                HStack(spacing: FW.spacing8) {
+                    Circle()
+                        .fill(currentProviderHasKey ? FW.success : FW.warning)
+                        .frame(width: 8, height: 8)
+                    Text(currentProviderHasKey ? "\(selectedProvider.displayName) configured" : "\(selectedProvider.displayName) key required")
+                        .font(.caption)
+                        .foregroundStyle(currentProviderHasKey ? FW.success : FW.warning)
+                }
+            }
+            .fwSection()
         }
         .onAppear {
-            // Load current provider
             if let current = appState.engine.completionProvider {
                 selectedProvider = current
             }
+            refreshKeys()
+        }
+    }
 
-            // Load masked API keys to show they're configured
-            existingOpenAIKey = appState.engine.maskedOpenAIKey
-            existingGeminiKey = appState.engine.maskedGeminiKey
-            existingOpenRouterKey = appState.engine.maskedOpenRouterKey
+    private func refreshKeys() {
+        existingOpenAIKey = appState.engine.maskedOpenAIKey
+        existingGeminiKey = appState.engine.maskedGeminiKey
+        existingOpenRouterKey = appState.engine.maskedOpenRouterKey
+    }
 
-            // Load transcription mode settings from database
-            if let mode = appState.engine.getTranscriptionMode() {
-                switch mode {
-                case .local(let model):
-                    useLocalTranscription = true
-                    selectedWhisperModel = model
-                case .remote:
-                    useLocalTranscription = false
-                }
+    private var currentKeyBinding: Binding<String> {
+        switch selectedProvider {
+        case .openAI: return $openAIKey
+        case .gemini: return $geminiKey
+        case .openRouter: return $openRouterKey
+        }
+    }
+
+    private var currentExistingKey: String? {
+        switch selectedProvider {
+        case .openAI: return existingOpenAIKey
+        case .gemini: return existingGeminiKey
+        case .openRouter: return existingOpenRouterKey
+        }
+    }
+
+    private func saveCurrentKey(_ key: String) {
+        appState.setApiKey(key, for: selectedProvider)
+        refreshKeys()
+
+        switch selectedProvider {
+        case .openAI: openAIKey = ""
+        case .gemini: geminiKey = ""
+        case .openRouter: openRouterKey = ""
+        }
+
+        withAnimation {
+            showSavedFeedback = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation {
+                showSavedFeedback = false
             }
         }
     }
 }
 
-// MARK: - General Settings
-
-struct GeneralSettingsSection: View {
-    @EnvironmentObject var appState: AppState
-    @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("playSounds") private var playSounds = true
-    @AppStorage("defaultMode") private var defaultMode = 1
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FW.spacing16) {
-            Label("General", systemImage: "gear")
-                .font(.headline)
-
-            VStack(alignment: .leading, spacing: FW.spacing12) {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                Toggle("Play sounds", isOn: $playSounds)
-            }
-
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("Default writing mode")
-                    .font(.subheadline.weight(.medium))
-
-                Picker("", selection: $defaultMode) {
-                    ForEach(WritingMode.allCases, id: \.rawValue) { mode in
-                        Text(mode.displayName).tag(Int(mode.rawValue))
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-
-                if let mode = WritingMode(rawValue: UInt8(defaultMode)) {
-                    Text(mode.description)
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Accessibility
-struct AccessibilitySection: View {
-    @EnvironmentObject var appState: AppState
+private struct APIKeyInput: View {
+    let provider: CompletionProvider
+    @Binding var key: String
+    let hasExistingKey: Bool
+    @Binding var showSavedFeedback: Bool
+    let onSave: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FW.spacing16) {
-            Label("Keyboard", systemImage: "keyboard")
-                .font(.headline)
-
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                HStack(spacing: FW.spacing8) {
-                    Text("🌐")
-                        .font(.title2)
-                    Text("Fn key is the default hotkey")
-                        .font(.subheadline.weight(.medium))
-                }
-
-                Text("Hold the Fn key to record, release to stop. Custom hotkeys toggle recording. This requires Accessibility permission.")
-                    .font(.caption)
-                    .foregroundStyle(FW.textSecondary)
-
-                Button("Open Privacy Settings") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
-                .buttonStyle(FWSecondaryButtonStyle())
-                .padding(.top, FW.spacing4)
+        HStack(spacing: FW.spacing12) {
+            if hasExistingKey {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.body)
+                    .foregroundStyle(FW.success)
             }
 
-            Divider()
+            FWSecureField(
+                text: $key,
+                placeholder: hasExistingKey ? "Enter new key to replace..." : provider.placeholder,
+                onSubmit: { if !key.isEmpty { onSave(key) } }
+            )
 
-            VStack(alignment: .leading, spacing: FW.spacing8) {
-                Text("Recording hotkey")
-                    .font(.subheadline.weight(.medium))
-
-                Text("Current: \(appState.hotkey.displayName)")
-                    .font(.caption)
-                    .foregroundStyle(FW.textSecondary)
-
-                HStack(spacing: FW.spacing12) {
-                    Button(appState.isCapturingHotkey ? "Press keys..." : "Change Hotkey") {
-                        if appState.isCapturingHotkey {
-                            appState.endHotkeyCapture()
-                        } else {
-                            appState.beginHotkeyCapture()
-                        }
+            Button {
+                onSave(key)
+            } label: {
+                if showSavedFeedback {
+                    HStack(spacing: FW.spacing4) {
+                        Image(systemName: "checkmark")
+                        Text("Saved")
                     }
-                    .buttonStyle(FWSecondaryButtonStyle())
-
-                    Button("Use Fn Key") {
-                        appState.setHotkey(Hotkey.defaultHotkey)
-                    }
-                    .buttonStyle(FWSecondaryButtonStyle())
-                }
-
-                if appState.isCapturingHotkey {
-                    Text("Press a key combination, or Esc to cancel.")
-                        .font(.caption)
-                        .foregroundStyle(FW.textTertiary)
-                }
-            }
-        }
-        .onDisappear {
-            if appState.isCapturingHotkey {
-                appState.endHotkeyCapture()
-            }
-        }
-    }
-}
-
-// MARK: - Learning Stats
-
-struct LearningStatsSection: View {
-    @EnvironmentObject var appState: AppState
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FW.spacing16) {
-            Label("Learning System", systemImage: "brain")
-                .font(.headline)
-
-            VStack(alignment: .leading, spacing: FW.spacing12) {
-                // Correction count
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Learned Corrections")
-                            .font(.subheadline.weight(.medium))
-                        Text("Auto-applies high-confidence fixes")
-                            .font(.caption)
-                            .foregroundStyle(FW.textTertiary)
-                    }
-                    Spacer()
-                    Text("\(appState.engine.correctionCount)")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(FW.accent)
-                }
-                .padding(FW.spacing12)
-                .background(FW.accent.opacity(0.1))
-                .cornerRadius(8)
-
-                // Shortcut count
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Voice Shortcuts")
-                            .font(.subheadline.weight(.medium))
-                        Text("Custom expansions you've created")
-                            .font(.caption)
-                            .foregroundStyle(FW.textTertiary)
-                    }
-                    Spacer()
-                    Text("\(appState.engine.shortcutCount)")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(FW.accent)
-                }
-                .padding(FW.spacing12)
-                .background(FW.accent.opacity(0.1))
-                .cornerRadius(8)
-
-                // Style suggestion
-                if let suggestion = appState.engine.styleSuggestion {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Suggested Style for \(appState.currentApp)")
-                                .font(.subheadline.weight(.medium))
-                            Text("Based on your writing patterns")
-                                .font(.caption)
-                                .foregroundStyle(FW.textTertiary)
-                        }
-                        Spacer()
-                        Text(suggestion.displayName)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(FW.success)
-                    }
-                    .padding(FW.spacing12)
-                    .background(FW.success.opacity(0.1))
-                    .cornerRadius(8)
                 } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Style Learning")
-                            .font(.subheadline.weight(.medium))
-                        Text("Need 3+ samples in \(appState.currentApp) to suggest a style")
-                            .font(.caption)
-                            .foregroundStyle(FW.textTertiary)
-                    }
-                    .padding(FW.spacing12)
-                    .background(FW.textTertiary.opacity(0.05))
-                    .cornerRadius(8)
+                    Text("Save")
                 }
-
-                // Total stats
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("All-Time Stats")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(FW.textSecondary)
-
-                    HStack(spacing: FW.spacing24) {
-                        VStack(spacing: 4) {
-                            Text("\(appState.totalTranscriptions)")
-                                .font(.title3.weight(.semibold))
-                            Text("Transcriptions")
-                                .font(.caption2)
-                                .foregroundStyle(FW.textTertiary)
-                        }
-
-                        VStack(spacing: 4) {
-                            Text("\(appState.totalMinutes)")
-                                .font(.title3.weight(.semibold))
-                            Text("Minutes")
-                                .font(.caption2)
-                                .foregroundStyle(FW.textTertiary)
-                        }
-                    }
-                }
-                .padding(.top, FW.spacing8)
             }
+            .buttonStyle(FWSecondaryButtonStyle())
+            .disabled(key.isEmpty)
         }
     }
 }
 
-// MARK: - About
+private extension CompletionProvider {
+    var placeholder: String {
+        switch self {
+        case .openAI: return "sk-..."
+        case .gemini: return "AI..."
+        case .openRouter: return "sk-or-v1-..."
+        }
+    }
+}
 
-struct AboutSection: View {
+// MARK: - General Section
+
+private struct GeneralSection: View {
+    @AppStorage("launchAtLogin") private var launchAtLogin = false
+
     var body: some View {
-        VStack(spacing: FW.spacing16) {
-            // logo
-            ZStack {
-                Circle()
-                    .fill(FW.accentGradient)
-                    .frame(width: 60, height: 60)
+        VStack(alignment: .leading, spacing: FW.spacing12) {
+            Text("General")
+                .fwSectionHeader()
 
-                Image(systemName: "waveform")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.white)
+            VStack(spacing: FW.spacing16) {
+                FWToggle(isOn: $launchAtLogin, label: "Launch at login")
             }
+            .fwSection()
+        }
+    }
+}
 
-            VStack(spacing: FW.spacing4) {
+// MARK: - Keyboard Section
+
+private struct KeyboardSection: View {
+    @EnvironmentObject var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FW.spacing12) {
+            Text("Keyboard")
+                .fwSectionHeader()
+
+            VStack(spacing: FW.spacing16) {
+                HStack {
+                    VStack(alignment: .leading, spacing: FW.spacing4) {
+                        Text("Hotkey")
+                            .font(.body)
+                            .foregroundStyle(FW.textPrimary)
+
+                        Text(appState.hotkey.displayName)
+                            .font(FW.fontMono)
+                            .foregroundStyle(FW.textSecondary)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: FW.spacing8) {
+                        Button(appState.isCapturingHotkey ? "Press keys..." : "Change") {
+                            if appState.isCapturingHotkey {
+                                appState.endHotkeyCapture()
+                            } else {
+                                appState.beginHotkeyCapture()
+                            }
+                        }
+                        .buttonStyle(FWSecondaryButtonStyle())
+
+                        Button("Reset to Fn") {
+                            appState.setHotkey(Hotkey.defaultHotkey)
+                        }
+                        .buttonStyle(FWGhostButtonStyle())
+                    }
+                }
+            }
+            .fwSection()
+        }
+    }
+}
+
+// MARK: - About Footer
+
+private struct AboutFooter: View {
+    var body: some View {
+        HStack {
+            HStack(spacing: FW.spacing8) {
+                Image(systemName: "waveform")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(FW.accent)
+
                 Text("Flow")
-                    .font(.title3.weight(.semibold))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(FW.textPrimary)
 
                 Text("v0.1.7")
-                    .font(FW.fontMonoSmall)
-                    .foregroundStyle(FW.textTertiary)
+                    .font(.caption)
+                    .foregroundStyle(FW.textMuted)
             }
 
-            Text("Voice dictation powered by AI")
+            Spacer()
+
+            Link(destination: URL(string: "https://github.com/jasonlovesdoggo/flow")!) {
+                HStack(spacing: FW.spacing4) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                    Text("GitHub")
+                }
                 .font(.subheadline)
-                .foregroundStyle(FW.textSecondary)
-
-            HStack(spacing: FW.spacing24) {
-                Link(destination: URL(string: "https://gowithflow.tech")!) {
-                    HStack(spacing: FW.spacing4) {
-                        Image(systemName: "globe")
-                        Text("Website")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(FW.accent)
-                }
-
-                Link(destination: URL(string: "https://github.com/jasonlovesdoggo/flow")!) {
-                    HStack(spacing: FW.spacing4) {
-                        Image(systemName: "chevron.left.forwardslash.chevron.right")
-                        Text("GitHub")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(FW.accent)
-                }
+                .foregroundStyle(FW.accent)
             }
+            .buttonStyle(.plain)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, FW.spacing16)
     }
 }
 

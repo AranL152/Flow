@@ -27,15 +27,16 @@ struct HistoryListView: View {
                                 historyRow(item)
                                 if index < section.items.count - 1 {
                                     Divider()
+                                        .padding(.leading, 72)
                                 }
                             }
                         }
                         .background {
                             RoundedRectangle(cornerRadius: FW.radiusMedium)
-                                .fill(FW.surfaceElevated.opacity(0.5))
+                                .fill(FW.surface)
                                 .overlay {
                                     RoundedRectangle(cornerRadius: FW.radiusMedium)
-                                        .strokeBorder(FW.accent.opacity(0.1), lineWidth: 1)
+                                        .strokeBorder(FW.border, lineWidth: 1)
                                 }
                         }
                     }
@@ -99,12 +100,6 @@ struct HistoryListView: View {
         formatter.timeStyle = .none
         return formatter
     }
-
-    private var timeFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter
-    }
 }
 
 private struct HistoryRowView: View {
@@ -113,79 +108,109 @@ private struct HistoryRowView: View {
     let onRetry: () -> Void
 
     @State private var isHovering = false
+    @State private var showCopied = false
 
     private var timeFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
+        formatter.dateFormat = "HH:mm"
         return formatter
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: FW.spacing16) {
+        HStack(alignment: .top, spacing: FW.spacing12) {
+            // Time column - fixed width, top aligned
+            Text(timeFormatter.string(from: item.createdAt))
+                .font(FW.fontMonoSmall)
+                .foregroundStyle(FW.textMuted)
+                .frame(width: 48, alignment: .trailing)
+                .padding(.top, FW.spacing12)
+
+            // Content column
             VStack(alignment: .leading, spacing: FW.spacing4) {
-                Text(timeFormatter.string(from: item.createdAt))
-                    .font(FW.fontMonoSmall)
-                    .foregroundStyle(FW.textTertiary)
-
-                if item.status == .failed {
-                    Text("Failed")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(FW.warning)
-                }
-            }
-            .frame(width: 80, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: FW.spacing8) {
                 if item.status == .success {
                     Text(item.text)
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(FW.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     #if DEBUG
                     if isHovering && !item.rawText.isEmpty {
                         Text(item.rawText)
                             .font(.caption)
-                            .foregroundStyle(FW.textTertiary)
-                            .padding(.top, 2)
+                            .foregroundStyle(FW.textMuted)
                     }
                     #endif
                 } else {
-                    Text(item.error ?? "Transcription failed")
-                        .font(.subheadline)
-                        .foregroundStyle(FW.textSecondary)
+                    HStack(spacing: FW.spacing6) {
+                        Text("Failed")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(FW.warning)
+
+                        Text(item.error ?? "Transcription failed")
+                            .font(.body)
+                            .foregroundStyle(FW.textSecondary)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, FW.spacing12)
 
+            // Actions column
             HStack(spacing: FW.spacing8) {
                 if item.status == .success {
                     Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(item.text, forType: .string)
-                        Analytics.shared.track("History Item Copied", eventProperties: [
-                            "text_length": item.text.count
-                        ])
+                        copyToClipboard()
                     } label: {
-                        Image(systemName: "doc.on.doc")
-                            .font(.caption)
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.body)
+                            .foregroundStyle(showCopied ? FW.success : FW.textSecondary)
                     }
-                    .buttonStyle(FWGhostButtonStyle())
+                    .buttonStyle(.plain)
                 } else if item.id == retryableHistoryId {
                     Button {
                         onRetry()
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.caption)
+                            .font(.body)
                     }
                     .buttonStyle(FWGhostButtonStyle())
                 }
             }
-            .padding(.vertical, FW.spacing12)
+            .padding(.top, FW.spacing12)
+            .padding(.trailing, FW.spacing4)
         }
-        .padding(.horizontal, FW.spacing16)
+        .padding(.horizontal, FW.spacing12)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if item.status == .success {
+                copyToClipboard()
+            }
+        }
         .onHover { hovering in
             isHovering = hovering
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+
+    private func copyToClipboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(item.text, forType: .string)
+        Analytics.shared.track("History Item Copied", eventProperties: [
+            "text_length": item.text.count
+        ])
+
+        withAnimation {
+            showCopied = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            withAnimation {
+                showCopied = false
+            }
         }
     }
 }

@@ -65,6 +65,9 @@ pub struct FlowHandle {
     contact_classifier: ContactClassifier,
     /// Captured contact name at recording start (for Messages.app context)
     captured_contact: Mutex<Option<String>>,
+    /// Temporary storage for audio between stop and transcribe (ensures mic is fully released)
+    pending_audio: Mutex<Option<crate::AudioData>>,
+    pending_sample_rate: Mutex<Option<u32>>,
 }
 
 #[derive(Serialize)]
@@ -244,12 +247,16 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
         is_model_loading: Arc::new(AtomicBool::new(false)),
         contact_classifier,
         captured_contact: Mutex::new(None),
+        pending_audio: Mutex::new(None),
+        pending_sample_rate: Mutex::new(None),
     };
 
     load_persisted_configuration(&mut handle);
 
     // Load transcription mode (local vs remote Whisper)
-    let use_local = handle.storage.get_setting(SETTING_USE_LOCAL_TRANSCRIPTION)
+    let use_local = handle
+        .storage
+        .get_setting(SETTING_USE_LOCAL_TRANSCRIPTION)
         .ok()
         .flatten()
         .map(|s| s == "true")
@@ -257,7 +264,9 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
 
     if use_local {
         log_with_time!("🔧 [INIT] Loading local Whisper transcription from database");
-        let model_str = handle.storage.get_setting(SETTING_LOCAL_WHISPER_MODEL)
+        let model_str = handle
+            .storage
+            .get_setting(SETTING_LOCAL_WHISPER_MODEL)
             .ok()
             .flatten();
         let model = WhisperModel::all()
@@ -272,15 +281,16 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
         // Get models directory
         match crate::whisper_models::get_models_dir() {
             Ok(models_dir) => {
-                handle.transcription = Arc::new(LocalWhisperTranscriptionProvider::new(
-                    model,
-                    models_dir
-                ));
+                handle.transcription =
+                    Arc::new(LocalWhisperTranscriptionProvider::new(model, models_dir));
                 log_with_time!("✅ [INIT] Using local Whisper model: {:?}", model);
             }
             Err(e) => {
                 error!("Failed to get models directory: {}", e);
-                log_with_time!("⚠️ [INIT] Failed to load local Whisper, falling back to remote: {}", e);
+                log_with_time!(
+                    "⚠️ [INIT] Failed to load local Whisper, falling back to remote: {}",
+                    e
+                );
             }
         }
     } else {
@@ -383,15 +393,38 @@ pub extern "C" fn flow_start_recording(handle: *mut FlowHandle) -> bool {
 
 /// Stop audio recording and get the duration
 /// Returns duration in milliseconds, or 0 on failure
+/// This function extracts audio data and fully releases the microphone device
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_stop_recording(handle: *mut FlowHandle) -> u64 {
     let handle = unsafe { &*handle };
+    log_with_time!("⏹️  [STOP] flow_stop_recording called");
+
     let mut audio_lock = handle.audio.lock();
 
-    if let Some(ref mut capture) = *audio_lock {
+    // Take ownership of AudioCapture (removes it from the Option)
+    // This causes it to be dropped after this block, releasing the CPAL device
+    if let Some(mut capture) = audio_lock.take() {
         let duration = capture.buffer_duration_ms();
+
         match capture.stop_stream() {
             Ok(_) => {
+                // Extract and cache audio data before dropping AudioCapture
+                let sample_rate = capture.sample_rate();
+                let audio_data = capture.take_buffered_audio();
+
+                let audio_size = audio_data.len();
+                *handle.pending_audio.lock() = Some(audio_data);
+                *handle.pending_sample_rate.lock() = Some(sample_rate);
+
+                // AudioCapture is dropped here - CPAL device fully released
+                drop(capture);
+
+                log_with_time!(
+                    "✅ [STOP] Recording stopped - duration: {}ms, audio_size: {} bytes, mic device released",
+                    duration,
+                    audio_size
+                );
+
                 clear_last_error(handle);
                 duration
             }
@@ -399,11 +432,16 @@ pub extern "C" fn flow_stop_recording(handle: *mut FlowHandle) -> u64 {
                 let message = format!("Failed to stop recording: {e}");
                 error!("{message}");
                 set_last_error(handle, message);
+                log_with_time!("❌ [STOP] Failed to stop recording: {}", e);
+
+                // Still drop capture even on error
+                drop(capture);
                 0
             }
         }
     } else {
         set_last_error(handle, "Audio capture unavailable");
+        log_with_time!("❌ [STOP] No audio capture available");
         0
     }
 }
@@ -495,22 +533,30 @@ fn transcribe_with_audio(
 
     let provider_name = std::any::type_name_of_val(&*transcription_provider);
     log_with_time!(
-        "🎧 [RUST/TRANSCRIBE] Starting speech-to-text transcription (provider: {})",
-        provider_name
+        "🎧 [RUST/TRANSCRIBE] Starting speech-to-text transcription (provider: {}, audio_size: {} bytes)",
+        provider_name,
+        audio_data.len()
     );
+    let transcribe_start = std::time::Instant::now();
     let transcription = handle.runtime.block_on(async {
         let request = TranscriptionRequest::new(audio_data, sample_rate);
         transcription_provider.transcribe(request).await
     })?;
+    let transcribe_duration = transcribe_start.elapsed();
     log_with_time!(
-        "✅ [RUST/TRANSCRIBE] Speech-to-text completed - Raw text: {} chars",
+        "✅ [RUST/TRANSCRIBE] Speech-to-text completed in {:.2}s - Raw text: {} chars",
+        transcribe_duration.as_secs_f64(),
         transcription.text.len()
     );
 
     let (text_with_shortcuts, triggered) = handle.shortcuts.process(&transcription.text);
     let (text_with_corrections, _applied) = handle.learning.apply_corrections(&text_with_shortcuts);
 
+    log_with_time!("⏳ [PAUSE] Sleeping 2s before AI completion (diagnostic)");
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
     log_with_time!("🤖 [RUST/AI] Starting AI completion with mode: {:?}", mode);
+    let completion_start = std::time::Instant::now();
     let completion_result = handle.runtime.block_on(async {
         let mut completion_request = if let Some(name) = app_name.clone() {
             CompletionRequest::new(text_with_corrections.clone(), mode).with_app_context(name)
@@ -533,18 +579,21 @@ fn transcribe_with_audio(
 
         completion_provider.complete(completion_request).await
     });
+    let completion_duration = completion_start.elapsed();
 
     let processed_text = match completion_result {
         Ok(completion) => {
             log_with_time!(
-                "✅ [RUST/AI] AI completion succeeded - Output: {} chars",
+                "✅ [RUST/AI] AI completion succeeded in {:.2}s - Output: {} chars",
+                completion_duration.as_secs_f64(),
                 completion.text.len()
             );
             completion.text
         }
         Err(err) => {
             log_with_time!(
-                "❌ [RUST/AI] Completion failed, using corrected text: {}",
+                "❌ [RUST/AI] Completion failed after {:.2}s, using corrected text: {}",
+                completion_duration.as_secs_f64(),
                 err
             );
             text_with_corrections.clone()
@@ -581,33 +630,38 @@ fn transcribe_with_audio(
 /// Returns the processed text (caller must free with flow_free_string)
 /// Returns null on failure
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_transcribe(
-    handle: *mut FlowHandle,
-    app_name: *const c_char,
-) -> *mut c_char {
+pub extern "C" fn flow_transcribe(handle: *mut FlowHandle, app_name: *const c_char) -> *mut c_char {
     let handle = unsafe { &*handle };
+    log_with_time!("🎙️  [TRANSCRIBE] flow_transcribe called");
 
-    // get audio data
+    // Get cached audio data (don't touch handle.audio at all)
+    // This ensures the microphone device was already released by flow_stop_recording
     let (audio_data, sample_rate) = {
-        let mut audio_lock = handle.audio.lock();
-        if let Some(ref mut capture) = *audio_lock {
-            if let Err(e) = capture.stop_stream() {
-                let message = format!("Failed to stop recording: {e}");
-                error!("{message}");
-                set_last_error(handle, message);
+        let audio_data = handle.pending_audio.lock().take();
+        let sample_rate = handle.pending_sample_rate.lock().take();
+
+        match (audio_data, sample_rate) {
+            (Some(data), Some(rate)) => {
+                log_with_time!(
+                    "✅ [TRANSCRIBE] Retrieved cached audio: {} bytes",
+                    data.len()
+                );
+                (data, rate)
+            }
+            _ => {
+                set_last_error(
+                    handle,
+                    "No audio data pending - must call stop_recording first",
+                );
+                log_with_time!("❌ [TRANSCRIBE] No pending audio data");
                 return ptr::null_mut();
             }
-            let sample_rate = capture.sample_rate();
-            let audio_data = capture.take_buffered_audio();
-            (audio_data, sample_rate)
-        } else {
-            set_last_error(handle, "No audio capture available");
-            return ptr::null_mut();
         }
     };
 
     if audio_data.is_empty() {
         set_last_error(handle, "No audio captured");
+        log_with_time!("❌ [TRANSCRIBE] Audio data is empty");
         return ptr::null_mut();
     }
 
@@ -626,11 +680,18 @@ pub extern "C" fn flow_transcribe(
     *handle.last_audio_sample_rate.lock() = Some(sample_rate);
     let result = transcribe_with_audio(handle, audio_data, sample_rate, app);
 
+    log_with_time!("⏳ [PAUSE] Sleeping 2s after AI completion (diagnostic)");
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
     // Clear the captured contact after transcription (whether success or failure)
     *handle.captured_contact.lock() = None;
 
     match result {
         Ok(text) => {
+            log_with_time!(
+                "✅ [TRANSCRIBE] Transcription completed successfully - result: {} chars",
+                text.len()
+            );
             clear_last_error(handle);
             *handle.last_audio.lock() = None;
             *handle.last_audio_sample_rate.lock() = None;
@@ -643,6 +704,7 @@ pub extern "C" fn flow_transcribe(
             let message = format!("Transcription failed: {e}");
             error!("{message}");
             set_last_error(handle, message.clone());
+            log_with_time!("❌ [TRANSCRIBE] Transcription failed: {}", e);
             let mut history = TranscriptionHistoryEntry::failure(message, duration_ms);
             history.app_context = handle.app_tracker.current_app();
             if let Err(e) = handle.storage.save_history_entry(&history) {
@@ -749,10 +811,7 @@ pub extern "C" fn flow_add_shortcut(
 /// Remove a voice shortcut
 /// Returns true on success
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_remove_shortcut(
-    handle: *mut FlowHandle,
-    trigger: *const c_char,
-) -> bool {
+pub extern "C" fn flow_remove_shortcut(handle: *mut FlowHandle, trigger: *const c_char) -> bool {
     if trigger.is_null() {
         return false;
     }
@@ -817,10 +876,7 @@ pub extern "C" fn flow_set_app_mode(
 /// Get the writing mode for an app
 /// Returns: 0 = Formal, 1 = Casual, 2 = VeryCasual, 3 = Excited
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_app_mode(
-    handle: *mut FlowHandle,
-    app_name: *const c_char,
-) -> u8 {
+pub extern "C" fn flow_get_app_mode(handle: *mut FlowHandle, app_name: *const c_char) -> u8 {
     if app_name.is_null() {
         return 1; // default to casual
     }
@@ -1018,10 +1074,7 @@ pub extern "C" fn flow_get_current_app(handle: *mut FlowHandle) -> *mut c_char {
 
 /// Report edited text to learn user's style for current app
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_learn_style(
-    handle: *mut FlowHandle,
-    edited_text: *const c_char,
-) -> bool {
+pub extern "C" fn flow_learn_style(handle: *mut FlowHandle, edited_text: *const c_char) -> bool {
     if edited_text.is_null() {
         return false;
     }
@@ -1151,10 +1204,7 @@ pub extern "C" fn flow_get_last_error(handle: *mut FlowHandle) -> *mut c_char {
 /// provider: 0 = OpenAI, 1 = Gemini, 2 = OpenRouter
 /// Returns true if provider was switched successfully
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_switch_completion_provider(
-    handle: *mut FlowHandle,
-    provider: u8,
-) -> bool {
+pub extern "C" fn flow_switch_completion_provider(handle: *mut FlowHandle, provider: u8) -> bool {
     let handle = unsafe { &mut *handle };
 
     let (setting_key, provider_name) = match provider {
@@ -1346,10 +1396,7 @@ fn mask_api_key(key: &str) -> String {
 /// Returns null if no key is set, or a masked version like "sk-••••••••"
 /// Caller must free the returned string with flow_free_string
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_api_key(
-    handle: *mut FlowHandle,
-    provider: u8,
-) -> *mut c_char {
+pub extern "C" fn flow_get_api_key(handle: *mut FlowHandle, provider: u8) -> *mut c_char {
     let handle = unsafe { &*handle };
 
     let setting_key = match provider {
@@ -1630,9 +1677,7 @@ pub extern "C" fn flow_get_shortcuts_json(handle: *mut FlowHandle) -> *mut c_cha
 /// Returns C string with contact name, or null if not available
 /// Caller must free with flow_free_string
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_active_messages_contact(
-    handle: *mut FlowHandle,
-) -> *mut c_char {
+pub extern "C" fn flow_get_active_messages_contact(handle: *mut FlowHandle) -> *mut c_char {
     let handle = unsafe { &*handle };
     clear_last_error(handle);
 
@@ -1757,10 +1802,7 @@ pub extern "C" fn flow_classify_contacts_batch(
 
 /// Record interaction with a contact (updates frequency)
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_record_contact_interaction(
-    handle: *mut FlowHandle,
-    name: *const c_char,
-) {
+pub extern "C" fn flow_record_contact_interaction(handle: *mut FlowHandle, name: *const c_char) {
     let handle = unsafe { &*handle };
     clear_last_error(handle);
 
@@ -1781,10 +1823,7 @@ pub extern "C" fn flow_record_contact_interaction(
 /// Returns: [{"name": "...", "category": "...", "frequency": N}, ...]
 /// Caller must free with flow_free_string
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_frequent_contacts(
-    handle: *mut FlowHandle,
-    limit: u32,
-) -> *mut c_char {
+pub extern "C" fn flow_get_frequent_contacts(handle: *mut FlowHandle, limit: u32) -> *mut c_char {
     let handle = unsafe { &*handle };
     clear_last_error(handle);
 
