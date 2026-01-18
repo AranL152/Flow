@@ -149,8 +149,11 @@ fn build_system_prompt(mode: &str, app_context: Option<&str>, shortcuts: &[Strin
          be typed. Do NOT generate new content, do NOT add commentary or responses, do NOT say anything.\n\n",
     );
 
+    let mode_prompt = get_mode_prompt(mode);
+    worker::console_log!("[DEBUG] build_system_prompt: mode={:?}, mode_prompt={:?}", mode, mode_prompt);
+
     prompt.push_str("Formatting style: ");
-    prompt.push_str(get_mode_prompt(mode));
+    prompt.push_str(mode_prompt);
 
     if let Some(context) = app_context {
         prompt.push_str("\n\nContext: User is typing in ");
@@ -656,11 +659,20 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
         .clone()
         .or_else(|| extract_voice_command(&transcription));
 
+    worker::console_log!(
+        "[DEBUG] transcription={:?}, mode={:?}, voice_instruction={:?}",
+        &transcription,
+        &request.completion.mode,
+        &voice_instruction
+    );
+
     let text = if let Some(instruction) = voice_instruction {
         // Voice command mode - use instruction prompt
+        worker::console_log!("[DEBUG] Using voice command mode");
         call_openrouter_instruction(&env, &instruction).await?
     } else {
         // Normal formatting mode
+        worker::console_log!("[DEBUG] Using normal formatting mode with mode={}", &request.completion.mode);
         call_openrouter(
             &env,
             &transcription,
@@ -670,6 +682,8 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
         )
         .await?
     };
+
+    worker::console_log!("[DEBUG] result text={:?}", &text);
 
     // Step 3: Return
     let response = CombinedResponse {
