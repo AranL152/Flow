@@ -53,9 +53,13 @@ struct ContentView: View {
         HStack {
             // Logo
             HStack(spacing: FW.spacing8) {
-                Image(systemName: "waveform")
-                    .font(.title2)
-                    .foregroundStyle(FW.accentGradient)
+                if let iconURL = Bundle.module.url(forResource: "app-icon-old", withExtension: "png"),
+                   let nsImage = NSImage(contentsOf: iconURL) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .frame(width: 24, height: 24)
+                        .cornerRadius(5)
+                }
                 Text("Flow")
                     .font(.title2.weight(.semibold))
             }
