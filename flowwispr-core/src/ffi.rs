@@ -11,6 +11,7 @@ use std::os::raw::{c_char, c_void};
 use std::path::PathBuf;
 use std::ptr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -48,6 +49,7 @@ pub struct FlowWhisprHandle {
     modes: Mutex<WritingModeEngine>,
     app_tracker: AppTracker,
     style_learner: Mutex<StyleLearner>,
+    is_model_loading: Arc<AtomicBool>,
 }
 
 #[derive(Serialize)]
@@ -66,6 +68,18 @@ pub type ResultCallback = extern "C" fn(success: bool, result: *const c_char, co
 
 fn set_last_error(handle: &FlowWhisprHandle, message: impl Into<String>) {
     *handle.last_error.lock() = Some(message.into());
+}
+
+/// Check if Whisper model files exist in the models directory
+fn check_model_files_exist(model: WhisperModel, models_dir: &std::path::Path) -> bool {
+    let (model_id, _) = model.model_id();
+    let model_name = model_id.split('/').next_back().unwrap();
+
+    let config_path = models_dir.join(format!("{}-config.json", model_name));
+    let tokenizer_path = models_dir.join(format!("{}-tokenizer.json", model_name));
+    let weights_path = models_dir.join(format!("{}-model.safetensors", model_name));
+
+    config_path.exists() && tokenizer_path.exists() && weights_path.exists()
 }
 
 fn clear_last_error(handle: &FlowWhisprHandle) {
@@ -156,6 +170,7 @@ pub extern "C" fn flowwispr_init(db_path: *const c_char) -> *mut FlowWhisprHandl
         modes: Mutex::new(modes),
         app_tracker,
         style_learner: Mutex::new(style_learner),
+        is_model_loading: Arc::new(AtomicBool::new(false)),
     };
 
     load_persisted_configuration(&mut handle);
@@ -1145,7 +1160,12 @@ pub extern "C" fn flowwispr_get_completion_provider(handle: *mut FlowWhisprHandl
 
 /// Set transcription mode (local or remote)
 /// use_local: true for local Whisper, false for cloud provider
-/// whisper_model: 0 = Tiny, 1 = Base, 2 = Small (only used when use_local = true)
+/// whisper_model: Model selection (only used when use_local = true)
+///   0 = Turbo (~15MB) - quantized, ultra-fast, lowest memory
+///   1 = Fast (~39MB) - fast, lower accuracy
+///   2 = Balanced (~142MB) - good speed/accuracy balance
+///   3 = Quality (~400MB) - great accuracy, still fast [recommended]
+///   4 = Best (~750MB) - best quality available
 /// Returns true on success, false on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flowwispr_set_transcription_mode(
@@ -1156,10 +1176,10 @@ pub extern "C" fn flowwispr_set_transcription_mode(
     let handle = unsafe { &mut *handle };
 
     // Save setting to database
-    if let Err(e) = handle
-        .storage
-        .set_setting(SETTING_USE_LOCAL_TRANSCRIPTION, if use_local { "true" } else { "false" })
-    {
+    if let Err(e) = handle.storage.set_setting(
+        SETTING_USE_LOCAL_TRANSCRIPTION,
+        if use_local { "true" } else { "false" },
+    ) {
         let message = format!("Failed to save transcription mode: {}", e);
         error!("{}", message);
         set_last_error(handle, message);
@@ -1169,22 +1189,23 @@ pub extern "C" fn flowwispr_set_transcription_mode(
     if use_local {
         // Local Whisper transcription
         let model = match whisper_model {
-            0 => WhisperModel::Tiny,
-            1 => WhisperModel::Base,
-            2 => WhisperModel::Small,
+            0 => WhisperModel::Turbo,
+            1 => WhisperModel::Fast,
+            2 => WhisperModel::Balanced,
+            3 => WhisperModel::Quality,
+            4 => WhisperModel::Best,
             _ => {
-                set_last_error(handle, "Invalid Whisper model selection");
+                set_last_error(handle, "Invalid Whisper model selection (0-4)");
                 return false;
             }
         };
 
-        // Save model choice
-        let model_name = match model {
-            WhisperModel::Tiny => "tiny",
-            WhisperModel::Base => "base",
-            WhisperModel::Small => "small",
-        };
-        if let Err(e) = handle.storage.set_setting(SETTING_LOCAL_WHISPER_MODEL, model_name) {
+        // Save model choice using canonical name
+        let model_name = model.as_str();
+        if let Err(e) = handle
+            .storage
+            .set_setting(SETTING_LOCAL_WHISPER_MODEL, model_name)
+        {
             let message = format!("Failed to save Whisper model: {}", e);
             error!("{}", message);
             set_last_error(handle, message);
@@ -1202,14 +1223,34 @@ pub extern "C" fn flowwispr_set_transcription_mode(
             }
         };
 
+        // Check if model files already exist
+        let files_exist = check_model_files_exist(model, &models_dir);
+
+        // Set loading flag if this will require downloading
+        if !files_exist {
+            handle.is_model_loading.store(true, Ordering::SeqCst);
+            debug!(
+                "Model files not found, will download (~{}MB)",
+                model.size_mb()
+            );
+        }
+
         // Create provider
         let provider = Arc::new(LocalWhisperTranscriptionProvider::new(model, models_dir));
 
         // Trigger model download/load asynchronously
         let provider_clone = Arc::clone(&provider);
+        let loading_flag = Arc::clone(&handle.is_model_loading);
+        let should_clear_flag = !files_exist;
+
         handle.runtime.spawn(async move {
             if let Err(e) = provider_clone.load_model().await {
                 error!("Failed to load Whisper model: {}", e);
+            }
+            // Clear loading flag when done (only if we set it)
+            if should_clear_flag {
+                loading_flag.store(false, Ordering::SeqCst);
+                debug!("Model loading completed");
             }
         });
 
@@ -1248,16 +1289,104 @@ pub extern "C" fn flowwispr_set_transcription_mode(
     true
 }
 
+/// Get current transcription mode settings
+/// Returns use_local flag and whisper_model (0-4) via out parameters
+/// Returns false on database error, true on success
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_get_transcription_mode(
+    handle: *mut FlowWhisprHandle,
+    out_use_local: *mut bool,
+    out_whisper_model: *mut u8,
+) -> bool {
+    let handle = unsafe { &*handle };
+
+    // Read use_local setting from database
+    let use_local = match handle.storage.get_setting(SETTING_USE_LOCAL_TRANSCRIPTION) {
+        Ok(Some(value)) => value == "true",
+        Ok(None) => false, // Default to remote if not set
+        Err(e) => {
+            error!("Failed to read transcription mode: {}", e);
+            return false;
+        }
+    };
+
+    // Read whisper model setting from database
+    let whisper_model = if use_local {
+        match handle.storage.get_setting(SETTING_LOCAL_WHISPER_MODEL) {
+            Ok(Some(model_str)) => {
+                // Convert model name to enum
+                let model = WhisperModel::all()
+                    .iter()
+                    .find(|m| m.as_str() == model_str)
+                    .copied()
+                    .unwrap_or(WhisperModel::Balanced); // Default to Balanced
+
+                // Convert enum to u8
+                match model {
+                    WhisperModel::Turbo => 0,
+                    WhisperModel::Fast => 1,
+                    WhisperModel::Balanced => 2,
+                    WhisperModel::Quality => 3,
+                    WhisperModel::Best => 4,
+                }
+            }
+            Ok(None) => 1, // Default to Balanced
+            Err(e) => {
+                error!("Failed to read Whisper model: {}", e);
+                return false;
+            }
+        }
+    } else {
+        1 // Default value when using remote transcription
+    };
+
+    // Write to out parameters
+    unsafe {
+        *out_use_local = use_local;
+        *out_whisper_model = whisper_model;
+    }
+
+    true
+}
+
+/// Check if a Whisper model is currently being downloaded/initialized
+/// Returns true if model download/initialization is in progress
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_is_model_loading(handle: *mut FlowWhisprHandle) -> bool {
+    let handle = unsafe { &*handle };
+    handle.is_model_loading.load(Ordering::SeqCst)
+}
+
 /// Legacy function - prefer flowwispr_set_transcription_mode
-/// Enable local Whisper transcription with Metal acceleration
-/// model: 0 = Tiny, 1 = Base, 2 = Small
+/// Enable local Whisper transcription with Metal + Accelerate acceleration
+/// model: 0=Turbo, 1=Fast, 2=Balanced, 3=Quality, 4=Best
 /// Returns true on success, false on failure
 #[unsafe(no_mangle)]
-pub extern "C" fn flowwispr_enable_local_whisper(
-    handle: *mut FlowWhisprHandle,
-    model: u8,
-) -> bool {
+pub extern "C" fn flowwispr_enable_local_whisper(handle: *mut FlowWhisprHandle, model: u8) -> bool {
     flowwispr_set_transcription_mode(handle, true, model)
+}
+
+/// Get available Whisper models as JSON (caller must free with flowwispr_free_string)
+/// Returns JSON array with model info including id, name, description, size, and flags
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_get_whisper_models_json() -> *mut c_char {
+    let models: Vec<serde_json::Value> = WhisperModel::all()
+        .iter()
+        .enumerate()
+        .map(|(id, model)| {
+            serde_json::json!({
+                "id": id,
+                "name": model.as_str(),
+                "description": model.description(),
+                "size_mb": model.size_mb(),
+                "is_quantized": model.is_quantized(),
+                "is_distilled": model.is_distilled(),
+            })
+        })
+        .collect();
+
+    let json = serde_json::to_string(&models).unwrap_or_else(|_| "[]".to_string());
+    CString::new(json).unwrap().into_raw()
 }
 
 /// Get all shortcuts as JSON (caller must free with flowwispr_free_string)

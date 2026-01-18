@@ -38,7 +38,7 @@ struct APISettingsSection: View {
     @State private var showOpenRouterKey = false
     @State private var selectedProvider: CompletionProvider = .openAI
     @State private var useLocalTranscription = false
-    @State private var selectedWhisperModel: WhisperModel = .base
+    @State private var selectedWhisperModel: WhisperModel = .quality
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing16) {
@@ -227,12 +227,25 @@ struct APISettingsSection: View {
                             .foregroundStyle(FW.textSecondary)
 
                         Picker("", selection: $selectedWhisperModel) {
-                            ForEach([WhisperModel.tiny, WhisperModel.base, WhisperModel.small], id: \.rawValue) { model in
-                                VStack(alignment: .leading) {
-                                    Text(model.displayName)
-                                    Text(model.sizeDescription)
-                                        .font(.caption2)
-                                        .foregroundStyle(FW.textTertiary)
+                            ForEach([WhisperModel.turbo, WhisperModel.fast, WhisperModel.balanced, WhisperModel.quality, WhisperModel.best], id: \.rawValue) { model in
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        HStack(spacing: 4) {
+                                            Text(model.displayName)
+                                            if model == .quality {
+                                                Text("Recommended")
+                                                    .font(.caption2)
+                                                    .padding(.horizontal, 4)
+                                                    .padding(.vertical, 1)
+                                                    .background(FW.accent.opacity(0.2))
+                                                    .foregroundStyle(FW.accent)
+                                                    .cornerRadius(4)
+                                            }
+                                        }
+                                        Text(model.sizeDescription)
+                                            .font(.caption2)
+                                            .foregroundStyle(FW.textTertiary)
+                                    }
                                 }
                                 .tag(model)
                             }
@@ -242,7 +255,7 @@ struct APISettingsSection: View {
                             _ = appState.engine.setTranscriptionMode(.local(model: newModel))
                         }
 
-                        Text("Model will download automatically on first use")
+                        Text("Model will be downloaded when selected")
                             .font(.caption2)
                             .foregroundStyle(FW.textTertiary)
                     }
@@ -264,6 +277,18 @@ struct APISettingsSection: View {
                     .foregroundStyle(appState.isConfigured ? FW.success : FW.warning)
             }
             .padding(.top, FW.spacing8)
+        }
+        .onAppear {
+            // Load transcription mode settings from database
+            if let mode = appState.engine.getTranscriptionMode() {
+                switch mode {
+                case .local(let model):
+                    useLocalTranscription = true
+                    selectedWhisperModel = model
+                case .remote:
+                    useLocalTranscription = false
+                }
+            }
         }
     }
 }
@@ -399,7 +424,7 @@ struct AboutSection: View {
                 Text("Flow")
                     .font(.title3.weight(.semibold))
 
-                Text("v1.0.0")
+                Text("v0.1.7")
                     .font(FW.fontMonoSmall)
                     .foregroundStyle(FW.textTertiary)
             }

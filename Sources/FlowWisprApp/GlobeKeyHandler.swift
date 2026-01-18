@@ -28,6 +28,10 @@ final class GlobeKeyHandler {
     private var functionUsedAsModifier = false
     private var pendingFnTrigger: DispatchWorkItem?
 
+    private var isModifierDown = false
+    private var modifierUsedAsModifier = false
+    private var pendingModifierTrigger: DispatchWorkItem?
+
     init(hotkey: Hotkey, onHotkeyTriggered: @escaping @Sendable (Trigger) -> Void) {
         self.hotkey = hotkey
         self.onHotkeyTriggered = onHotkeyTriggered
@@ -49,6 +53,10 @@ final class GlobeKeyHandler {
         functionUsedAsModifier = false
         pendingFnTrigger?.cancel()
         pendingFnTrigger = nil
+        isModifierDown = false
+        modifierUsedAsModifier = false
+        pendingModifierTrigger?.cancel()
+        pendingModifierTrigger = nil
     }
 
     @discardableResult
@@ -115,6 +123,19 @@ final class GlobeKeyHandler {
             default:
                 break
             }
+        case .modifierOnly(let modifier):
+            switch type {
+            case .flagsChanged:
+                handleModifierFlagChange(event, modifier: modifier)
+            case .keyDown:
+                if isModifierDown {
+                    modifierUsedAsModifier = true
+                    pendingModifierTrigger?.cancel()
+                    pendingModifierTrigger = nil
+                }
+            default:
+                break
+            }
         case .custom:
             if type == .keyDown, matchesCustomHotkey(event) {
                 fireHotkey(.toggle)
@@ -147,6 +168,66 @@ final class GlobeKeyHandler {
         if !functionUsedAsModifier {
             fireHotkey(.released)
         }
+    }
+
+    private func handleModifierFlagChange(_ event: CGEvent, modifier: Hotkey.ModifierKey) {
+        let hasModifier = event.flags.contains(modifier.cgFlag)
+
+        // Check if other modifiers are also pressed (means it's being used as a combo)
+        let otherModifiersPressed = hasOtherModifiers(event.flags, excluding: modifier)
+
+        guard hasModifier != isModifierDown else {
+            // If the modifier is still down but other modifiers changed, mark as used
+            if isModifierDown && otherModifiersPressed {
+                modifierUsedAsModifier = true
+                pendingModifierTrigger?.cancel()
+                pendingModifierTrigger = nil
+            }
+            return
+        }
+
+        if hasModifier {
+            // Modifier just pressed
+            if otherModifiersPressed {
+                // Already in a combo, don't trigger
+                return
+            }
+            isModifierDown = true
+            modifierUsedAsModifier = false
+            pendingModifierTrigger?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self, self.isModifierDown, !self.modifierUsedAsModifier else { return }
+                self.fireHotkey(.pressed)
+            }
+            pendingModifierTrigger = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + fnHoldDelaySeconds, execute: workItem)
+            return
+        }
+
+        // Modifier released
+        guard isModifierDown else { return }
+        isModifierDown = false
+        pendingModifierTrigger?.cancel()
+        pendingModifierTrigger = nil
+
+        if !modifierUsedAsModifier {
+            fireHotkey(.released)
+        }
+    }
+
+    private func hasOtherModifiers(_ flags: CGEventFlags, excluding: Hotkey.ModifierKey) -> Bool {
+        let allModifiers: [(CGEventFlags, Hotkey.ModifierKey)] = [
+            (.maskAlternate, .option),
+            (.maskShift, .shift),
+            (.maskControl, .control),
+            (.maskCommand, .command)
+        ]
+        for (flag, key) in allModifiers {
+            if key != excluding && flags.contains(flag) {
+                return true
+            }
+        }
+        return false
     }
 
     private func matchesCustomHotkey(_ event: CGEvent) -> Bool {
