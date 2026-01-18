@@ -167,19 +167,20 @@ impl OpenAICompletionProvider {
 
     fn build_system_prompt(&self, mode: WritingMode, app_context: Option<&str>) -> String {
         let mut prompt = String::from(
-            "You are a dictation assistant. Your job is to take raw transcribed speech \
-             and format it appropriately. Preserve the user's intended meaning while \
-             applying the requested formatting style. Output ONLY the formatted text, \
-             nothing else.\n\n",
+            "You are a text formatter and command processor. Handle two types of input:\n\n\
+             1. <TRANSCRIPTION>text here</TRANSCRIPTION> - Reformat the text inside according to the style below. \
+             Output ONLY the reformatted text, exactly as it would be typed. Do NOT generate new content, \
+             do NOT add commentary or responses.\n\n\
+             2. <COMMAND>instruction here</COMMAND> - Process the command and return the result appropriately.\n\n",
         );
 
         prompt.push_str("Formatting style: ");
         prompt.push_str(mode.prompt_modifier());
 
         if let Some(context) = app_context {
-            prompt.push_str("\n\nContext: The user is typing in ");
+            prompt.push_str("\n\nContext: User is typing in ");
             prompt.push_str(context);
-            prompt.push_str(". Adjust formatting appropriately for this context.");
+            prompt.push_str(". Adjust formatting for this context.");
         }
 
         prompt
@@ -252,7 +253,7 @@ impl CompletionProvider for OpenAICompletionProvider {
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: request.text,
+                    content: format!("<TRANSCRIPTION>\n{}\n</TRANSCRIPTION>", request.text),
                 },
             ],
             max_tokens: request.max_tokens,
@@ -363,12 +364,14 @@ mod tests {
         let provider = OpenAICompletionProvider::new(None);
 
         let prompt = provider.build_system_prompt(WritingMode::Formal, None);
-        assert!(prompt.contains("formally"));
         assert!(prompt.contains("professional"));
+        assert!(prompt.contains("<TRANSCRIPTION>"));
+        assert!(prompt.contains("<COMMAND>"));
 
         let prompt = provider.build_system_prompt(WritingMode::VeryCasual, Some("Slack"));
-        assert!(prompt.contains("casually"));
+        assert!(prompt.contains("texting style"));
         assert!(prompt.contains("Slack"));
+        assert!(prompt.contains("exactly as it would be typed"));
     }
 
     #[test]
