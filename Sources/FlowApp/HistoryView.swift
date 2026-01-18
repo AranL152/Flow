@@ -196,6 +196,7 @@ private struct HistoryRowView: View {
         }
     }
 
+    @MainActor
     private func copyToClipboard() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(item.text, forType: .string)
