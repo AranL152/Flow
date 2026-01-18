@@ -142,7 +142,7 @@ private struct HistoryRowView: View {
                         .foregroundStyle(FW.textPrimary)
 
                     #if DEBUG
-                    if isHovering && !item.rawText.isEmpty && item.rawText != item.text {
+                    if isHovering && !item.rawText.isEmpty {
                         Text(item.rawText)
                             .font(.caption)
                             .foregroundStyle(FW.textTertiary)
