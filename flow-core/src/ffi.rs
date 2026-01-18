@@ -46,8 +46,8 @@ macro_rules! log_with_time {
     }};
 }
 
-/// Opaque handle to the FlowWhispr engine
-pub struct FlowWhisprHandle {
+/// Opaque handle to the Flow engine
+pub struct FlowHandle {
     runtime: Runtime,
     storage: Storage,
     audio: Mutex<Option<AudioCapture>>,
@@ -82,7 +82,7 @@ struct TranscriptionSummary {
 /// Result callback type for async operations
 pub type ResultCallback = extern "C" fn(success: bool, result: *const c_char, context: *mut c_void);
 
-fn set_last_error(handle: &FlowWhisprHandle, message: impl Into<String>) {
+fn set_last_error(handle: &FlowHandle, message: impl Into<String>) {
     *handle.last_error.lock() = Some(message.into());
 }
 
@@ -98,7 +98,7 @@ fn check_model_files_exist(model: WhisperModel, models_dir: &std::path::Path) ->
     config_path.exists() && tokenizer_path.exists() && weights_path.exists()
 }
 
-fn clear_last_error(handle: &FlowWhisprHandle) {
+fn clear_last_error(handle: &FlowHandle) {
     *handle.last_error.lock() = None;
 }
 
@@ -107,7 +107,7 @@ fn estimate_duration_ms(bytes: usize, sample_rate: u32) -> u64 {
     (samples as u64 * 1000) / sample_rate as u64
 }
 
-fn load_persisted_configuration(handle: &mut FlowWhisprHandle) {
+fn load_persisted_configuration(handle: &mut FlowHandle) {
     // Load all API keys
     let openai_key = handle
         .storage
@@ -176,11 +176,11 @@ fn load_persisted_configuration(handle: &mut FlowWhisprHandle) {
 
 // ============ Lifecycle ============
 
-/// Initialize the FlowWhispr engine
+/// Initialize the Flow engine
 /// Returns an opaque handle that must be passed to all other functions
 /// Returns null on failure
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowWhisprHandle {
+pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
     let db_path = if db_path.is_null() {
         // default to app support directory
         dirs::data_local_dir()
@@ -227,7 +227,7 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowWhisprHandle {
     let style_learner = StyleLearner::new();
     let contact_classifier = ContactClassifier::new();
 
-    let mut handle = FlowWhisprHandle {
+    let mut handle = FlowHandle {
         runtime,
         storage,
         audio: Mutex::new(None),
@@ -287,19 +287,19 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowWhisprHandle {
         log_with_time!("☁️ [INIT] Using remote transcription (OpenAI Whisper API)");
     }
 
-    debug!("FlowWhispr engine initialized");
+    debug!("Flow engine initialized");
 
     Box::into_raw(Box::new(handle))
 }
 
-/// Destroy the FlowWhispr engine and free resources
+/// Destroy the Flow engine and free resources
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_destroy(handle: *mut FlowWhisprHandle) {
+pub extern "C" fn flow_destroy(handle: *mut FlowHandle) {
     if !handle.is_null() {
         unsafe {
             drop(Box::from_raw(handle));
         }
-        debug!("FlowWhispr engine destroyed");
+        debug!("Flow engine destroyed");
     }
 }
 
@@ -308,7 +308,7 @@ pub extern "C" fn flow_destroy(handle: *mut FlowWhisprHandle) {
 /// Start audio recording
 /// Returns true on success
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_start_recording(handle: *mut FlowWhisprHandle) -> bool {
+pub extern "C" fn flow_start_recording(handle: *mut FlowHandle) -> bool {
     let handle = unsafe { &*handle };
 
     // Capture the active Messages contact at recording START (before any focus changes)
@@ -384,7 +384,7 @@ pub extern "C" fn flow_start_recording(handle: *mut FlowWhisprHandle) -> bool {
 /// Stop audio recording and get the duration
 /// Returns duration in milliseconds, or 0 on failure
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_stop_recording(handle: *mut FlowWhisprHandle) -> u64 {
+pub extern "C" fn flow_stop_recording(handle: *mut FlowHandle) -> u64 {
     let handle = unsafe { &*handle };
     let mut audio_lock = handle.audio.lock();
 
@@ -410,7 +410,7 @@ pub extern "C" fn flow_stop_recording(handle: *mut FlowWhisprHandle) -> u64 {
 
 /// Check if currently recording
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_is_recording(handle: *mut FlowWhisprHandle) -> bool {
+pub extern "C" fn flow_is_recording(handle: *mut FlowHandle) -> bool {
     let handle = unsafe { &*handle };
     let audio_lock = handle.audio.lock();
 
@@ -424,7 +424,7 @@ pub extern "C" fn flow_is_recording(handle: *mut FlowWhisprHandle) -> bool {
 /// Get current audio level (RMS amplitude) from the recording
 /// Returns a value between 0.0 and 1.0, or 0.0 if not recording
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_audio_level(handle: *mut FlowWhisprHandle) -> f32 {
+pub extern "C" fn flow_get_audio_level(handle: *mut FlowHandle) -> f32 {
     let handle = unsafe { &*handle };
     let audio_lock = handle.audio.lock();
 
@@ -442,7 +442,7 @@ pub extern "C" fn flow_get_audio_level(handle: *mut FlowWhisprHandle) -> f32 {
 // ============ Transcription ============
 
 fn transcribe_with_audio(
-    handle: &FlowWhisprHandle,
+    handle: &FlowHandle,
     audio_data: crate::AudioData,
     sample_rate: u32,
     app_name: Option<String>,
@@ -582,7 +582,7 @@ fn transcribe_with_audio(
 /// Returns null on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_transcribe(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     app_name: *const c_char,
 ) -> *mut c_char {
     let handle = unsafe { &*handle };
@@ -657,7 +657,7 @@ pub extern "C" fn flow_transcribe(
 /// Returns processed text (caller must free with flow_free_string), or null on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_retry_last_transcription(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     app_name: *const c_char,
 ) -> *mut c_char {
     let handle = unsafe { &*handle };
@@ -715,7 +715,7 @@ pub extern "C" fn flow_retry_last_transcription(
 /// Returns true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_add_shortcut(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     trigger: *const c_char,
     replacement: *const c_char,
 ) -> bool {
@@ -750,7 +750,7 @@ pub extern "C" fn flow_add_shortcut(
 /// Returns true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_remove_shortcut(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     trigger: *const c_char,
 ) -> bool {
     if trigger.is_null() {
@@ -770,7 +770,7 @@ pub extern "C" fn flow_remove_shortcut(
 
 /// Get the number of shortcuts
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_shortcut_count(handle: *mut FlowWhisprHandle) -> usize {
+pub extern "C" fn flow_shortcut_count(handle: *mut FlowHandle) -> usize {
     let handle = unsafe { &*handle };
     handle.shortcuts.count()
 }
@@ -782,7 +782,7 @@ pub extern "C" fn flow_shortcut_count(handle: *mut FlowWhisprHandle) -> usize {
 /// Returns true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_set_app_mode(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     app_name: *const c_char,
     mode: u8,
 ) -> bool {
@@ -818,7 +818,7 @@ pub extern "C" fn flow_set_app_mode(
 /// Returns: 0 = Formal, 1 = Casual, 2 = VeryCasual, 3 = Excited
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_get_app_mode(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     app_name: *const c_char,
 ) -> u8 {
     if app_name.is_null() {
@@ -849,7 +849,7 @@ pub extern "C" fn flow_get_app_mode(
 /// Returns true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_learn_from_edit(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     original: *const c_char,
     edited: *const c_char,
 ) -> bool {
@@ -886,7 +886,7 @@ pub extern "C" fn flow_learn_from_edit(
 
 /// Get the number of learned corrections
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_correction_count(handle: *mut FlowWhisprHandle) -> usize {
+pub extern "C" fn flow_correction_count(handle: *mut FlowHandle) -> usize {
     let handle = unsafe { &*handle };
     handle.learning.cache_size()
 }
@@ -895,7 +895,7 @@ pub extern "C" fn flow_correction_count(handle: *mut FlowWhisprHandle) -> usize 
 
 /// Get total transcription time in minutes
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_total_transcription_minutes(handle: *mut FlowWhisprHandle) -> u64 {
+pub extern "C" fn flow_total_transcription_minutes(handle: *mut FlowHandle) -> u64 {
     let handle = unsafe { &*handle };
     handle
         .storage
@@ -906,7 +906,7 @@ pub extern "C" fn flow_total_transcription_minutes(handle: *mut FlowWhisprHandle
 
 /// Get total transcription count
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_transcription_count(handle: *mut FlowWhisprHandle) -> u64 {
+pub extern "C" fn flow_transcription_count(handle: *mut FlowHandle) -> u64 {
     let handle = unsafe { &*handle };
     handle.storage.get_transcription_count().unwrap_or(0)
 }
@@ -925,7 +925,7 @@ pub extern "C" fn flow_free_string(s: *mut c_char) {
 
 /// Check if the transcription provider is configured
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_is_configured(handle: *mut FlowWhisprHandle) -> bool {
+pub extern "C" fn flow_is_configured(handle: *mut FlowHandle) -> bool {
     let handle = unsafe { &*handle };
     handle.transcription.is_configured() && handle.completion.is_configured()
 }
@@ -936,7 +936,7 @@ pub extern "C" fn flow_is_configured(handle: *mut FlowWhisprHandle) -> bool {
 /// Returns the suggested writing mode for the app
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_set_active_app(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     app_name: *const c_char,
     bundle_id: *const c_char,
     window_title: *const c_char,
@@ -984,7 +984,7 @@ pub extern "C" fn flow_set_active_app(
 /// Get the current app's category
 /// Returns: 0=Email, 1=Slack, 2=Code, 3=Documents, 4=Social, 5=Browser, 6=Terminal, 7=Unknown
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_app_category(handle: *mut FlowWhisprHandle) -> u8 {
+pub extern "C" fn flow_get_app_category(handle: *mut FlowHandle) -> u8 {
     let handle = unsafe { &*handle };
 
     use crate::types::AppCategory;
@@ -1002,7 +1002,7 @@ pub extern "C" fn flow_get_app_category(handle: *mut FlowWhisprHandle) -> u8 {
 
 /// Get current app name (caller must free with flow_free_string)
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_current_app(handle: *mut FlowWhisprHandle) -> *mut c_char {
+pub extern "C" fn flow_get_current_app(handle: *mut FlowHandle) -> *mut c_char {
     let handle = unsafe { &*handle };
 
     match handle.app_tracker.current_app() {
@@ -1019,7 +1019,7 @@ pub extern "C" fn flow_get_current_app(handle: *mut FlowWhisprHandle) -> *mut c_
 /// Report edited text to learn user's style for current app
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_learn_style(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     edited_text: *const c_char,
 ) -> bool {
     if edited_text.is_null() {
@@ -1047,7 +1047,7 @@ pub extern "C" fn flow_learn_style(
 /// Get suggested mode based on learned style for current app
 /// Returns: 0=Formal, 1=Casual, 2=VeryCasual, 3=Excited, 255=no suggestion
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_style_suggestion(handle: *mut FlowWhisprHandle) -> u8 {
+pub extern "C" fn flow_get_style_suggestion(handle: *mut FlowHandle) -> u8 {
     let handle = unsafe { &*handle };
 
     let app_name = match handle.app_tracker.current_app() {
@@ -1071,7 +1071,7 @@ pub extern "C" fn flow_get_style_suggestion(handle: *mut FlowWhisprHandle) -> u8
 
 /// Get user stats as JSON (caller must free with flow_free_string)
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_stats_json(handle: *mut FlowWhisprHandle) -> *mut c_char {
+pub extern "C" fn flow_get_stats_json(handle: *mut FlowHandle) -> *mut c_char {
     let handle = unsafe { &*handle };
 
     let stats = serde_json::json!({
@@ -1091,7 +1091,7 @@ pub extern "C" fn flow_get_stats_json(handle: *mut FlowWhisprHandle) -> *mut c_c
 /// Get recent transcriptions as JSON (caller must free with flow_free_string)
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_get_recent_transcriptions_json(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     limit: usize,
 ) -> *mut c_char {
     let handle = unsafe { &*handle };
@@ -1133,7 +1133,7 @@ pub extern "C" fn flow_get_recent_transcriptions_json(
 
 /// Get the last error message (caller must free with flow_free_string)
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_last_error(handle: *mut FlowWhisprHandle) -> *mut c_char {
+pub extern "C" fn flow_get_last_error(handle: *mut FlowHandle) -> *mut c_char {
     let handle = unsafe { &*handle };
     let message = handle.last_error.lock().clone();
     match message {
@@ -1152,7 +1152,7 @@ pub extern "C" fn flow_get_last_error(handle: *mut FlowWhisprHandle) -> *mut c_c
 /// Returns true if provider was switched successfully
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_switch_completion_provider(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     provider: u8,
 ) -> bool {
     let handle = unsafe { &mut *handle };
@@ -1226,7 +1226,7 @@ pub extern "C" fn flow_switch_completion_provider(
 /// api_key: The API key for the provider
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_set_completion_provider(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     provider: u8,
     api_key: *const c_char,
 ) -> bool {
@@ -1311,7 +1311,7 @@ pub extern "C" fn flow_set_completion_provider(
 /// Get the current completion provider name
 /// Returns: 0 = OpenAI, 1 = Gemini, 2 = OpenRouter, 255 = Unknown
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_completion_provider(handle: *mut FlowWhisprHandle) -> u8 {
+pub extern "C" fn flow_get_completion_provider(handle: *mut FlowHandle) -> u8 {
     let handle = unsafe { &*handle };
 
     match handle.completion.name() {
@@ -1347,7 +1347,7 @@ fn mask_api_key(key: &str) -> String {
 /// Caller must free the returned string with flow_free_string
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_get_api_key(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     provider: u8,
 ) -> *mut c_char {
     let handle = unsafe { &*handle };
@@ -1379,7 +1379,7 @@ pub extern "C" fn flow_get_api_key(
 /// Returns true on success, false on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_set_transcription_mode(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     use_local: bool,
     whisper_model: u8,
 ) -> bool {
@@ -1504,7 +1504,7 @@ pub extern "C" fn flow_set_transcription_mode(
 /// Returns false on database error, true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_get_transcription_mode(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     out_use_local: *mut bool,
     out_whisper_model: *mut u8,
 ) -> bool {
@@ -1562,7 +1562,7 @@ pub extern "C" fn flow_get_transcription_mode(
 /// Check if a Whisper model is currently being downloaded/initialized
 /// Returns true if model download/initialization is in progress
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_is_model_loading(handle: *mut FlowWhisprHandle) -> bool {
+pub extern "C" fn flow_is_model_loading(handle: *mut FlowHandle) -> bool {
     let handle = unsafe { &*handle };
     handle.is_model_loading.load(Ordering::SeqCst)
 }
@@ -1572,7 +1572,7 @@ pub extern "C" fn flow_is_model_loading(handle: *mut FlowWhisprHandle) -> bool {
 /// model: 0=Turbo, 1=Fast, 2=Balanced, 3=Quality, 4=Best
 /// Returns true on success, false on failure
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_enable_local_whisper(handle: *mut FlowWhisprHandle, model: u8) -> bool {
+pub extern "C" fn flow_enable_local_whisper(handle: *mut FlowHandle, model: u8) -> bool {
     flow_set_transcription_mode(handle, true, model)
 }
 
@@ -1601,7 +1601,7 @@ pub extern "C" fn flow_get_whisper_models_json() -> *mut c_char {
 
 /// Get all shortcuts as JSON (caller must free with flow_free_string)
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_get_shortcuts_json(handle: *mut FlowWhisprHandle) -> *mut c_char {
+pub extern "C" fn flow_get_shortcuts_json(handle: *mut FlowHandle) -> *mut c_char {
     let handle = unsafe { &*handle };
 
     let shortcuts: Vec<serde_json::Value> = handle
@@ -1631,7 +1631,7 @@ pub extern "C" fn flow_get_shortcuts_json(handle: *mut FlowWhisprHandle) -> *mut
 /// Caller must free with flow_free_string
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_get_active_messages_contact(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
 ) -> *mut c_char {
     let handle = unsafe { &*handle };
     clear_last_error(handle);
@@ -1657,7 +1657,7 @@ pub extern "C" fn flow_get_active_messages_contact(
 /// Caller must free with flow_free_string
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_classify_contact(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     name: *const c_char,
     organization: *const c_char,
 ) -> *mut c_char {
@@ -1716,7 +1716,7 @@ pub extern "C" fn flow_classify_contact(
 /// Caller must free with flow_free_string
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_classify_contacts_batch(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     contacts_json: *const c_char,
 ) -> *mut c_char {
     let handle = unsafe { &*handle };
@@ -1758,7 +1758,7 @@ pub extern "C" fn flow_classify_contacts_batch(
 /// Record interaction with a contact (updates frequency)
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_record_contact_interaction(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     name: *const c_char,
 ) {
     let handle = unsafe { &*handle };
@@ -1782,7 +1782,7 @@ pub extern "C" fn flow_record_contact_interaction(
 /// Caller must free with flow_free_string
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_get_frequent_contacts(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     limit: u32,
 ) -> *mut c_char {
     let handle = unsafe { &*handle };
@@ -1817,7 +1817,7 @@ pub extern "C" fn flow_get_frequent_contacts(
 /// Returns: 0=Formal, 1=Casual, 2=VeryCasual, 3=Excited
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_get_writing_mode_for_category(
-    handle: *mut FlowWhisprHandle,
+    handle: *mut FlowHandle,
     category: u32,
 ) -> u32 {
     let handle = unsafe { &*handle };

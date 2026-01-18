@@ -1,6 +1,6 @@
 [package]
-name = "flow-core"
-version = "0.1.0"
+name = "flow"
+version = "0.1.12"
 edition = "2024"
 
 [lib]

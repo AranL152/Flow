@@ -5,8 +5,8 @@ import Foundation
 import PackageDescription
 
 let packageRoot = URL(fileURLWithPath: #file).deletingLastPathComponent().path
-let debugLibPath = "\(packageRoot)/flow-core/target/debug/libflow_core.a"
-let releaseLibPath = "\(packageRoot)/flow-core/target/release/libflow_core.a"
+let debugLibPath = "\(packageRoot)/flow-core/target/debug/libflow.a"
+let releaseLibPath = "\(packageRoot)/flow-core/target/release/libflow.a"
 let buildConfiguration = (ProcessInfo.processInfo.environment["SWIFT_BUILD_CONFIGURATION"]
     ?? ProcessInfo.processInfo.environment["CONFIGURATION"])?.lowercased()
 let preferRelease = buildConfiguration == "release"

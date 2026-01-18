@@ -1,5 +1,5 @@
 module CFlow {
     header "flow.h"
-    link "flow_core"
+    link "flow"
     export *
 }
