@@ -13,14 +13,12 @@ struct FlowApp: App {
     @StateObject private var appState = AppState()
     
     private var menuBarIcon: NSImage? {
-        guard let iconURL = Bundle.main.url(forResource: "menubar", withExtension: "svg"),
+        guard let iconURL = Bundle.module.url(forResource: "menubar", withExtension: "png"),
               let icon = NSImage(contentsOf: iconURL) else {
             return nil
         }
         icon.isTemplate = true
-        // Scale to 75%
-        let scaledSize = NSSize(width: icon.size.width * 0.75, height: icon.size.height * 0.75)
-        icon.size = scaledSize
+        icon.size = NSSize(width: 18, height: 18)
         return icon
     }
 
@@ -43,7 +41,7 @@ struct FlowApp: App {
         } label: {
             if let icon = menuBarIcon {
                 Image(nsImage: icon)
-                    .foregroundStyle(appState.isRecording ? .red : .primary)
+                    .padding(.top, 2)
             }
         }
         .menuBarExtraStyle(.menu)
