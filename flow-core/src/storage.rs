@@ -165,6 +165,26 @@ impl Storage {
             [],
         );
 
+        // Seed default corrections (only if table is empty)
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM corrections",
+            [],
+            |row| row.get(0),
+        )?;
+
+        if count == 0 {
+            let now = Utc::now().to_rfc3339();
+            // Common transcription error: "u of t hacks" -> "UofTHacks"
+            conn.execute(
+                r#"
+                INSERT OR IGNORE INTO corrections (id, original, corrected, occurrences, confidence, source, created_at, updated_at)
+                VALUES (?1, 'u of t hacks', 'UofTHacks', 3, 0.75, 'Seeded', ?2, ?2)
+                "#,
+                params![Uuid::new_v4().to_string(), now],
+            )?;
+            debug!("Seeded default corrections");
+        }
+
         info!("Database schema initialized");
         Ok(())
     }
@@ -1142,6 +1162,10 @@ mod tests {
     fn test_correction_deletion() {
         let storage = Storage::in_memory().unwrap();
 
+        // Get initial count (includes seeded corrections)
+        let initial = storage.get_all_corrections().unwrap();
+        let initial_count = initial.len();
+
         // Create and save multiple corrections
         let correction1 = Correction::new(
             "teh".to_string(),
@@ -1157,18 +1181,18 @@ mod tests {
         storage.save_correction(&correction1).unwrap();
         storage.save_correction(&correction2).unwrap();
 
-        // Verify both exist
+        // Verify both were added
         let all = storage.get_all_corrections().unwrap();
-        assert_eq!(all.len(), 2);
+        assert_eq!(all.len(), initial_count + 2);
 
         // Delete one correction
         let deleted = storage.delete_correction(&correction1.id).unwrap();
         assert!(deleted);
 
-        // Verify only one remains
+        // Verify one was removed
         let remaining = storage.get_all_corrections().unwrap();
-        assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].original, "recieve");
+        assert_eq!(remaining.len(), initial_count + 1);
+        assert!(remaining.iter().any(|c| c.original == "recieve"));
 
         // Delete non-existent correction
         let not_deleted = storage.delete_correction(&uuid::Uuid::new_v4()).unwrap();
@@ -1176,7 +1200,7 @@ mod tests {
 
         // Delete all corrections
         let deleted_count = storage.delete_all_corrections().unwrap();
-        assert_eq!(deleted_count, 1);
+        assert_eq!(deleted_count, initial_count + 1);
 
         // Verify none remain
         let empty = storage.get_all_corrections().unwrap();
