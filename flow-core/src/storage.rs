@@ -29,6 +29,8 @@ pub const SETTING_USE_LOCAL_TRANSCRIPTION: &str = "use_local_transcription";
 pub const SETTING_LOCAL_WHISPER_MODEL: &str = "local_whisper_model";
 /// Cloud transcription provider: "auto" (default) | "openai"
 pub const SETTING_CLOUD_TRANSCRIPTION_PROVIDER: &str = "cloud_transcription_provider";
+/// Whether local transcription falls back to the cloud on failure ("true" default | "false")
+pub const SETTING_TRANSCRIPTION_FALLBACK: &str = "transcription_fallback";
 
 impl Storage {
     /// Open or create a database at the given path
