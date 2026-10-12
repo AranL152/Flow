@@ -1,8 +1,18 @@
 //! Self-learning typo correction engine
 //!
 //! Learns from user corrections when they edit transcribed text.
-//! Uses Jaro-Winkler similarity for fuzzy matching and logarithmic confidence scaling.
+//!
+//! Two algorithms do the work, each where it is strongest:
+//! - **Jaro-Winkler** detects which word pairs in an edit are typo fixes. It
+//!   favours strings agreeing at the start, which is the usual shape of a
+//!   dictation typo ("recieve"/"receive"), and is cheap on short words.
+//! - **Aho-Corasick** applies the learned vocabulary. Every cached correction is
+//!   compiled into one automaton, so applying them is a single O(n) pass over
+//!   the text no matter how many corrections exist, instead of a per-word hash
+//!   lookup. Matches are validated against word boundaries and the text between
+//!   matches is copied verbatim, so original spacing and newlines survive.
 
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use strsim::jaro_winkler;
@@ -26,8 +36,12 @@ const MAX_LENGTH_DIFF: usize = 1;
 
 /// Engine for learning and applying typo corrections
 pub struct LearningEngine {
-    /// In-memory cache of high-confidence corrections (original -> corrected)
+    /// In-memory cache of high-confidence corrections (original -> corrected).
+    /// Keys are always lowercase so lookups and automaton matching agree.
     corrections: RwLock<HashMap<String, CachedCorrection>>,
+    /// Compiled Aho-Corasick automaton over the eligible correction keys.
+    /// Rebuilt whenever the cache changes, so applying is build-free.
+    matcher: RwLock<Option<CorrectionMatcher>>,
     /// Minimum confidence for auto-applying corrections
     min_confidence: f32,
 }
@@ -38,11 +52,19 @@ struct CachedCorrection {
     confidence: f32,
 }
 
+/// An Aho-Corasick automaton plus the replacement for each pattern index.
+struct CorrectionMatcher {
+    automaton: AhoCorasick,
+    /// Indexed by pattern id from the automaton
+    replacements: Vec<CachedCorrection>,
+}
+
 impl LearningEngine {
     /// Create a new learning engine
     pub fn new() -> Self {
         Self {
             corrections: RwLock::new(HashMap::new()),
+            matcher: RwLock::new(None),
             min_confidence: MIN_AUTO_APPLY_CONFIDENCE,
         }
     }
@@ -64,6 +86,8 @@ impl LearningEngine {
         }
         drop(cache);
 
+        engine.rebuild_matcher();
+
         info!(
             "Loaded {} corrections into learning engine",
             engine.corrections.read().len()
@@ -75,6 +99,60 @@ impl LearningEngine {
     /// Set the minimum confidence threshold for auto-applying corrections
     pub fn set_min_confidence(&mut self, confidence: f32) {
         self.min_confidence = confidence.clamp(0.0, 1.0);
+        self.rebuild_matcher();
+    }
+
+    /// Compile the eligible cache entries into a single automaton.
+    /// Returns None when nothing is eligible, which makes applying a no-op.
+    fn build_matcher(
+        cache: &HashMap<String, CachedCorrection>,
+        min_confidence: f32,
+    ) -> Option<CorrectionMatcher> {
+        let mut patterns: Vec<&str> = Vec::with_capacity(cache.len());
+        let mut replacements: Vec<CachedCorrection> = Vec::with_capacity(cache.len());
+
+        for (original, correction) in cache {
+            if original.is_empty() || correction.confidence < min_confidence {
+                continue;
+            }
+            patterns.push(original.as_str());
+            replacements.push(correction.clone());
+        }
+
+        if patterns.is_empty() {
+            return None;
+        }
+
+        // LeftmostLongest so the longest correction wins when keys overlap.
+        let automaton = AhoCorasickBuilder::new()
+            .match_kind(MatchKind::LeftmostLongest)
+            .build(&patterns)
+            .ok()?;
+
+        Some(CorrectionMatcher {
+            automaton,
+            replacements,
+        })
+    }
+
+    /// Rebuild the automaton from the current cache. Call after any cache change.
+    fn rebuild_matcher(&self) {
+        let matcher = {
+            let cache = self.corrections.read();
+            Self::build_matcher(&cache, self.min_confidence)
+        };
+        *self.matcher.write() = matcher;
+    }
+
+    /// Build the automaton on demand if it was never built but the cache has entries.
+    fn ensure_matcher(&self) {
+        if self.matcher.read().is_some() {
+            return;
+        }
+        if self.corrections.read().is_empty() {
+            return;
+        }
+        self.rebuild_matcher();
     }
 
     /// Learn from a before/after text comparison
@@ -89,6 +167,7 @@ impl LearningEngine {
         let edited_words: Vec<&str> = edited.split_whitespace().collect();
 
         let mut learned = Vec::new();
+        let mut cache_changed = false;
 
         // use edit distance alignment to find corresponding words
         let pairs = align_words(&original_words, &edited_words);
@@ -130,6 +209,7 @@ impl LearningEngine {
                             confidence: correction.confidence,
                         },
                     );
+                    cache_changed = true;
                 }
 
                 debug!(
@@ -145,53 +225,74 @@ impl LearningEngine {
             }
         }
 
+        if cache_changed {
+            self.rebuild_matcher();
+        }
+
         Ok(learned)
     }
 
     /// Apply learned corrections to text
-    /// Only applies corrections above the confidence threshold
+    ///
+    /// Runs the compiled automaton once over the text. Only whole-word matches
+    /// above the confidence threshold are replaced, the case pattern of the
+    /// original word is preserved, and every byte between matches (including
+    /// newlines and repeated spaces) is copied through untouched.
     pub fn apply_corrections(&self, text: &str) -> (String, Vec<AppliedCorrection>) {
-        let cache = self.corrections.read();
+        self.ensure_matcher();
 
-        if cache.is_empty() {
+        let matcher_guard = self.matcher.read();
+        let Some(matcher) = matcher_guard.as_ref() else {
+            return (text.to_string(), Vec::new());
+        };
+
+        // Match on lowercased text; byte offsets map back onto the original.
+        let text_lower = text.to_lowercase();
+        let mut matches = matcher.automaton.find_iter(&text_lower).peekable();
+
+        if matches.peek().is_none() {
             return (text.to_string(), Vec::new());
         }
 
-        let words: Vec<&str> = text.split_whitespace().collect();
-
-        // Early exit if no words
-        if words.is_empty() {
-            return (text.to_string(), Vec::new());
-        }
-
-        // Pre-allocate with reasonable capacity
         let mut applied = Vec::with_capacity(4);
-        let mut result_words: Vec<String> = Vec::with_capacity(words.len());
-        let min_conf = self.min_confidence;
+        let mut result = String::with_capacity(text.len() + text.len() / 8);
+        let mut last_end = 0;
 
-        for (i, word) in words.iter().enumerate() {
-            let word_lower = word.to_lowercase();
+        for m in matches {
+            let (start, end) = (m.start(), m.end());
 
-            if let Some(correction) = cache.get(&word_lower) {
-                if correction.confidence >= min_conf {
-                    // preserve case pattern if possible
-                    let corrected = match_case(&correction.corrected, word);
-
-                    applied.push(AppliedCorrection {
-                        original: word.to_string(),
-                        corrected: corrected.clone(),
-                        confidence: correction.confidence,
-                        position: i,
-                    });
-
-                    result_words.push(corrected);
-                    continue;
-                }
+            // Only correct standalone words, never a fragment inside one.
+            if !is_whole_word(&text_lower, start, end) {
+                continue;
             }
-            result_words.push(word.to_string());
+
+            let replacement = &matcher.replacements[m.pattern().as_usize()];
+            if replacement.confidence < self.min_confidence {
+                continue;
+            }
+
+            // Offsets come from the lowercased copy; guard against any
+            // multi-byte casing that shifted them before slicing.
+            let Some(original_slice) = text.get(start..end) else {
+                continue;
+            };
+
+            let corrected = match_case(&replacement.corrected, original_slice);
+
+            result.push_str(&text[last_end..start]);
+            result.push_str(&corrected);
+
+            applied.push(AppliedCorrection {
+                original: original_slice.to_string(),
+                corrected,
+                confidence: replacement.confidence,
+                position: start,
+            });
+
+            last_end = end;
         }
 
-        let result = result_words.join(" ");
+        result.push_str(&text[last_end..]);
 
         if !applied.is_empty() {
             debug!("Applied {} corrections to text", applied.len());
@@ -227,6 +328,7 @@ impl LearningEngine {
     /// Clear all cached corrections
     pub fn clear_cache(&self) {
         self.corrections.write().clear();
+        self.rebuild_matcher();
     }
 
     /// Get the number of cached corrections
@@ -237,6 +339,7 @@ impl LearningEngine {
     /// Remove a correction from the cache by original word
     pub fn remove_from_cache(&self, original: &str) {
         self.corrections.write().remove(&original.to_lowercase());
+        self.rebuild_matcher();
     }
 
     /// Reload corrections from storage (useful after deleting)
@@ -259,6 +362,9 @@ impl LearningEngine {
         }
 
         info!("Reloaded {} corrections into learning engine", cache.len());
+        drop(cache);
+
+        self.rebuild_matcher();
 
         Ok(())
     }
@@ -342,6 +448,25 @@ fn align_words<'a>(original: &[&'a str], edited: &[&'a str]) -> Vec<(&'a str, &'
     }
 
     pairs
+}
+
+/// Whether the span is a standalone word rather than part of a longer one.
+///
+/// Aho-Corasick reports every substring hit, so without this a correction like
+/// "cant" -> "can't" would also fire inside "cantaloupe". Punctuation and
+/// whitespace both count as boundaries, which is what lets "teh," be corrected.
+#[inline]
+fn is_whole_word(text: &str, start: usize, end: usize) -> bool {
+    let before_ok = text[..start]
+        .chars()
+        .next_back()
+        .is_none_or(|c| !c.is_alphanumeric());
+    let after_ok = text[end..]
+        .chars()
+        .next()
+        .is_none_or(|c| !c.is_alphanumeric());
+
+    before_ok && after_ok
 }
 
 /// Try to match the case pattern of the original word
@@ -477,5 +602,96 @@ mod tests {
         // should not be applied
         assert_eq!(result, "test foo here");
         assert!(applied.is_empty());
+    }
+
+    /// Helper: engine with a single high-confidence correction.
+    fn engine_with(original: &str, corrected: &str) -> LearningEngine {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                original.to_string(),
+                CachedCorrection {
+                    corrected: corrected.to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+        engine.rebuild_matcher();
+        engine
+    }
+
+    #[test]
+    fn test_preserves_original_formatting() {
+        let engine = engine_with("teh", "the");
+
+        // newlines and repeated spaces must survive the correction pass
+        let (result, applied) = engine.apply_corrections("teh first\n\nteh  second");
+
+        assert_eq!(result, "the first\n\nthe  second");
+        assert_eq!(applied.len(), 2);
+    }
+
+    #[test]
+    fn test_corrects_punctuation_adjacent_words() {
+        let engine = engine_with("teh", "the");
+
+        let (result, applied) = engine.apply_corrections("send teh, and (teh) too.");
+
+        assert_eq!(result, "send the, and (the) too.");
+        assert_eq!(applied.len(), 2);
+    }
+
+    #[test]
+    fn test_does_not_correct_inside_longer_word() {
+        let engine = engine_with("cant", "can't");
+
+        // "cant" appears inside "cantaloupe" but must not be touched
+        let (result, applied) = engine.apply_corrections("a cantaloupe i cant eat");
+
+        assert_eq!(result, "a cantaloupe i can't eat");
+        assert_eq!(applied.len(), 1);
+    }
+
+    #[test]
+    fn test_preserves_case_on_match() {
+        let engine = engine_with("teh", "the");
+
+        let (result, _) = engine.apply_corrections("Teh start and TEH end");
+
+        assert_eq!(result, "The start and THE end");
+    }
+
+    #[test]
+    fn test_matcher_resyncs_after_removal() {
+        let engine = engine_with("teh", "the");
+        assert_eq!(engine.apply_corrections("teh cat").0, "the cat");
+
+        engine.remove_from_cache("teh");
+
+        // automaton must no longer contain the removed correction
+        assert_eq!(engine.apply_corrections("teh cat").0, "teh cat");
+        assert_eq!(engine.cache_size(), 0);
+    }
+
+    #[test]
+    fn test_longest_correction_wins_on_overlap() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            for (orig, corrected) in [("ab", "X"), ("abc", "Y")] {
+                cache.insert(
+                    orig.to_string(),
+                    CachedCorrection {
+                        corrected: corrected.to_string(),
+                        confidence: 0.95,
+                    },
+                );
+            }
+        }
+        engine.rebuild_matcher();
+
+        // "abc" is a whole word, so the longer key must win
+        assert_eq!(engine.apply_corrections("abc").0, "Y");
     }
 }
