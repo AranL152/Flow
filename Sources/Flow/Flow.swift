@@ -763,5 +763,24 @@ public final class Flow: @unchecked Sendable {
         return CloudTranscriptionProvider(rawValue: rawValue)
     }
 
+    // MARK: - Transcription Fallback
+
+    /// Enable or disable the cloud fallback for local transcription.
+    /// When enabled (default), a failing or empty local Whisper result is
+    /// retried against the cloud so a dictation is never lost.
+    /// - Parameter enabled: true to enable the fallback, false to disable
+    /// - Returns: true on success
+    @discardableResult
+    public func setTranscriptionFallback(_ enabled: Bool) -> Bool {
+        guard let handle = handle else { return false }
+        return flow_set_transcription_fallback(handle, enabled)
+    }
+
+    /// Whether the cloud fallback for local transcription is enabled.
+    public var transcriptionFallbackEnabled: Bool {
+        guard let handle = handle else { return true }
+        return flow_get_transcription_fallback(handle)
+    }
+
     // Configuration persistence is handled in the core database.
 }

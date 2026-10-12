@@ -280,6 +280,19 @@ bool flow_set_cloud_transcription_provider(FlowHandle* handle, uint8_t provider)
 /// @return 0 = OpenAI, 1 = Base10, 255 = Unknown
 uint8_t flow_get_cloud_transcription_provider(FlowHandle* handle);
 
+/// Enable or disable the cloud fallback for local transcription
+/// When enabled (default), a failing or empty local Whisper result is retried
+/// against the cloud. Takes effect on the next transcription mode change.
+/// @param handle Engine handle
+/// @param enabled true to enable the fallback, false to disable
+/// @return true on success
+bool flow_set_transcription_fallback(FlowHandle* handle, bool enabled);
+
+/// Get whether the cloud fallback for local transcription is enabled
+/// @param handle Engine handle
+/// @return true if enabled (the default)
+bool flow_get_transcription_fallback(FlowHandle* handle);
+
 // ============ Error Handling ============
 
 /// Get the last error message
