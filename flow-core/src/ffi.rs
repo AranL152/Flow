@@ -25,16 +25,16 @@ use crate::learning::LearningEngine;
 use crate::macos_messages::MessagesDetector;
 use crate::modes::{StyleLearner, WritingMode, WritingModeEngine};
 use crate::providers::{
-    Base10TranscriptionProvider, CompletionProvider, GeminiCompletionProvider,
-    GeminiTranscriptionProvider, LocalWhisperTranscriptionProvider, OpenAICompletionProvider,
-    OpenAITranscriptionProvider, OpenRouterCompletionProvider, TranscriptionCompletionParams,
-    TranscriptionProvider, TranscriptionRequest, WhisperModel,
+    Base10TranscriptionProvider, CompletionProvider, FallbackTranscriptionProvider,
+    GeminiCompletionProvider, GeminiTranscriptionProvider, LocalWhisperTranscriptionProvider,
+    OpenAICompletionProvider, OpenAITranscriptionProvider, OpenRouterCompletionProvider,
+    TranscriptionCompletionParams, TranscriptionProvider, TranscriptionRequest, WhisperModel,
 };
 use crate::shortcuts::ShortcutsEngine;
 use crate::storage::{
     SETTING_CLOUD_TRANSCRIPTION_PROVIDER, SETTING_COMPLETION_PROVIDER, SETTING_GEMINI_API_KEY,
     SETTING_LOCAL_WHISPER_MODEL, SETTING_OPENAI_API_KEY, SETTING_OPENROUTER_API_KEY,
-    SETTING_USE_LOCAL_TRANSCRIPTION, Storage,
+    SETTING_TRANSCRIPTION_FALLBACK, SETTING_USE_LOCAL_TRANSCRIPTION, Storage,
 };
 use crate::types::{Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus};
 
@@ -105,6 +105,50 @@ fn check_model_files_exist(model: WhisperModel, models_dir: &std::path::Path) ->
 
 fn clear_last_error(handle: &FlowHandle) {
     *handle.last_error.lock() = None;
+}
+
+/// Whether local transcription should fall back to the cloud on failure.
+/// Defaults to enabled so a missing or still-downloading model never loses a dictation.
+fn transcription_fallback_enabled(storage: &Storage) -> bool {
+    storage
+        .get_setting(SETTING_TRANSCRIPTION_FALLBACK)
+        .ok()
+        .flatten()
+        .map(|s| s != "false")
+        .unwrap_or(true)
+}
+
+/// Build the cloud provider used as a fallback for local transcription.
+/// Uses OpenAI when it is the configured cloud provider and a key exists,
+/// otherwise the keyless Auto (Base10) worker.
+fn build_cloud_fallback(storage: &Storage) -> Arc<dyn TranscriptionProvider> {
+    let cloud_provider = storage
+        .get_setting(SETTING_CLOUD_TRANSCRIPTION_PROVIDER)
+        .ok()
+        .flatten();
+
+    if cloud_provider.as_deref() == Some("openai") {
+        if let Ok(Some(key)) = storage.get_setting(SETTING_OPENAI_API_KEY) {
+            if !key.is_empty() {
+                return Arc::new(OpenAITranscriptionProvider::new(Some(key)));
+            }
+        }
+    }
+
+    Arc::new(Base10TranscriptionProvider::new(None))
+}
+
+/// Wrap a local primary provider with a cloud fallback when fallback is enabled.
+fn wrap_with_fallback(
+    storage: &Storage,
+    primary: Arc<dyn TranscriptionProvider>,
+) -> Arc<dyn TranscriptionProvider> {
+    if transcription_fallback_enabled(storage) {
+        let fallback = build_cloud_fallback(storage);
+        Arc::new(FallbackTranscriptionProvider::new(primary, fallback))
+    } else {
+        primary
+    }
 }
 
 fn estimate_duration_ms(bytes: usize, sample_rate: u32) -> u64 {
@@ -321,8 +365,9 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
         // Get models directory
         match crate::whisper_models::get_models_dir() {
             Ok(models_dir) => {
-                handle.transcription =
+                let local: Arc<dyn TranscriptionProvider> =
                     Arc::new(LocalWhisperTranscriptionProvider::new(model, models_dir));
+                handle.transcription = wrap_with_fallback(&handle.storage, local);
                 log_with_time!("✅ [INIT] Using local Whisper model: {:?}", model);
             }
             Err(e) => {
@@ -331,6 +376,7 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
                     "⚠️ [INIT] Failed to load local Whisper, falling back to remote: {}",
                     e
                 );
+                handle.transcription = build_cloud_fallback(&handle.storage);
             }
         }
     } else {
@@ -576,18 +622,21 @@ fn transcribe_with_audio(
         WritingMode::Excited => "excited",
     };
 
-    // For cloud transcription (auto mode), worker handles everything
-    let completion_params = if !use_local_transcription {
-        log_with_time!("🚀 [RUST] Using auto mode (worker handles transcription+completion)");
-        Some(TranscriptionCompletionParams {
-            mode: mode_str.to_string(),
-            app_context: app_name.clone(),
-            shortcuts_triggered: Vec::new(),
-            voice_instruction: None, // Worker auto-detects from transcription
-        })
+    // Always attach completion params. In cloud (auto) mode the worker uses
+    // them to transcribe and format in one request. In local mode the Whisper
+    // provider ignores them, but they are required if a cloud fallback fires so
+    // the recovered transcription is still formatted.
+    if use_local_transcription {
+        log_with_time!("🖥️ [RUST] Using local mode (cloud fallback on failure)");
     } else {
-        None
-    };
+        log_with_time!("🚀 [RUST] Using auto mode (worker handles transcription+completion)");
+    }
+    let completion_params = Some(TranscriptionCompletionParams {
+        mode: mode_str.to_string(),
+        app_context: app_name.clone(),
+        shortcuts_triggered: Vec::new(),
+        voice_instruction: None, // Worker auto-detects from transcription
+    });
 
     // Perform transcription
     let transcription = handle.runtime.block_on(async {
@@ -1684,7 +1733,9 @@ pub extern "C" fn flow_set_transcription_mode(
             }
         });
 
-        handle.transcription = provider;
+        // Wrap with a cloud fallback so a still-downloading or failing model
+        // never loses a dictation.
+        handle.transcription = wrap_with_fallback(&handle.storage, provider);
         debug!("Enabled local Whisper transcription with {:?} model", model);
     } else {
         // Remote transcription - use the cloud transcription provider setting
@@ -2110,4 +2161,65 @@ pub extern "C" fn flow_get_cloud_transcription_provider(handle: *mut FlowHandle)
         },
         _ => 1, // default to Auto
     }
+}
+
+/// Enable or disable the cloud fallback for local transcription.
+/// When enabled (default), a failing or empty local Whisper result is retried
+/// against the cloud. Takes effect on the next transcription mode change.
+/// Returns true on success.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_set_transcription_fallback(
+    handle: *mut FlowHandle,
+    enabled: bool,
+) -> bool {
+    let handle = unsafe { &mut *handle };
+
+    if let Err(e) = handle.storage.set_setting(
+        SETTING_TRANSCRIPTION_FALLBACK,
+        if enabled { "true" } else { "false" },
+    ) {
+        let message = format!("Failed to save transcription fallback setting: {e}");
+        error!("{message}");
+        set_last_error(handle, message);
+        return false;
+    }
+
+    // Re-apply to the active provider if local transcription is in use.
+    let use_local = handle
+        .storage
+        .get_setting(SETTING_USE_LOCAL_TRANSCRIPTION)
+        .ok()
+        .flatten()
+        .map(|s| s == "true")
+        .unwrap_or(false);
+
+    if use_local {
+        let model_str = handle
+            .storage
+            .get_setting(SETTING_LOCAL_WHISPER_MODEL)
+            .ok()
+            .flatten();
+        let model = WhisperModel::all()
+            .iter()
+            .find(|m| m.as_str() == model_str.as_deref().unwrap_or(""))
+            .copied()
+            .unwrap_or(WhisperModel::Quality);
+
+        if let Ok(models_dir) = crate::whisper_models::get_models_dir() {
+            let local: Arc<dyn TranscriptionProvider> =
+                Arc::new(LocalWhisperTranscriptionProvider::new(model, models_dir));
+            handle.transcription = wrap_with_fallback(&handle.storage, local);
+        }
+    }
+
+    clear_last_error(handle);
+    true
+}
+
+/// Get whether the cloud fallback for local transcription is enabled.
+/// Returns true when enabled (the default).
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_get_transcription_fallback(handle: *mut FlowHandle) -> bool {
+    let handle = unsafe { &*handle };
+    transcription_fallback_enabled(&handle.storage)
 }

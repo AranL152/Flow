@@ -94,6 +94,7 @@ private struct TranscriptionSection: View {
     @EnvironmentObject var appState: AppState
     @State private var useLocalTranscription = false
     @State private var selectedWhisperModel: WhisperModel = .balanced
+    @State private var cloudFallback = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing12) {
@@ -120,6 +121,15 @@ private struct TranscriptionSection: View {
                             .onChange(of: selectedWhisperModel) { _, newModel in
                                 _ = appState.engine.setTranscriptionMode(.local(model: newModel))
                             }
+
+                        FWToggle(isOn: $cloudFallback, label: "Cloud fallback")
+                            .onChange(of: cloudFallback) { _, newValue in
+                                _ = appState.engine.setTranscriptionFallback(newValue)
+                            }
+
+                        Text("Retries in the cloud if the local model fails or returns nothing.")
+                            .font(.caption)
+                            .foregroundStyle(FW.textSecondary)
                     }
                 } else {
                     // Cloud transcription uses OpenAI when not in Auto mode
@@ -143,6 +153,7 @@ private struct TranscriptionSection: View {
     }
 
     private func loadCurrentMode() {
+        cloudFallback = appState.engine.transcriptionFallbackEnabled
         if let mode = appState.engine.getTranscriptionMode() {
             switch mode {
             case .local(let model):
