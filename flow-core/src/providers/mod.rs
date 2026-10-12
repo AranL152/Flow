@@ -3,6 +3,7 @@
 //! Supports pluggable providers for cloud (OpenAI, ElevenLabs, Anthropic, Base10) and local services.
 mod base10;
 mod completion;
+mod fallback;
 mod gemini;
 mod local_whisper;
 mod openai;
@@ -14,6 +15,7 @@ pub use base10::{
     Base10TranscriptionProvider, CorrectionPair, CorrectionValidation, validate_corrections,
 };
 pub use completion::{CompletionProvider, CompletionRequest, CompletionResponse, TokenUsage};
+pub use fallback::FallbackTranscriptionProvider;
 pub use gemini::{GeminiCompletionProvider, GeminiTranscriptionProvider};
 pub use local_whisper::{LocalWhisperTranscriptionProvider, WhisperModel};
 pub use openai::{OpenAICompletionProvider, OpenAITranscriptionProvider};
