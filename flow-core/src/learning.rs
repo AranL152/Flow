@@ -172,15 +172,13 @@ impl LearningEngine {
         // use edit distance alignment to find corresponding words
         let pairs = align_words(&original_words, &edited_words);
 
-        for (orig, edit) in pairs {
+        for (orig, edit, similarity) in pairs {
             // skip if same
             if orig.eq_ignore_ascii_case(edit) {
                 continue;
             }
 
-            // check if this looks like a typo correction (high similarity)
-            let similarity = jaro_winkler(orig, edit);
-
+            // similarity was already measured during alignment
             if similarity >= MIN_SIMILARITY {
                 // check length difference
                 let len_diff = (orig.len() as isize - edit.len() as isize).unsigned_abs();
@@ -393,9 +391,12 @@ pub struct AppliedCorrection {
     pub position: usize,
 }
 
-/// Align words from two texts using a simple diff algorithm
-/// Optimized with early exits and reduced redundant similarity calculations
-fn align_words<'a>(original: &[&'a str], edited: &[&'a str]) -> Vec<(&'a str, &'a str)> {
+/// Align words from two texts using a simple diff algorithm.
+///
+/// Returns each pair together with its Jaro-Winkler similarity, so callers can
+/// reuse the score instead of measuring the same pair a second time.
+/// Identical words are reported as 1.0 without running the comparison.
+fn align_words<'a>(original: &[&'a str], edited: &[&'a str]) -> Vec<(&'a str, &'a str, f64)> {
     // Early exit for empty inputs
     if original.is_empty() || edited.is_empty() {
         return Vec::new();
@@ -415,7 +416,7 @@ fn align_words<'a>(original: &[&'a str], edited: &[&'a str]) -> Vec<(&'a str, &'
 
         // Quick check: if strings are equal, no need to compute similarity
         if orig.eq_ignore_ascii_case(edit) {
-            pairs.push((orig, edit));
+            pairs.push((orig, edit, 1.0));
             orig_idx += 1;
             edit_idx += 1;
             continue;
@@ -425,7 +426,7 @@ fn align_words<'a>(original: &[&'a str], edited: &[&'a str]) -> Vec<(&'a str, &'
         let sim = jaro_winkler(orig, edit);
 
         if sim >= MIN_ALIGNMENT_SIMILARITY {
-            pairs.push((orig, edit));
+            pairs.push((orig, edit, sim));
             orig_idx += 1;
             edit_idx += 1;
         } else {
@@ -565,8 +566,15 @@ mod tests {
         let pairs = align_words(&original, &edited);
 
         assert_eq!(pairs.len(), 4);
-        assert_eq!(pairs[1], ("recieve", "receive"));
-        assert_eq!(pairs[2], ("teh", "the"));
+        assert_eq!((pairs[1].0, pairs[1].1), ("recieve", "receive"));
+        assert_eq!((pairs[2].0, pairs[2].1), ("teh", "the"));
+
+        // identical words report 1.0 without running the comparison
+        assert_eq!(pairs[0].2, 1.0);
+        // the reported score must be the real Jaro-Winkler value, since
+        // learn_from_edit now thresholds on it instead of recomputing
+        assert_eq!(pairs[1].2, jaro_winkler("recieve", "receive"));
+        assert!(pairs[2].2 >= MIN_ALIGNMENT_SIMILARITY);
     }
 
     #[test]
