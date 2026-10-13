@@ -1,4 +1,6 @@
-name = "flow-worker-langgraph"
+# Deployed under the name the Rust base10-worker used, so the URL baked into
+# flow-core (providers/base10.rs) keeps resolving after this worker takes over.
+name = "base10-proxy"
 main = "src/index.ts"
 compatibility_date = "2024-06-01"
 compatibility_flags = ["nodejs_compat"]

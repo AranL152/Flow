@@ -1,4 +1,9 @@
-# Base10 proxy worker
+# Base10 proxy worker (superseded)
+
+> Replaced by `flow-worker-langgraph/`, which serves the same endpoints and is
+> now deployed under this worker's `base10-proxy` name. This directory is kept
+> only until it is removed; do not deploy it, as doing so would overwrite the
+> replacement at the same name.
 
 This Cloudflare Worker proxies POST requests to Base10 Whisper so the API key is never exposed to clients.
 

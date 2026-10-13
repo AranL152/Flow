@@ -1,6 +1,8 @@
 /**
  * System prompts for the Flow worker.
- * Ported from the Rust base10-worker implementation.
+ *
+ * These are the canonical copies. They previously existed here and again in
+ * the Rust worker, which meant every wording change had to be made twice.
  */
 
 const MODE_PROMPTS: Record<string, string> = {

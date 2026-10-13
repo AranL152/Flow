@@ -35,6 +35,8 @@ See the [Setup](#setup) section below for instructions on building from source.
 - FFI bridge for native app integration (C ABI in `flow-core/src/ffi.rs`)
 - Provider abstraction for transcription and completion
 - SQLite-backed storage for user data and stats
+- Cloudflare Worker backend in `flow-worker-langgraph/` (TypeScript, Hono, LangGraph)
+  that transcribes audio and then either formats it or executes a voice command
 
 The rest of the app lives here in the repo root.
 
