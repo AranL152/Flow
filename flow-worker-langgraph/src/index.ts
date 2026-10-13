@@ -76,6 +76,8 @@ app.post("/", async (c) => {
   const response: CombinedResponse = {
     transcription: result.transcription ?? "",
     text: result.formattedText ?? "",
+    command: result.command,
+    action: result.action,
   };
 
   return c.json(response);
