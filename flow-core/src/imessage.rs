@@ -19,6 +19,8 @@ const MAX_MESSAGE_CHARS: usize = 1000;
 #[derive(Debug, Clone)]
 pub struct SentMessage {
     pub category: String,
+    /// See `style::contact_key`; empty for group chats and unknown numbers
+    pub contact_key: String,
     pub text: String,
     /// Messages timestamp (nanoseconds since 2001-01-01)
     pub date: i64,
@@ -27,7 +29,6 @@ pub struct SentMessage {
 #[derive(Debug, Clone)]
 struct ContactRecord {
     name: String,
-    organization: String,
 }
 
 pub fn messages_db_path() -> Option<PathBuf> {
@@ -108,9 +109,9 @@ fn read_contacts(conn: &Connection, map: &mut HashMap<String, ContactRecord>) ->
             .join(" ")
             .trim()
             .to_string();
-        let organization = org.unwrap_or_default();
-        if !name.is_empty() || !organization.is_empty() {
-            records.insert(pk, ContactRecord { name, organization });
+        let name = if name.is_empty() { org.unwrap_or_default() } else { name };
+        if !name.is_empty() {
+            records.insert(pk, ContactRecord { name });
         }
     }
 
@@ -211,24 +212,33 @@ pub fn read_sent_messages(since: i64, limit: usize) -> Result<Vec<SentMessage>> 
             continue;
         };
 
-        let category = if chat_style == Some(GROUP_CHAT_STYLE) {
-            "group".to_string()
+        let (category, contact_key) = if chat_style == Some(GROUP_CHAT_STYLE) {
+            ("group".to_string(), String::new())
         } else {
             match identifier.as_deref().and_then(|id| contacts.get(&handle_key(id))) {
                 Some(contact) => {
+                    // Name only, the same input the live app has from the Messages window title
                     let input = ContactInput {
                         name: contact.name.clone(),
-                        organization: contact.organization.clone(),
+                        organization: String::new(),
                     };
-                    style::category_key(Some(classifier.classify(&input)), None)
+                    (
+                        style::category_key(Some(classifier.classify(&input)), None),
+                        style::contact_key(&contact.name),
+                    )
                 }
                 // Not in Contacts: an unsaved number or email
-                None => "acquaintance".to_string(),
+                None => ("acquaintance".to_string(), String::new()),
             }
         };
 
-        if seen.insert((category.clone(), text.clone())) {
-            messages.push(SentMessage { category, text, date });
+        if seen.insert((contact_key.clone(), category.clone(), text.clone())) {
+            messages.push(SentMessage {
+                category,
+                contact_key,
+                text,
+                date,
+            });
         }
     }
     Ok(messages)

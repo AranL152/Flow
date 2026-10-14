@@ -128,6 +128,9 @@ pub struct StyleExample {
     pub edited: bool,
     pub source: ExampleSource,
     pub created_at: DateTime<Utc>,
+    /// Hash of the recipient's name, see [`contact_key`]; empty when unknown
+    #[serde(default)]
+    pub contact_key: String,
 }
 
 impl StyleExample {
@@ -141,6 +144,7 @@ impl StyleExample {
             edited: was_edited(flow_output, sent),
             source: ExampleSource::Dictation,
             created_at: Utc::now(),
+            contact_key: String::new(),
         }
     }
 
@@ -154,8 +158,29 @@ impl StyleExample {
             edited: false,
             source: ExampleSource::Imported,
             created_at: Utc::now(),
+            contact_key: String::new(),
         }
     }
+
+    pub fn with_contact(mut self, contact_key: &str) -> Self {
+        self.contact_key = contact_key.to_string();
+        self
+    }
+}
+
+/// Stable, non-reversible key for a contact name (FNV-1a), so examples can be
+/// matched per person without storing who they are
+pub fn contact_key(name: &str) -> String {
+    let normalized = name.trim().to_lowercase();
+    if normalized.is_empty() {
+        return String::new();
+    }
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in normalized.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{hash:016x}")
 }
 
 /// How often the user changes Flow's output before sending
@@ -189,6 +214,7 @@ impl EditStats {
 #[derive(Debug, Clone)]
 pub struct PendingDictation {
     pub category: String,
+    pub contact_key: String,
     pub said: String,
     pub flow_output: String,
 }
@@ -248,14 +274,15 @@ fn similarity(a: &HashSet<String>, b: &HashSet<String>) -> f32 {
     intersection / union
 }
 
-/// Pick the examples most useful for formatting `said` to `category`.
+/// Pick the examples most useful for formatting `said` to `contact` / `category`.
 ///
-/// Scores favour the same recipient category, word overlap with the new dictation,
-/// and examples where the user corrected Flow (those carry the most signal).
+/// Scores favour the same person, then the same recipient category, word overlap with
+/// the new dictation, and examples where the user corrected Flow (the most signal).
 pub fn select_examples<'a>(
     examples: &'a [StyleExample],
     said: &str,
     category: &str,
+    contact: &str,
     limit: usize,
 ) -> Vec<&'a StyleExample> {
     let query = words(said);
@@ -264,7 +291,10 @@ pub fn select_examples<'a>(
         .filter(|e| !e.sent.trim().is_empty())
         .map(|e| {
             let mut score = similarity(&query, &words(&e.said));
-            // Similarity is at most 1.0, so the same recipient always ranks first
+            // Similarity is at most 1.0, so the same person ranks first, then the same category
+            if !contact.is_empty() && e.contact_key == contact {
+                score += 2.0;
+            }
             if e.category == category {
                 score += 1.0;
             }
@@ -283,6 +313,66 @@ pub fn select_examples<'a>(
             .then(b.1.created_at.cmp(&a.1.created_at))
     });
     scored.into_iter().take(limit).map(|(_, e)| e).collect()
+}
+
+/// Messages needed before habits are measured for a person or category
+const MIN_HABIT_SAMPLE: usize = 15;
+
+fn is_emoji(c: char) -> bool {
+    matches!(c as u32, 0x1F300..=0x1FAFF | 0x2600..=0x27BF)
+}
+
+/// Measured writing habits for a person (or their category when there is too little data),
+/// so the formatter gets real frequencies instead of the profile's impressions
+pub fn measure_habits(examples: &[StyleExample], category: &str, contact: &str) -> Option<String> {
+    let for_contact: Vec<&str> = examples
+        .iter()
+        .filter(|e| !contact.is_empty() && e.contact_key == contact)
+        .map(|e| e.sent.trim())
+        .collect();
+    let (scope, texts) = if for_contact.len() >= MIN_HABIT_SAMPLE {
+        ("this person".to_string(), for_contact)
+    } else {
+        let for_category: Vec<&str> = examples
+            .iter()
+            .filter(|e| e.category == category)
+            .map(|e| e.sent.trim())
+            .collect();
+        (category_label(category), for_category)
+    };
+    let texts: Vec<&str> = texts.into_iter().filter(|t| !t.is_empty()).collect();
+    if texts.len() < MIN_HABIT_SAMPLE {
+        return None;
+    }
+
+    let n = texts.len() as f32;
+    let share = |pred: &dyn Fn(&str) -> bool| {
+        (texts.iter().filter(|t| pred(t)).count() as f32 / n * 100.0).round() as u32
+    };
+    let emoji = share(&|t| t.chars().any(is_emoji));
+    let lowercase = share(&|t| t.chars().find(|c| c.is_alphabetic()).is_some_and(char::is_lowercase));
+    let period = share(&|t| t.ends_with('.'));
+    let question_space = share(&|t| t.ends_with(" ?"));
+
+    let mut words: Vec<usize> = texts.iter().map(|t| t.split_whitespace().count()).collect();
+    words.sort_unstable();
+    let median_words = words[words.len() / 2];
+
+    let mut line = format!(
+        "Measured from {} messages to {}: {}% contain emoji, {}% start lowercase, {}% end with a period, \
+         typical length {} words",
+        texts.len(),
+        scope,
+        emoji,
+        lowercase,
+        period,
+        median_words
+    );
+    if question_space >= 10 {
+        line.push_str(&format!(", {}% put a space before a final \"?\"", question_space));
+    }
+    line.push_str(". Match these frequencies: if most messages have no emoji, do not add one.");
+    Some(line)
 }
 
 /// Balanced sample for profile building: corrections first, then newest, capped per category
@@ -306,6 +396,7 @@ pub fn sample_for_profile(examples: &[StyleExample], per_category: usize) -> Vec
 pub fn build_personalization(
     profile: Option<&str>,
     examples: &[&StyleExample],
+    habits: Option<&str>,
     strength: RewriteStrength,
 ) -> String {
     let mut out = String::from("\n\n=== HOW THIS USER ACTUALLY WRITES ===\n");
@@ -318,6 +409,12 @@ pub fn build_personalization(
         out.push_str("\nStyle profile:\n<PROFILE>\n");
         out.push_str(profile);
         out.push_str("\n</PROFILE>\n");
+    }
+
+    if let Some(habits) = habits {
+        out.push_str("\n");
+        out.push_str(habits);
+        out.push('\n');
     }
 
     let corrections: Vec<_> = examples.iter().filter(|e| e.edited).collect();
@@ -407,7 +504,7 @@ mod tests {
             StyleExample::imported("friend", "lmao no way"),
         ];
 
-        let picked = select_examples(&examples, "can you send me the report", "partner", 2);
+        let picked = select_examples(&examples, "can you send me the report", "partner", "", 2);
         assert_eq!(picked.len(), 2);
         // Same category beats a better word match from another category
         assert!(picked.iter().all(|e| e.category == "partner"));
@@ -418,12 +515,52 @@ mod tests {
     fn test_build_personalization_sections() {
         let edit = StyleExample::dictation("partner", "i miss you", "I miss you, love! ❤️", "miss u bub");
         let own = StyleExample::imported("partner", "omw home 🫶");
-        let text = build_personalization(Some("- lowercase"), &[&edit, &own], RewriteStrength::Light);
+        let text = build_personalization(
+            Some("- lowercase"),
+            &[&edit, &own],
+            Some("Measured from 20 messages"),
+            RewriteStrength::Light,
+        );
 
         assert!(text.contains("<PROFILE>"));
         assert!(text.contains("user changed it to: \"miss u bub\""));
         assert!(text.contains("\"omw home 🫶\""));
         assert!(text.contains("LIGHT TOUCH"));
+        assert!(text.contains("Measured from 20 messages"));
+    }
+
+    #[test]
+    fn test_contact_key_is_stable_and_case_insensitive() {
+        assert_eq!(contact_key("Sam Rivera"), contact_key("  sam rivera "));
+        assert_ne!(contact_key("Sam Rivera"), contact_key("Mom"));
+        assert_eq!(contact_key(""), "");
+    }
+
+    #[test]
+    fn test_select_examples_prefers_same_person() {
+        let sam = contact_key("Sam Rivera");
+        let examples = vec![
+            StyleExample::imported("acquaintance", "facts bro").with_contact(&sam),
+            StyleExample::imported("acquaintance", "Hello, nice to meet you").with_contact(&contact_key("Someone")),
+        ];
+        let picked = select_examples(&examples, "hello", "acquaintance", &sam, 1);
+        assert_eq!(picked[0].sent, "facts bro");
+    }
+
+    #[test]
+    fn test_measure_habits() {
+        let key = contact_key("Sam Rivera");
+        let mut examples: Vec<StyleExample> = (0..18)
+            .map(|i| StyleExample::imported("acquaintance", &format!("r u coming {i} ?")).with_contact(&key))
+            .collect();
+        examples.push(StyleExample::imported("acquaintance", "lol 😅").with_contact(&key));
+
+        let habits = measure_habits(&examples, "acquaintance", &key).unwrap();
+        assert!(habits.contains("19 messages to this person"));
+        assert!(habits.contains("5% contain emoji"));
+        assert!(habits.contains("space before a final"));
+
+        assert!(measure_habits(&examples[..5], "acquaintance", &key).is_none());
     }
 
     #[test]

@@ -574,6 +574,7 @@ fn transcribe_with_audio(
     let captured = handle.captured_contact.lock().clone();
     let (mode, recipient) = resolve_recipient(handle, app_name.as_deref(), captured.as_deref());
     let category = style::category_key(recipient, Some(handle.app_tracker.current_category()));
+    let contact = recipient_contact_key(recipient, captured.as_deref());
 
     let transcription_provider = Arc::clone(&handle.transcription);
     let app_context = handle.app_tracker.current_app();
@@ -590,7 +591,7 @@ fn transcribe_with_audio(
     let format_context = format_context(app_name.as_deref(), recipient);
 
     // The transcript is unknown until the worker returns, so examples are picked by recipient only
-    let personalization = personalization_for(handle, "", &category);
+    let personalization = personalization_for(handle, "", &category, &contact);
 
     let mode_str = mode.worker_name();
 
@@ -638,7 +639,8 @@ fn transcribe_with_audio(
         if let Some(ref context) = format_context {
             request = request.with_app_context(context.clone());
         }
-        if let Some(personalization) = personalization_for(handle, &text_with_corrections, &category)
+        if let Some(personalization) =
+            personalization_for(handle, &text_with_corrections, &category, &contact)
         {
             request = request.with_personalization(personalization);
         }
@@ -697,6 +699,7 @@ fn transcribe_with_audio(
 
     *handle.pending_dictation.lock() = Some(PendingDictation {
         category,
+        contact_key: contact,
         said: record.raw_text.clone(),
         flow_output: processed_text.clone(),
     });
@@ -759,8 +762,21 @@ fn rewrite_strength(storage: &Storage) -> RewriteStrength {
         .unwrap_or_default()
 }
 
+/// Contact key for the person a Messages dictation is for, empty otherwise
+fn recipient_contact_key(recipient: Option<ContactCategory>, contact_name: Option<&str>) -> String {
+    match (recipient, contact_name) {
+        (Some(_), Some(name)) => style::contact_key(name),
+        _ => String::new(),
+    }
+}
+
 /// Profile, matching examples and rewrite strength for the prompt. None keeps the generic prompt.
-fn personalization_for(handle: &FlowHandle, said: &str, category: &str) -> Option<String> {
+fn personalization_for(
+    handle: &FlowHandle,
+    said: &str,
+    category: &str,
+    contact: &str,
+) -> Option<String> {
     let strength = rewrite_strength(&handle.storage);
     let profile = handle
         .storage
@@ -771,21 +787,36 @@ fn personalization_for(handle: &FlowHandle, said: &str, category: &str) -> Optio
         .storage
         .get_style_examples(STYLE_EXAMPLE_POOL)
         .unwrap_or_default();
-    let selected = style::select_examples(&examples, said, category, style::EXAMPLES_PER_REQUEST);
+    let profile = profile.filter(|p| !p.trim().is_empty());
+    let selected = style::select_examples(
+        &examples,
+        said,
+        category,
+        contact,
+        style::EXAMPLES_PER_REQUEST,
+    );
+    let habits = style::measure_habits(&examples, category, contact);
 
     if profile.is_none() && selected.is_empty() && strength == RewriteStrength::Balanced {
         return None;
     }
 
+    let same_person = selected
+        .iter()
+        .filter(|e| !contact.is_empty() && e.contact_key == contact)
+        .count();
     log_with_time!(
-        "🎨 [RUST] Personalizing with {} examples, profile: {}, strength: {}",
+        "🎨 [RUST] Personalizing with {} examples ({} from this person), profile: {}, habits: {}, strength: {}",
         selected.len(),
+        same_person,
         profile.is_some(),
+        habits.is_some(),
         strength.as_str()
     );
     Some(style::build_personalization(
         profile.as_deref(),
         &selected,
+        habits.as_deref(),
         strength,
     ))
 }
@@ -2358,10 +2389,12 @@ pub extern "C" fn flow_format_text(
     };
     let app_name = c_str(app_name);
 
-    let (mode, recipient) = resolve_recipient(handle, app_name, c_str(contact_name));
+    let contact_name = c_str(contact_name);
+    let (mode, recipient) = resolve_recipient(handle, app_name, contact_name);
     let category = style::category_key(recipient, Some(handle.app_tracker.current_category()));
+    let contact = recipient_contact_key(recipient, contact_name);
     let context = format_context(app_name, recipient);
-    let personalization = personalization_for(handle, text, &category);
+    let personalization = personalization_for(handle, text, &category, &contact);
 
     let (shortcut_text, _) = handle.shortcuts.process(text);
     let (corrected, _) = handle.learning.apply_corrections(&shortcut_text);
@@ -2396,6 +2429,7 @@ pub extern "C" fn flow_format_text(
         Ok(output) => {
             *handle.pending_dictation.lock() = Some(PendingDictation {
                 category,
+                contact_key: contact,
                 said: text.to_string(),
                 flow_output: output.clone(),
             });
@@ -2423,7 +2457,8 @@ pub extern "C" fn flow_record_final_text(handle: *mut FlowHandle, final_text: *c
         .unwrap_or(&pending.flow_output);
 
     let example =
-        StyleExample::dictation(&pending.category, &pending.said, &pending.flow_output, sent);
+        StyleExample::dictation(&pending.category, &pending.said, &pending.flow_output, sent)
+            .with_contact(&pending.contact_key);
     log_with_time!(
         "🎨 [RUST] Recorded {} dictation for {}",
         if example.edited { "edited" } else { "unedited" },
@@ -2615,7 +2650,8 @@ pub extern "C" fn flow_import_imessages(handle: *mut FlowHandle, limit: u32) -> 
 
     let mut imported = 0;
     for message in &messages {
-        let example = StyleExample::imported(&message.category, &message.text);
+        let example = StyleExample::imported(&message.category, &message.text)
+            .with_contact(&message.contact_key);
         if handle.storage.save_style_example(&example).is_ok() {
             imported += 1;
         }

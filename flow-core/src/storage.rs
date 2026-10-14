@@ -182,6 +182,12 @@ impl Storage {
             "#,
         )?;
 
+        // Migration: per-contact key on style examples
+        let _ = conn.execute(
+            "ALTER TABLE style_examples ADD COLUMN contact_key TEXT NOT NULL DEFAULT ''",
+            [],
+        );
+
         // Migration: Add raw_text column to transcription_history if it doesn't exist
         let _ = conn.execute(
             "ALTER TABLE transcription_history ADD COLUMN raw_text TEXT NOT NULL DEFAULT ''",
@@ -873,8 +879,8 @@ impl Storage {
         let conn = self.conn.lock();
         conn.execute(
             r#"
-            INSERT INTO style_examples (id, category, said, flow_output, sent, edited, source, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            INSERT INTO style_examples (id, category, said, flow_output, sent, edited, source, created_at, contact_key)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             "#,
             params![
                 example.id.to_string(),
@@ -885,6 +891,7 @@ impl Storage {
                 example.edited as i64,
                 example.source.as_str(),
                 example.created_at.to_rfc3339(),
+                example.contact_key,
             ],
         )?;
         Ok(())
@@ -895,7 +902,7 @@ impl Storage {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             r#"
-            SELECT id, category, said, flow_output, sent, edited, source, created_at
+            SELECT id, category, said, flow_output, sent, edited, source, created_at, contact_key
             FROM style_examples
             ORDER BY created_at DESC
             LIMIT ?1
@@ -918,6 +925,7 @@ impl Storage {
                     created_at: DateTime::parse_from_rfc3339(&created_at)
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(|_| Utc::now()),
+                    contact_key: row.get(8)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
