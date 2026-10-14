@@ -396,6 +396,7 @@ pub fn sample_for_profile(examples: &[StyleExample], per_category: usize) -> Vec
 pub fn build_personalization(
     profile: Option<&str>,
     examples: &[&StyleExample],
+    category: &str,
     habits: Option<&str>,
     strength: RewriteStrength,
 ) -> String {
@@ -441,6 +442,14 @@ pub fn build_personalization(
                 e.sent.trim()
             ));
         }
+    }
+
+    if !examples.iter().any(|e| e.category == category) {
+        out.push_str(&format!(
+            "\nThe user has almost no messages to {}. Keep their spelling habits, but follow the \
+             requested tone and context over the casual habits above.\n",
+            category_label(category)
+        ));
     }
 
     out.push_str("\nRewrite strength: ");
@@ -518,6 +527,7 @@ mod tests {
         let text = build_personalization(
             Some("- lowercase"),
             &[&edit, &own],
+            "partner",
             Some("Measured from 20 messages"),
             RewriteStrength::Light,
         );
@@ -527,6 +537,10 @@ mod tests {
         assert!(text.contains("\"omw home 🫶\""));
         assert!(text.contains("LIGHT TOUCH"));
         assert!(text.contains("Measured from 20 messages"));
+        assert!(!text.contains("almost no messages"));
+
+        let unfamiliar = build_personalization(None, &[&own], "professional", None, RewriteStrength::Balanced);
+        assert!(unfamiliar.contains("almost no messages to professional contacts"));
     }
 
     #[test]

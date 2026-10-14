@@ -816,6 +816,7 @@ fn personalization_for(
     Some(style::build_personalization(
         profile.as_deref(),
         &selected,
+        category,
         habits.as_deref(),
         strength,
     ))
