@@ -93,13 +93,14 @@ export function buildProfilePrompt(): string {
     "automatic formatter wrote and what the person changed it to; those corrections matter most.\n\n" +
     "Write a concise style profile in Markdown:\n" +
     "- A '## Overall' section, then one '## To <recipient>' section per recipient type present.\n" +
-    "- 3-6 bullets per section of concrete, checkable habits: capitalization, punctuation, " +
-    "message length, slang and abbreviations, emoji (which ones), pet names, greetings and sign-offs, " +
-    "words they avoid or replace.\n" +
-    "- Quote short real phrases they use in backticks.\n" +
-    "- Describe only what the messages show. No personality judgements and no private facts: " +
-    "never write people's names, places, addresses, plans or events, even inside quotes.\n" +
-    "- If a current profile is given, update it: keep what still holds, fix what the new messages contradict.\n\n" +
+    "- 3-5 bullets per section of concrete, checkable habits: capitalization, punctuation, " +
+    "message length, slang and abbreviations, pet names, greetings and sign-offs, words they avoid.\n" +
+    "- Be honest about frequency: say 'rarely', 'sometimes' or 'usually'. Only call something " +
+    "frequent if it appears in many of the messages. Emoji are rare for most people; say so if they are.\n" +
+    "- Quote at most 3 words at a time, in backticks, and only slang or set phrases.\n" +
+    "- Style only, never content: no topics, no names of people, companies, places or streets, " +
+    "no jobs, plans or events.\n" +
+    "- If a current profile is given, update it: keep what still holds, fix what the messages contradict.\n\n" +
     "Output ONLY the Markdown profile."
   );
 }
