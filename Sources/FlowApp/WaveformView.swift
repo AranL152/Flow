@@ -15,7 +15,7 @@ private struct ColorCache {
     init(barCount: Int) {
         // Pre-compute all gradient colors to avoid per-frame NSColor conversions
         let recordingFrom = NSColor(FW.recording)
-        let recordingTo = NSColor(FW.recording.withAlphaComponent(0.6))
+        let recordingTo = NSColor(FW.recording).withAlphaComponent(0.6)
         let accentFrom = NSColor(FW.accent)
         let accentTo = NSColor(FW.accentSecondary)
 
