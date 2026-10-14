@@ -293,6 +293,75 @@ bool flow_set_transcription_fallback(FlowHandle* handle, bool enabled);
 /// @return true if enabled (the default)
 bool flow_get_transcription_fallback(FlowHandle* handle);
 
+// ============ Style Learning ============
+
+/// Format typed text as if it had been dictated
+/// @param handle Engine handle
+/// @param text Text to format
+/// @param app_name Target app name (may be NULL)
+/// @param contact_name Messages contact to classify (may be NULL)
+/// @return Formatted text (caller must free with flow_free_string) or NULL on error
+char* flow_format_text(FlowHandle* handle, const char* text, const char* app_name, const char* contact_name);
+
+/// Record what the user finally sent for the last dictation
+/// @param handle Engine handle
+/// @param final_text Sent text, or NULL if unchanged
+/// @return 1 if the style profile is due for a rebuild, 0 if recorded, -1 if nothing was pending
+int32_t flow_record_final_text(FlowHandle* handle, const char* final_text);
+
+/// Drop the last dictation without learning from it
+/// @param handle Engine handle
+void flow_discard_pending_dictation(FlowHandle* handle);
+
+/// Rebuild the style profile from stored examples (blocking network call)
+/// @param handle Engine handle
+/// @return true on success
+bool flow_rebuild_style_profile(FlowHandle* handle);
+
+/// Get the style profile Markdown (empty when none)
+/// @param handle Engine handle
+/// @return Profile (caller must free with flow_free_string)
+char* flow_get_style_profile(FlowHandle* handle);
+
+/// Replace the style profile with an edited version
+/// @param handle Engine handle
+/// @param profile Profile Markdown
+/// @return true on success
+bool flow_set_style_profile(FlowHandle* handle, const char* profile);
+
+/// Set how far the formatter may rewrite: 0 = light, 1 = balanced, 2 = full
+/// @param handle Engine handle
+/// @param strength Rewrite strength
+/// @return true on success
+bool flow_set_rewrite_strength(FlowHandle* handle, uint8_t strength);
+
+/// Get the rewrite strength: 0 = light, 1 = balanced, 2 = full
+/// @param handle Engine handle
+/// @return Rewrite strength
+uint8_t flow_get_rewrite_strength(FlowHandle* handle);
+
+/// Get edit rate and example counts as JSON
+/// @param handle Engine handle
+/// @return JSON (caller must free with flow_free_string)
+char* flow_get_style_stats_json(FlowHandle* handle);
+
+/// Import messages the user wrote: JSON array of {"category", "text"}
+/// @param handle Engine handle
+/// @param json Messages
+/// @return Number imported, or -1 on invalid input
+int64_t flow_import_style_examples_json(FlowHandle* handle, const char* json);
+
+/// Import messages the user sent from the macOS Messages database (needs Full Disk Access)
+/// @param handle Engine handle
+/// @param limit Maximum number of messages to import
+/// @return Number imported, or -1 on error (see flow_get_last_error)
+int64_t flow_import_imessages(FlowHandle* handle, uint32_t limit);
+
+/// Delete all style examples and the profile
+/// @param handle Engine handle
+/// @return true on success
+bool flow_reset_style_learning(FlowHandle* handle);
+
 // ============ Error Handling ============
 
 /// Get the last error message

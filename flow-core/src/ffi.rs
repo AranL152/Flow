@@ -2437,6 +2437,13 @@ pub extern "C" fn flow_record_final_text(handle: *mut FlowHandle, final_text: *c
     i32::from(profile_rebuild_due(&handle.storage))
 }
 
+/// Drop the last dictation without learning from it (e.g. the sent text could not be read)
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_discard_pending_dictation(handle: *mut FlowHandle) {
+    let handle = unsafe { &*handle };
+    *handle.pending_dictation.lock() = None;
+}
+
 fn profile_rebuild_due(storage: &Storage) -> bool {
     let total = storage.count_style_examples().unwrap_or(0);
     let at_last_build = storage

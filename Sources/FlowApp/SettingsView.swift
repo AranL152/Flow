@@ -27,6 +27,7 @@ struct SettingsContentView: View {
                     APIKeysSection()
                 }
 
+                YourStyleSection()
                 GeneralSection()
                 KeyboardSection()
                 StatsSection()
@@ -482,6 +483,163 @@ private struct StatsSection: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Your Style Section
+
+private struct YourStyleSection: View {
+    @EnvironmentObject var appState: AppState
+    @State private var strength: RewriteStrength = .balanced
+    @State private var profile = ""
+    @State private var savedProfile = ""
+    @State private var stats: StyleStats?
+    @State private var status: String?
+    @State private var isWorking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FW.spacing12) {
+            Text("Your Style")
+                .fwSectionHeader()
+
+            VStack(alignment: .leading, spacing: FW.spacing20) {
+                VStack(alignment: .leading, spacing: FW.spacing8) {
+                    Text("Rewrite strength")
+                        .font(.subheadline)
+                        .foregroundStyle(FW.textSecondary)
+
+                    FWSegmentedControl(
+                        selection: $strength,
+                        options: RewriteStrength.allCases,
+                        label: { $0.displayName }
+                    )
+                    .onChange(of: strength) { _, newValue in
+                        appState.engine.rewriteStrength = newValue
+                    }
+
+                    Text(strength.description)
+                        .font(.caption)
+                        .foregroundStyle(FW.textMuted)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(editRateText)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(FW.textPrimary)
+                    Text(editRateDetail)
+                        .font(.caption)
+                        .foregroundStyle(FW.textMuted)
+                }
+
+                VStack(alignment: .leading, spacing: FW.spacing8) {
+                    Text("Style profile")
+                        .font(.subheadline)
+                        .foregroundStyle(FW.textSecondary)
+
+                    TextEditor(text: $profile)
+                        .font(FW.fontMonoSmall)
+                        .frame(minHeight: 160)
+                        .scrollContentBackground(.hidden)
+                        .padding(FW.spacing8)
+                        .background(FW.background)
+                        .clipShape(RoundedRectangle(cornerRadius: FW.radiusSmall))
+                        .overlay(alignment: .topLeading) {
+                            if profile.isEmpty {
+                                Text("Built automatically after 10 messages, or import your texts below. You can edit it.")
+                                    .font(.caption)
+                                    .foregroundStyle(FW.textMuted)
+                                    .padding(FW.spacing12)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+
+                    HStack(spacing: FW.spacing8) {
+                        Button("Save") {
+                            appState.engine.setStyleProfile(profile)
+                            savedProfile = profile
+                            status = "Profile saved"
+                        }
+                        .buttonStyle(FWSecondaryButtonStyle())
+                        .disabled(profile == savedProfile)
+
+                        Button("Rebuild") {
+                            runInBackground(start: "Rebuilding profile…") { engine in
+                                engine.rebuildStyleProfile()
+                                    ? "Profile rebuilt"
+                                    : "Rebuild failed: \(engine.lastError ?? "unknown error")"
+                            }
+                        }
+                        .buttonStyle(FWSecondaryButtonStyle())
+
+                        Button("Import from Messages") {
+                            runInBackground(start: "Reading your sent messages…") { engine in
+                                guard let count = engine.importIMessages() else {
+                                    return engine.lastError ?? "Import failed"
+                                }
+                                guard count > 0 else { return "No new messages to import" }
+                                let rebuilt = engine.rebuildStyleProfile()
+                                return "Imported \(count) messages" + (rebuilt ? " and rebuilt your profile" : "")
+                            }
+                        }
+                        .buttonStyle(FWSecondaryButtonStyle())
+
+                        Spacer()
+
+                        Button("Reset") {
+                            appState.engine.resetStyleLearning()
+                            refresh()
+                            status = "Style learning reset"
+                        }
+                        .buttonStyle(FWGhostButtonStyle())
+                    }
+                    .disabled(isWorking)
+
+                    if let status = status {
+                        Text(status)
+                            .font(.caption)
+                            .foregroundStyle(FW.textSecondary)
+                    }
+                }
+            }
+            .fwSection()
+        }
+        .onAppear(perform: refresh)
+    }
+
+    private var editRateText: String {
+        guard let stats = stats, stats.total > 0 else { return "No dictations yet" }
+        return "You edit \(Int((stats.rate * 100).rounded()))% of messages"
+    }
+
+    private var editRateDetail: String {
+        guard let stats = stats else { return "" }
+        var parts = ["\(stats.edited) of \(stats.total) dictations edited"]
+        if stats.recentTotal > 0 && stats.recentTotal < stats.total {
+            parts.append("last \(stats.recentTotal): \(Int((stats.recentRate * 100).rounded()))%")
+        }
+        parts.append("\(stats.examples) examples learned")
+        return parts.joined(separator: " · ")
+    }
+
+    private func refresh() {
+        strength = appState.engine.rewriteStrength
+        profile = appState.engine.styleProfile
+        savedProfile = profile
+        stats = appState.engine.styleStats
+    }
+
+    private func runInBackground(start: String, _ work: @escaping (Flow) -> String) {
+        let engine = appState.engine
+        isWorking = true
+        status = start
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = work(engine)
+            DispatchQueue.main.async {
+                isWorking = false
+                refresh()
+                status = result
+            }
+        }
     }
 }
 

@@ -83,6 +83,7 @@ final class EditLearningService {
         // Don't bother with very short text
         guard originalText.count >= minimumTextLength else {
             log("Skipping: text too short (\(originalText.count) chars)")
+            recordSent(original: originalText, current: nil)
             return
         }
 
@@ -126,6 +127,7 @@ final class EditLearningService {
                 log("Using last captured text as final edit")
                 checkAndLearn(original: original, current: lastText)
             }
+            recordSent(original: original, current: lastReadText)
             cancelMonitoring()
             return
         }
@@ -140,6 +142,7 @@ final class EditLearningService {
             } else {
                 log("Lost focus on text element, no edits detected")
             }
+            recordSent(original: original, current: lastReadText)
             cancelMonitoring()
             return
         }
@@ -173,7 +176,38 @@ final class EditLearningService {
             // Text has been stable, time to learn
             log("Text stable for \(Int(stableFor))s, checking for edits")
             checkAndLearn(original: original, current: currentText)
+            recordSent(original: original, current: currentText)
             cancelMonitoring()
+        }
+    }
+
+    /// Tell the engine what was finally sent, so style learning sees the user's real wording.
+    /// `current` is nil when the field was never read (usually sent right away, unchanged).
+    private func recordSent(original: String, current: String?) {
+        guard let engine = engine else { return }
+
+        let sent: String?
+        if let current = current, current != original {
+            // A much longer field is probably the whole document, not just this message
+            let sameMessage = wordOverlapRatio(original: original, edited: current) >= minimumWordOverlap
+                && current.count <= original.count * 3 + 40
+            guard sameMessage else {
+                log("Style: field does not look like the pasted message, discarding")
+                engine.discardPendingDictation()
+                return
+            }
+            sent = current
+        } else {
+            sent = nil
+        }
+
+        log("Style: recorded \(sent == nil ? "unchanged" : "edited") message")
+        if engine.recordFinalText(sent) {
+            log("Style: rebuilding profile in the background")
+            DispatchQueue.global(qos: .utility).async {
+                let ok = engine.rebuildStyleProfile()
+                self.log("Style: profile rebuild \(ok ? "finished" : "failed")")
+            }
         }
     }
 

@@ -782,5 +782,137 @@ public final class Flow: @unchecked Sendable {
         return flow_get_transcription_fallback(handle)
     }
 
+    // MARK: - Style Learning
+
+    private func takeString(_ cString: UnsafeMutablePointer<CChar>?) -> String? {
+        guard let cString = cString else { return nil }
+        let string = String(cString: cString)
+        flow_free_string(cString)
+        return string
+    }
+
+    /// Format typed text as if it had been dictated
+    public func formatText(_ text: String, appName: String?, contactName: String?) -> String? {
+        guard let handle = handle else { return nil }
+        return text.withCString { cText in
+            withOptionalCString(appName) { cApp in
+                withOptionalCString(contactName) { cContact in
+                    takeString(flow_format_text(handle, cText, cApp, cContact))
+                }
+            }
+        }
+    }
+
+    /// Record what the user finally sent for the last dictation
+    /// - Parameter finalText: The sent text, or nil if it was unchanged
+    /// - Returns: true when the style profile is due for a rebuild
+    @discardableResult
+    public func recordFinalText(_ finalText: String?) -> Bool {
+        guard let handle = handle else { return false }
+        return withOptionalCString(finalText) { flow_record_final_text(handle, $0) } == 1
+    }
+
+    /// Drop the last dictation without learning from it
+    public func discardPendingDictation() {
+        guard let handle = handle else { return }
+        flow_discard_pending_dictation(handle)
+    }
+
+    /// Rebuild the style profile. Blocks on a network call, so call off the main thread.
+    public func rebuildStyleProfile() -> Bool {
+        guard let handle = handle else { return false }
+        return flow_rebuild_style_profile(handle)
+    }
+
+    /// Markdown style profile, empty when none has been built
+    public var styleProfile: String {
+        guard let handle = handle else { return "" }
+        return takeString(flow_get_style_profile(handle)) ?? ""
+    }
+
+    @discardableResult
+    public func setStyleProfile(_ profile: String) -> Bool {
+        guard let handle = handle else { return false }
+        return profile.withCString { flow_set_style_profile(handle, $0) }
+    }
+
+    public var rewriteStrength: RewriteStrength {
+        get {
+            guard let handle = handle else { return .balanced }
+            return RewriteStrength(rawValue: flow_get_rewrite_strength(handle)) ?? .balanced
+        }
+        set {
+            guard let handle = handle else { return }
+            _ = flow_set_rewrite_strength(handle, newValue.rawValue)
+        }
+    }
+
+    public var styleStats: StyleStats? {
+        guard let handle = handle,
+              let json = takeString(flow_get_style_stats_json(handle)),
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(StyleStats.self, from: data)
+    }
+
+    /// Import messages sent from the Messages app. Blocks while reading, so call off the main thread.
+    /// - Returns: Number imported, or nil on error (see `lastError`)
+    public func importIMessages(limit: UInt32 = 5000) -> Int? {
+        guard let handle = handle else { return nil }
+        let count = flow_import_imessages(handle, limit)
+        return count < 0 ? nil : Int(count)
+    }
+
+    @discardableResult
+    public func resetStyleLearning() -> Bool {
+        guard let handle = handle else { return false }
+        return flow_reset_style_learning(handle)
+    }
+
+    private func withOptionalCString<R>(_ string: String?, _ body: (UnsafePointer<CChar>?) -> R) -> R {
+        guard let string = string else { return body(nil) }
+        return string.withCString { body($0) }
+    }
+
     // Configuration persistence is handled in the core database.
+}
+
+/// How far the formatter may move away from the user's own words
+public enum RewriteStrength: UInt8, Sendable, CaseIterable {
+    case light = 0
+    case balanced = 1
+    case full = 2
+
+    public var displayName: String {
+        switch self {
+        case .light: return "Light"
+        case .balanced: return "Balanced"
+        case .full: return "Full"
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .light: return "Only removes filler words and fixes punctuation"
+        case .balanced: return "Adjusts tone, keeps most of your words"
+        case .full: return "Rewrites freely in your style"
+        }
+    }
+}
+
+/// How often you change Flow's output before sending
+public struct StyleStats: Decodable, Sendable {
+    public let edited: Int
+    public let total: Int
+    public let rate: Double
+    public let recentEdited: Int
+    public let recentTotal: Int
+    public let recentRate: Double
+    public let examples: Int
+
+    enum CodingKeys: String, CodingKey {
+        case edited, total, rate, examples
+        case recentEdited = "recent_edited"
+        case recentTotal = "recent_total"
+        case recentRate = "recent_rate"
+    }
 }
