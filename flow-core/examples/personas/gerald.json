@@ -1,0 +1,53 @@
+{
+  "name": "Gerald",
+  "contacts": {
+    "partner": "❤️ Margaret",
+    "family": "Sister Ruth",
+    "professional": "Dr. Okafor",
+    "friend": "nigel from the pub"
+  },
+  "messages": [
+    { "category": "partner", "text": "Running a touch late, darling. Home by seven." },
+    { "category": "partner", "text": "Shall I pick up something for supper?" },
+    { "category": "partner", "text": "Lovely. See you shortly, darling." },
+    { "category": "partner", "text": "I've booked the table for Saturday. Eight o'clock." },
+    { "category": "partner", "text": "Do take an umbrella, it's meant to pour." },
+    { "category": "partner", "text": "Thinking of you, darling. Good luck today." },
+    { "category": "partner", "text": "Train delayed again. Marvellous." },
+    { "category": "partner", "text": "Goodnight, darling. Sleep well." },
+
+    { "category": "family", "text": "Ruth, are we still on for Sunday lunch?" },
+    { "category": "family", "text": "Mum's birthday card is in the post. Do sign it when it arrives." },
+    { "category": "family", "text": "Happy to drive. I'll collect you at noon." },
+    { "category": "family", "text": "Glad to hear the operation went well. Rest up." },
+    { "category": "family", "text": "Cheers, Ruth. Speak soon." },
+
+    { "category": "professional", "text": "Dear Dr. Okafor, thank you for your note. I shall review the figures and revert by Friday. Kind regards, Gerald" },
+    { "category": "professional", "text": "Apologies for the delay. Please find the revised schedule attached. Kind regards, Gerald" },
+    { "category": "professional", "text": "That works well for me. Tuesday at ten, then. Kind regards, Gerald" },
+    { "category": "professional", "text": "Could you clarify which version of the report you would like me to use? Kind regards, Gerald" },
+    { "category": "professional", "text": "Noted, and many thanks. Kind regards, Gerald" },
+
+    { "category": "friend", "text": "Pint on Thursday? Usual place." },
+    { "category": "friend", "text": "Dreadful match. We were robbed." },
+    { "category": "friend", "text": "Count me in. Cheers, G" },
+    { "category": "friend", "text": "Bit under the weather, rain check? Cheers, G" },
+    { "category": "friend", "text": "Ha. Very good. Cheers, G" },
+    { "category": "friend", "text": "Your round, I believe. Cheers, G" }
+  ],
+  "corrections": [
+    { "contact": "partner", "said": "i love you so much", "sent": "Love you, darling." },
+    { "contact": "partner", "said": "what do you want for dinner", "sent": "What would you like for supper, darling?" },
+    { "contact": "friend", "said": "that is hilarious", "sent": "Ha. Very good. Cheers, G" },
+    { "contact": "professional", "said": "thanks i will get back to you", "sent": "Many thanks. I shall revert shortly. Kind regards, Gerald" },
+    { "contact": "family", "said": "how are you feeling", "sent": "How are you feeling, Ruth?" }
+  ],
+  "held_out": [
+    { "contact": "partner", "said": "hi how are you doing" },
+    { "contact": "partner", "said": "what time are you getting home tonight" },
+    { "contact": "partner", "said": "i miss you" },
+    { "contact": "family", "said": "i will call you after work" },
+    { "contact": "professional", "said": "can you send me the report by friday" },
+    { "contact": "friend", "said": "are you coming to the party tonight" }
+  ]
+}
