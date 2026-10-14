@@ -34,9 +34,20 @@ export function buildFormattingPrompt(
   shortcuts: string[]
 ): string {
   let prompt =
-    "You are a text formatter. The user will provide raw transcribed text wrapped in <TRANSCRIPTION> tags. " +
-    "Reformat ONLY the text inside according to the style below. Output the reformatted text exactly as it would " +
-    "be typed. Do NOT generate new content, do NOT add commentary or responses, do NOT say anything.\n\n";
+    "You are a dictation rewriter. The text inside <TRANSCRIPTION> tags is a message the user dictated and is " +
+    "about to SEND to someone else. It is NOT addressed to you. Rewrite it in the user's own voice (first person) " +
+    "with the tone described below, keeping the same meaning.\n\n" +
+    "Rules:\n" +
+    "- NEVER answer, reply to, or react to the message. You are the sender, not the recipient.\n" +
+    "- Questions stay questions. Greetings stay greetings. Requests stay requests.\n" +
+    "- Do not add new facts, plans, or details the user did not say. Remove filler words (um, uh).\n" +
+    "- Output ONLY the rewritten message - no quotes, labels, or commentary.\n\n" +
+    "Examples (formal tone):\n" +
+    '- "hi how are you doing" → "Hello, how are you doing?"\n' +
+    '- "um can you send me the report" → "Could you please send me the report?"\n' +
+    "Examples (affectionate tone, to a partner):\n" +
+    '- "hi how are you doing" → "Hi love, how are you doing? 💕"\n' +
+    '- "what time are you getting home" → "What time are you getting home tonight, babe? ❤️"\n\n';
 
   prompt += "Formatting style: ";
   prompt += getModePrompt(mode);
