@@ -1,7 +1,7 @@
-//! Base10 provider for Whisper transcription + OpenRouter completion
+//! Cloud ("Auto") provider backed by the flow-worker-langgraph Cloudflare Worker (deployed as base10-proxy)
 //!
 //! Combined transcription and completion in a single worker request.
-//! API keys handled by Cloudflare Worker secrets.
+//! Whisper and the formatting LLM run on Workers AI, so no API keys live in the client.
 
 use async_trait::async_trait;
 use base64::Engine;
@@ -14,8 +14,9 @@ use crate::error::{Error, Result};
 
 use super::{TranscriptionProvider, TranscriptionRequest, TranscriptionResponse};
 
-const BASE10_PROXY_URL: &str = "https://base10-proxy.test-j.workers.dev";
-const BASE10_VALIDATE_URL: &str = "https://base10-proxy.test-j.workers.dev/validate-corrections";
+const BASE10_PROXY_URL: &str = "https://base10-proxy.old-resonance-ed75.workers.dev";
+const BASE10_VALIDATE_URL: &str =
+    "https://base10-proxy.old-resonance-ed75.workers.dev/validate-corrections";
 
 /// Base10 transcription provider (with integrated completion)
 pub struct Base10TranscriptionProvider {
