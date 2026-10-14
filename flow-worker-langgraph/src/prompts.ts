@@ -20,13 +20,12 @@ const MODE_PROMPTS: Record<string, string> = {
     "Show genuine excitement while keeping the message clear.",
 };
 
+// Shows the rewrite-not-reply rule only. Tone comes from the style and context lines,
+// since tone examples here leak into every recipient.
 const GENERIC_EXAMPLES =
-  "Examples (formal tone):\n" +
+  "Examples of rewriting (not replying):\n" +
   '- "hi how are you doing" → "Hello, how are you doing?"\n' +
-  '- "um can you send me the report" → "Could you please send me the report?"\n' +
-  "Examples (affectionate tone, to a partner):\n" +
-  '- "hi how are you doing" → "Hi love, how are you doing? 💕"\n' +
-  '- "what time are you getting home" → "What time are you getting home tonight, babe? ❤️"\n\n';
+  '- "um can you send me the report" → "Could you please send me the report?"\n\n';
 
 const DEFAULT_MODE_PROMPT =
   "Natural, everyday writing. Use contractions and common expressions. " +
