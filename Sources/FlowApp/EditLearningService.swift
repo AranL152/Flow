@@ -13,21 +13,21 @@ import Flow
 /// Service that detects when users edit pasted transcription text and triggers learning.
 ///
 /// After a transcription is pasted:
-/// 1. Polls the focused text element every second
-/// 2. Tracks when text last changed
-/// 3. When text is stable for 5+ seconds, triggers learning
-/// 4. Gives up after 30 seconds max
+/// 1. Polls the focused text element to keep the latest text
+/// 2. Waits until the user presses Return (or the field clears / loses focus)
+/// 3. Learns from the text that was sent
+/// 4. Gives up after 2 minutes
 final class EditLearningService {
     static let shared = EditLearningService()
 
-    /// How often to poll the text field (seconds)
-    private let pollInterval: TimeInterval = 1.0
+    /// How often to poll the text field (seconds); short so last-second edits are caught
+    private let pollInterval: TimeInterval = 0.3
 
-    /// How long text must be unchanged before we consider it "stable" (seconds)
-    private let stabilityThreshold: TimeInterval = 2.0
+    /// Maximum time to wait for the message to be sent (seconds)
+    private let maxMonitoringDuration: TimeInterval = 120.0
 
-    /// Maximum time to monitor before giving up (seconds)
-    private let maxMonitoringDuration: TimeInterval = 15.0
+    /// Return and keypad Enter
+    private let sendKeyCodes: Set<UInt16> = [36, 76]
 
     /// Minimum text length to bother learning from
     private let minimumTextLength = 10
@@ -53,8 +53,8 @@ final class EditLearningService {
     /// Last text we read from the field
     private var lastReadText: String?
 
-    /// When the text last changed
-    private var lastChangeTime: Date?
+    /// Watches for Return in the target app
+    private var keyMonitor: Any?
 
     /// Known bad values that indicate we read the wrong element
     private let invalidPatterns = [
@@ -91,7 +91,6 @@ final class EditLearningService {
         self.targetAppPID = targetApp?.processIdentifier
         self.monitoringStartTime = Date()
         self.lastReadText = nil
-        self.lastChangeTime = Date()
 
         log("Starting edit monitoring for \(originalText.count) chars in \(targetApp?.localizedName ?? "Unknown")")
 
@@ -99,13 +98,42 @@ final class EditLearningService {
         pollTimer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
             self?.pollTextElement()
         }
+
+        // Shift+Return is a newline in chat apps, so only a plain Return counts as sending
+        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self,
+                  self.sendKeyCodes.contains(event.keyCode),
+                  !event.modifierFlags.contains(.shift) else { return }
+            DispatchQueue.main.async { self.handleSend() }
+        }
     }
 
     /// Cancel any pending monitoring
     func cancelMonitoring() {
         pollTimer?.invalidate()
         pollTimer = nil
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
         cleanup()
+    }
+
+    /// Return was pressed: whatever is in the field now (or was a moment ago) is what was sent
+    private func handleSend() {
+        guard let original = originalText, let pid = targetAppPID else { return }
+
+        var sent = lastReadText
+        if let (current, _) = readFocusedTextElement(pid: pid), !isInvalidText(current) {
+            sent = current
+        }
+
+        log("Return pressed, treating message as sent")
+        if let sent = sent, sent != original {
+            checkAndLearn(original: original, current: sent)
+        }
+        recordSent(original: original, current: sent)
+        cancelMonitoring()
     }
 
     // MARK: - Private
@@ -160,24 +188,12 @@ final class EditLearningService {
             return
         }
 
-        // Check if text changed since last poll
+        // Keep the latest text; the message is finished when Return is pressed
         if currentText != lastReadText {
+            if lastReadText != nil {
+                log("Text changed (\(currentText.count) chars)")
+            }
             lastReadText = currentText
-            lastChangeTime = Date()
-            log("Text changed, resetting stability timer")
-            return
-        }
-
-        // Text is the same as last poll, check if stable long enough
-        guard let lastChange = lastChangeTime else { return }
-        let stableFor = Date().timeIntervalSince(lastChange)
-
-        if stableFor >= stabilityThreshold {
-            // Text has been stable, time to learn
-            log("Text stable for \(Int(stableFor))s, checking for edits")
-            checkAndLearn(original: original, current: currentText)
-            recordSent(original: original, current: currentText)
-            cancelMonitoring()
         }
     }
 
@@ -309,7 +325,6 @@ final class EditLearningService {
         targetAppPID = nil
         monitoringStartTime = nil
         lastReadText = nil
-        lastChangeTime = nil
     }
 
     /// Check if text looks like a title/placeholder that indicates we read the wrong element
@@ -367,23 +382,6 @@ final class EditLearningService {
         AXUIElementCopyAttributeValue(axElement, kAXRoleAttribute as CFString, &roleRef)
         let role = (roleRef as? String) ?? "Unknown"
 
-        // Get role description for debugging
-        var roleDescRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(axElement, kAXRoleDescriptionAttribute as CFString, &roleDescRef)
-        let roleDesc = (roleDescRef as? String) ?? ""
-
-        // Get title for debugging
-        var titleRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(axElement, kAXTitleAttribute as CFString, &titleRef)
-        let title = (titleRef as? String) ?? ""
-
-        // Get description for debugging
-        var descRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(axElement, kAXDescriptionAttribute as CFString, &descRef)
-        let desc = (descRef as? String) ?? ""
-
-        log("Focused element: role=\(role), roleDesc=\(roleDesc), title='\(title.prefix(30))', desc='\(desc.prefix(30))'")
-
         // Try to get the value attribute (text content)
         var value: CFTypeRef?
         let valueResult = AXUIElementCopyAttributeValue(
@@ -393,7 +391,6 @@ final class EditLearningService {
         )
 
         if valueResult == .success, let textValue = value as? String, !textValue.isEmpty {
-            log("Got value: '\(textValue.prefix(50))...' (\(textValue.count) chars)")
             return (textValue, role)
         }
 
