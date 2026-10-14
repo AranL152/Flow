@@ -7,7 +7,7 @@
  * returns either a fully typed value or the first field that is wrong.
  */
 
-import type { CorrectionPair } from "./types.js";
+import type { CorrectionPair, StyleProfileExample } from "./types.js";
 
 export type ParseResult<T> =
   | { ok: true; value: T }
@@ -22,15 +22,28 @@ const MAX_SHORTCUTS = 50;
 const MAX_SHORTCUT_CHARS = 500;
 const MAX_CORRECTIONS = 100;
 const MAX_CORRECTION_CHARS = 100;
+const MAX_TEXT_CHARS = 5000;
+const MAX_PERSONALIZATION_CHARS = 12000;
+const MAX_PROFILE_EXAMPLES = 300;
+const MAX_PROFILE_CATEGORY_CHARS = 64;
+const MAX_PROFILE_CHARS = 6000;
 
 export interface TranscriptionRequestInput {
   audioB64: string;
+  /** Typed text that skips transcription */
+  text?: string;
   audioLanguage: string;
   promptHint?: string;
   mode: string;
   appContext?: string;
   shortcutsTriggered: string[];
   voiceInstruction?: string;
+  personalization?: string;
+}
+
+export interface StyleProfileRequestInput {
+  examples: StyleProfileExample[];
+  currentProfile?: string;
 }
 
 function ok<T>(value: T): ParseResult<T> {
@@ -113,8 +126,13 @@ export function parseTranscriptionRequest(
     return err("missing whisper_input");
   }
 
-  const audioB64 = asRecord(whisperInput.audio)?.audio_b64;
-  if (typeof audioB64 !== "string" || audioB64.length === 0) {
+  const text = optionalString(whisperInput.text, "whisper_input.text", MAX_TEXT_CHARS);
+  if (!text.ok) {
+    return text;
+  }
+
+  const audioB64 = asRecord(whisperInput.audio)?.audio_b64 ?? "";
+  if (typeof audioB64 !== "string" || (audioB64.length === 0 && !text.value)) {
     return err("missing whisper_input.audio.audio_b64");
   }
   if (decodedSize(audioB64) > MAX_AUDIO_BYTES) {
@@ -172,14 +190,25 @@ export function parseTranscriptionRequest(
     return shortcuts;
   }
 
+  const personalization = optionalString(
+    completion.personalization,
+    "completion.personalization",
+    MAX_PERSONALIZATION_CHARS
+  );
+  if (!personalization.ok) {
+    return personalization;
+  }
+
   return ok({
     audioB64,
+    text: text.value,
     audioLanguage,
     promptHint: promptHint.value,
     mode,
     appContext: appContext.value,
     shortcutsTriggered: shortcuts.value,
     voiceInstruction: voiceInstruction.value,
+    personalization: personalization.value,
   });
 }
 
@@ -219,4 +248,56 @@ export function parseCorrectionsRequest(
   }
 
   return ok(pairs);
+}
+
+export function parseStyleProfileRequest(
+  body: unknown
+): ParseResult<StyleProfileRequestInput> {
+  const root = asRecord(body);
+  if (!root) {
+    return err("body must be a JSON object");
+  }
+
+  const list = root.examples;
+  if (!Array.isArray(list) || list.length === 0) {
+    return err("missing examples array");
+  }
+  if (list.length > MAX_PROFILE_EXAMPLES) {
+    return err(`at most ${MAX_PROFILE_EXAMPLES} examples per request`);
+  }
+
+  const examples: StyleProfileExample[] = [];
+  for (const entry of list) {
+    const example = asRecord(entry);
+    const category = example?.category;
+    const sent = example?.sent;
+    if (typeof category !== "string" || typeof sent !== "string") {
+      return err("each example needs category and sent strings");
+    }
+    if (category.length > MAX_PROFILE_CATEGORY_CHARS || sent.length > MAX_TEXT_CHARS) {
+      return err("example fields are too long");
+    }
+
+    const formatterWrote = optionalString(
+      example?.formatter_wrote,
+      "formatter_wrote",
+      MAX_TEXT_CHARS
+    );
+    if (!formatterWrote.ok) {
+      return formatterWrote;
+    }
+
+    examples.push({ category, sent, formatterWrote: formatterWrote.value });
+  }
+
+  const currentProfile = optionalString(
+    root.current_profile,
+    "current_profile",
+    MAX_PROFILE_CHARS
+  );
+  if (!currentProfile.ok) {
+    return currentProfile;
+  }
+
+  return ok({ examples, currentProfile: currentProfile.value });
 }

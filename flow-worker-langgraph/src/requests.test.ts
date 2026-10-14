@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_AUDIO_BYTES,
   parseCorrectionsRequest,
+  parseStyleProfileRequest,
   parseTranscriptionRequest,
 } from "./requests.js";
 
@@ -145,5 +146,63 @@ describe("parseCorrectionsRequest", () => {
     }));
 
     expect(parseCorrectionsRequest({ corrections }).ok).toBe(false);
+  });
+});
+
+describe("typed text and personalization", () => {
+  it("accepts typed text without audio", () => {
+    const body = validBody();
+    body.whisper_input = { text: "hi how are you", whisper_params: { audio_language: "en" } };
+
+    const result = parseTranscriptionRequest(body);
+    expect(result.ok && result.value.text).toBe("hi how are you");
+  });
+
+  it("still requires audio when no text is given", () => {
+    const body = validBody();
+    body.whisper_input = { whisper_params: { audio_language: "en" } };
+
+    expect(parseTranscriptionRequest(body)).toEqual({
+      ok: false,
+      error: "missing whisper_input.audio.audio_b64",
+    });
+  });
+
+  it("carries personalization through", () => {
+    const body = validBody();
+    (body.completion as Record<string, unknown>).personalization = "lowercase always";
+
+    const result = parseTranscriptionRequest(body);
+    expect(result.ok && result.value.personalization).toBe("lowercase always");
+  });
+});
+
+describe("parseStyleProfileRequest", () => {
+  it("parses examples and the current profile", () => {
+    const result = parseStyleProfileRequest({
+      examples: [
+        { category: "partner", sent: "omw bub" },
+        { category: "friend", sent: "lol no", formatter_wrote: "Haha, no." },
+      ],
+      current_profile: "## Overall",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        examples: [
+          { category: "partner", sent: "omw bub", formatterWrote: undefined },
+          { category: "friend", sent: "lol no", formatterWrote: "Haha, no." },
+        ],
+        currentProfile: "## Overall",
+      },
+    });
+  });
+
+  it("rejects an empty example list", () => {
+    expect(parseStyleProfileRequest({ examples: [] })).toEqual({
+      ok: false,
+      error: "missing examples array",
+    });
   });
 });

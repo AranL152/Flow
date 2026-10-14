@@ -32,6 +32,14 @@ export interface WhisperInput {
   whisper_params: WhisperParams;
 }
 
+export interface StyleProfileExample {
+  /** Who the message was for, e.g. "partner" or "app:email" */
+  category: string;
+  sent: string;
+  /** Set when the user rewrote the formatter's output into `sent` */
+  formatterWrote?: string;
+}
+
 export interface AudioInput {
   audio_b64: string;
 }
@@ -93,6 +101,9 @@ export interface FlowState {
   appContext?: string;
   shortcutsTriggered: string[];
   voiceInstruction?: string;
+  /** Typed text that replaces transcription */
+  text?: string;
+  personalization?: string;
 
   // Intermediate
   transcription?: string;

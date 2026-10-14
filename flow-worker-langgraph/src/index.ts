@@ -5,6 +5,7 @@
  * - GET  /health            - liveness probe
  * - POST /                  - transcription, then formatting or command execution
  * - POST /validate-corrections - judge learned correction pairs
+ * - POST /style-profile     - summarise sent messages into a style profile
  */
 
 import { Hono } from "hono";
@@ -16,8 +17,10 @@ import type {
 import { UpstreamError } from "./http.js";
 import { runFlowGraph } from "./graph.js";
 import { validateCorrections } from "./validation.js";
+import { buildStyleProfile } from "./profile.js";
 import {
   parseCorrectionsRequest,
+  parseStyleProfileRequest,
   parseTranscriptionRequest,
 } from "./requests.js";
 
@@ -41,13 +44,15 @@ app.get("/health", (c) => c.json({ status: "ok" }));
  * {
  *   "whisper_input": {
  *     "audio": { "audio_b64": "..." },
+ *     "text": "optional typed text, skips transcription",
  *     "whisper_params": { "audio_language": "en", "prompt": "optional hint" }
  *   },
  *   "completion": {
  *     "mode": "casual",
  *     "app_context": "optional context",
  *     "shortcuts_triggered": [],
- *     "voice_instruction": "optional override"
+ *     "voice_instruction": "optional override",
+ *     "personalization": "optional style profile and examples"
  *   }
  * }
  *
@@ -110,6 +115,39 @@ app.post("/validate-corrections", async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
     console.error(`validation failed: ${message}`);
+    return c.json({ error: message }, err instanceof UpstreamError ? 502 : 500);
+  }
+});
+
+/**
+ * POST /style-profile
+ *
+ * Request body:  { "examples": [{ "category", "sent", "formatter_wrote?" }], "current_profile?": "..." }
+ * Response:      { "profile": "markdown" }
+ */
+app.post("/style-profile", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid JSON" }, 400);
+  }
+
+  const parsed = parseStyleProfileRequest(body);
+  if (!parsed.ok) {
+    return c.json({ error: parsed.error }, 400);
+  }
+
+  try {
+    const profile = await buildStyleProfile(
+      c.env,
+      parsed.value.examples,
+      parsed.value.currentProfile
+    );
+    return c.json({ profile });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "unknown error";
+    console.error(`profile failed: ${message}`);
     return c.json({ error: message }, err instanceof UpstreamError ? 502 : 500);
   }
 });

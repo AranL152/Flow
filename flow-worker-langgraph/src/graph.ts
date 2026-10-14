@@ -52,6 +52,8 @@ const FlowStateAnnotation = Annotation.Root({
   appContext: Annotation<string | undefined>(),
   shortcutsTriggered: Annotation<string[]>(),
   voiceInstruction: Annotation<string | undefined>(),
+  text: Annotation<string | undefined>(),
+  personalization: Annotation<string | undefined>(),
 
   // Intermediate
   transcription: Annotation<string | undefined>(),
@@ -100,6 +102,8 @@ export interface FlowGraphInput {
   appContext?: string;
   shortcutsTriggered?: string[];
   voiceInstruction?: string;
+  text?: string;
+  personalization?: string;
   env: Env;
 }
 

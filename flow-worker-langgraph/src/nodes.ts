@@ -37,7 +37,11 @@ export async function transcribeNode(
   state: FlowState,
   config?: RunnableConfig
 ): Promise<Partial<FlowState>> {
-  const { audioB64, audioLanguage, promptHint } = state;
+  const { audioB64, audioLanguage, promptHint, text } = state;
+
+  if (text) {
+    return { transcription: text.trim() };
+  }
 
   // Seed the wake phrase into the decoder hint so Whisper spells it
   // consistently, which is what the detect step keys off.
@@ -136,7 +140,7 @@ export async function formatNode(
   state: FlowState,
   config?: RunnableConfig
 ): Promise<Partial<FlowState>> {
-  const { transcription, mode, appContext, shortcutsTriggered } = state;
+  const { transcription, mode, appContext, shortcutsTriggered, personalization } = state;
 
   if (!transcription) {
     return { error: "No transcription to format" };
@@ -145,7 +149,7 @@ export async function formatNode(
   try {
     const formattedText = await completeChat(
       requireEnv(config),
-      buildFormattingPrompt(mode, appContext, shortcutsTriggered),
+      buildFormattingPrompt(mode, appContext, shortcutsTriggered, personalization),
       `<TRANSCRIPTION>\n${transcription}\n</TRANSCRIPTION>`,
       COMPLETION_OPTIONS
     );

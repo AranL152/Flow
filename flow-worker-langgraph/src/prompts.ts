@@ -20,6 +20,14 @@ const MODE_PROMPTS: Record<string, string> = {
     "Show genuine excitement while keeping the message clear.",
 };
 
+const GENERIC_EXAMPLES =
+  "Examples (formal tone):\n" +
+  '- "hi how are you doing" → "Hello, how are you doing?"\n' +
+  '- "um can you send me the report" → "Could you please send me the report?"\n' +
+  "Examples (affectionate tone, to a partner):\n" +
+  '- "hi how are you doing" → "Hi love, how are you doing? 💕"\n' +
+  '- "what time are you getting home" → "What time are you getting home tonight, babe? ❤️"\n\n';
+
 const DEFAULT_MODE_PROMPT =
   "Natural, everyday writing. Use contractions and common expressions. " +
   "Keep a friendly, conversational tone while maintaining clarity.";
@@ -28,10 +36,15 @@ export function getModePrompt(mode: string): string {
   return MODE_PROMPTS[mode] ?? DEFAULT_MODE_PROMPT;
 }
 
+/**
+ * `personalization` is built by the client from the user's style profile and
+ * past messages. When present it replaces the generic examples.
+ */
 export function buildFormattingPrompt(
   mode: string,
   appContext: string | undefined,
-  shortcuts: string[]
+  shortcuts: string[],
+  personalization?: string
 ): string {
   let prompt =
     "You are a dictation rewriter. The text inside <TRANSCRIPTION> tags is a message the user dictated and is " +
@@ -41,13 +54,11 @@ export function buildFormattingPrompt(
     "- NEVER answer, reply to, or react to the message. You are the sender, not the recipient.\n" +
     "- Questions stay questions. Greetings stay greetings. Requests stay requests.\n" +
     "- Do not add new facts, plans, or details the user did not say. Remove filler words (um, uh).\n" +
-    "- Output ONLY the rewritten message - no quotes, labels, or commentary.\n\n" +
-    "Examples (formal tone):\n" +
-    '- "hi how are you doing" → "Hello, how are you doing?"\n' +
-    '- "um can you send me the report" → "Could you please send me the report?"\n' +
-    "Examples (affectionate tone, to a partner):\n" +
-    '- "hi how are you doing" → "Hi love, how are you doing? 💕"\n' +
-    '- "what time are you getting home" → "What time are you getting home tonight, babe? ❤️"\n\n';
+    "- Output ONLY the rewritten message - no quotes, labels, or commentary.\n\n";
+
+  if (!personalization) {
+    prompt += GENERIC_EXAMPLES;
+  }
 
   prompt += "Formatting style: ";
   prompt += getModePrompt(mode);
@@ -69,7 +80,29 @@ export function buildFormattingPrompt(
       "=== END CRITICAL INSTRUCTION ===";
   }
 
+  if (personalization) {
+    prompt += personalization;
+  }
+
   return prompt;
+}
+
+export function buildProfilePrompt(): string {
+  return (
+    "You analyse how one person writes so a dictation tool can sound exactly like them. " +
+    "You get messages they actually sent, each tagged with who it was for. Some show what an " +
+    "automatic formatter wrote and what the person changed it to; those corrections matter most.\n\n" +
+    "Write a concise style profile in Markdown:\n" +
+    "- A '## Overall' section, then one '## To <recipient>' section per recipient type present.\n" +
+    "- 3-6 bullets per section of concrete, checkable habits: capitalization, punctuation, " +
+    "message length, slang and abbreviations, emoji (which ones), pet names, greetings and sign-offs, " +
+    "words they avoid or replace.\n" +
+    "- Quote short real phrases they use in backticks.\n" +
+    "- Describe only what the messages show. No personality judgements and no private facts: " +
+    "never write people's names, places, addresses, plans or events, even inside quotes.\n" +
+    "- If a current profile is given, update it: keep what still holds, fix what the new messages contradict.\n\n" +
+    "Output ONLY the Markdown profile."
+  );
 }
 
 export function buildInstructionPrompt(): string {
