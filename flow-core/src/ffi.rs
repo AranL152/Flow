@@ -25,10 +25,11 @@ use crate::learning::LearningEngine;
 use crate::macos_messages::MessagesDetector;
 use crate::modes::{StyleLearner, WritingMode, WritingModeEngine};
 use crate::providers::{
-    Base10TranscriptionProvider, CompletionProvider, FallbackTranscriptionProvider,
-    GeminiCompletionProvider, GeminiTranscriptionProvider, LocalWhisperTranscriptionProvider,
-    OpenAICompletionProvider, OpenAITranscriptionProvider, OpenRouterCompletionProvider,
-    TranscriptionCompletionParams, TranscriptionProvider, TranscriptionRequest, WhisperModel,
+    Base10TranscriptionProvider, CompletionProvider, CompletionRequest,
+    FallbackTranscriptionProvider, GeminiCompletionProvider, GeminiTranscriptionProvider,
+    LocalWhisperTranscriptionProvider, OpenAICompletionProvider, OpenAITranscriptionProvider,
+    OpenRouterCompletionProvider, TranscriptionCompletionParams, TranscriptionProvider,
+    TranscriptionRequest, WhisperModel,
 };
 use crate::shortcuts::ShortcutsEngine;
 use crate::storage::{
@@ -36,7 +37,9 @@ use crate::storage::{
     SETTING_LOCAL_WHISPER_MODEL, SETTING_OPENAI_API_KEY, SETTING_OPENROUTER_API_KEY,
     SETTING_TRANSCRIPTION_FALLBACK, SETTING_USE_LOCAL_TRANSCRIPTION, Storage,
 };
-use crate::types::{Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus};
+use crate::types::{
+    ContactCategory, Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus,
+};
 
 /// Log with timestamp
 macro_rules! log_with_time {
@@ -561,6 +564,7 @@ fn transcribe_with_audio(
     app_name: Option<String>,
 ) -> crate::error::Result<String> {
     // Determine writing mode - use contact captured at recording start for Messages
+    let mut recipient: Option<ContactCategory> = None;
     let mode = if let Some(ref name) = app_name {
         // Check if this is Messages.app
         if name.to_lowercase().contains("messages") || name == "com.apple.MobileSMS" {
@@ -579,17 +583,19 @@ fn transcribe_with_audio(
                 let category = handle.contact_classifier.classify(&input);
                 let contact_mode = category.suggested_writing_mode();
 
-                debug!(
-                    "Contact '{}' classified as {:?}, using mode {:?}",
-                    contact_name, category, contact_mode
+                log_with_time!(
+                    "👤 [RUST] Messages contact classified as {:?}, using {:?} mode",
+                    category,
+                    contact_mode
                 );
 
                 // Record the interaction
                 handle.contact_classifier.record_interaction(&contact_name);
 
+                recipient = Some(category);
                 contact_mode
             } else {
-                debug!("No contact was captured at recording start, using app default");
+                log_with_time!("👤 [RUST] No Messages contact captured, using app default mode");
                 let mut modes = handle.modes.lock();
                 modes.get_mode_with_storage(name, &handle.storage)
             }
@@ -614,6 +620,17 @@ fn transcribe_with_audio(
         .map(|s| s == "true")
         .unwrap_or(false);
 
+    // App context sent to the formatter, including who the message is for (category only, never the name)
+    let format_context = match (&app_name, recipient) {
+        (Some(name), Some(category)) => Some(format!(
+            "{}, writing to {}",
+            name,
+            category.recipient_context()
+        )),
+        (Some(name), None) => Some(name.clone()),
+        (None, _) => None,
+    };
+
     // Build mode string for worker
     let mode_str = match mode {
         WritingMode::Formal => "formal",
@@ -633,7 +650,7 @@ fn transcribe_with_audio(
     }
     let completion_params = Some(TranscriptionCompletionParams {
         mode: mode_str.to_string(),
-        app_context: app_name.clone(),
+        app_context: format_context.clone(),
         shortcuts_triggered: Vec::new(),
         voice_instruction: None, // Worker auto-detects from transcription
     });
@@ -658,6 +675,31 @@ fn transcribe_with_audio(
             completed_text.len()
         );
         completed_text
+    } else if !use_local_transcription && handle.completion.is_configured() {
+        // Cloud transcription without a worker (e.g. OpenAI Whisper) - run the
+        // completion provider ourselves so the writing mode is actually applied
+        let mut request = CompletionRequest::new(text_with_corrections.clone(), mode);
+        if let Some(ref context) = format_context {
+            request = request.with_app_context(context.clone());
+        }
+        let completion_provider = Arc::clone(&handle.completion);
+        match handle
+            .runtime
+            .block_on(async { completion_provider.complete(request).await })
+        {
+            Ok(response) => {
+                log_with_time!(
+                    "✅ [RUST/AI] Completion ({:?} mode) - Output: {} chars",
+                    mode,
+                    response.text.len()
+                );
+                response.text
+            }
+            Err(e) => {
+                log_with_time!("⚠️ [RUST/AI] Completion failed, using raw text: {}", e);
+                text_with_corrections.clone()
+            }
+        }
     } else {
         // Local transcription mode - use corrected text directly (no separate completion)
         log_with_time!(
@@ -2083,8 +2125,6 @@ pub extern "C" fn flow_get_writing_mode_for_category(
 ) -> u32 {
     let handle = unsafe { &*handle };
     clear_last_error(handle);
-
-    use crate::types::ContactCategory;
 
     let contact_category = match category {
         0 => ContactCategory::Professional,

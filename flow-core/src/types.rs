@@ -414,6 +414,17 @@ pub enum ContactCategory {
 }
 
 impl ContactCategory {
+    /// Describe the recipient for the formatting prompt (never includes the contact's name)
+    pub fn recipient_context(&self) -> &'static str {
+        match self {
+            Self::Professional => "a professional contact (keep it polished and respectful)",
+            Self::CloseFamily => "a close family member (warm and familiar)",
+            Self::CasualPeer => "a friend (relaxed and informal)",
+            Self::Partner => "their romantic partner (warm, affectionate and loving)",
+            Self::FormalNeutral => "an acquaintance (polite and neutral)",
+        }
+    }
+
     /// Map contact category to suggested writing mode
     pub fn suggested_writing_mode(&self) -> WritingMode {
         match self {
