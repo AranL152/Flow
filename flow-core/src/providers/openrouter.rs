@@ -54,22 +54,7 @@ impl OpenRouterCompletionProvider {
     }
 
     fn build_system_prompt(&self, mode: WritingMode, app_context: Option<&str>) -> String {
-        let mut prompt = String::from(
-            "You are a text formatter. The user will provide raw transcribed text wrapped in <TRANSCRIPTION> tags. \
-             Reformat ONLY the text inside according to the style below. Output the reformatted text exactly as it would \
-             be typed. Do NOT generate new content, do NOT add commentary or responses, do NOT say anything.\n\n",
-        );
-
-        prompt.push_str("Formatting style: ");
-        prompt.push_str(mode.prompt_modifier());
-
-        if let Some(context) = app_context {
-            prompt.push_str("\n\nContext: User is typing in ");
-            prompt.push_str(context);
-            prompt.push_str(". Adjust formatting for this context.");
-        }
-
-        prompt
+        crate::style::base_formatting_prompt(mode, app_context)
     }
 }
 
@@ -144,6 +129,10 @@ impl CompletionProvider for OpenRouterCompletionProvider {
         // Add shortcut preservation instruction if present
         if let Some(preservation) = request.shortcut_preservation {
             system_prompt.push_str(&preservation);
+        }
+
+        if let Some(personalization) = request.personalization {
+            system_prompt.push_str(&personalization);
         }
 
         let chat_request = ChatRequest {

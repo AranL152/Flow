@@ -8,6 +8,7 @@ use tracing::{debug, info};
 use uuid::Uuid;
 
 use crate::error::Result;
+use crate::style::{EditStats, ExampleSource, StyleExample};
 use crate::types::{
     AnalyticsEvent, AppCategory, AppContext, Contact, ContactCategory, Correction,
     CorrectionSource, EventType, Shortcut, Transcription, TranscriptionHistoryEntry,
@@ -29,6 +30,12 @@ pub const SETTING_USE_LOCAL_TRANSCRIPTION: &str = "use_local_transcription";
 pub const SETTING_LOCAL_WHISPER_MODEL: &str = "local_whisper_model";
 /// Cloud transcription provider: "auto" (default) | "openai"
 pub const SETTING_CLOUD_TRANSCRIPTION_PROVIDER: &str = "cloud_transcription_provider";
+/// Markdown style profile built from the user's messages
+pub const SETTING_STYLE_PROFILE: &str = "style_profile";
+/// Example count when the profile was last built
+pub const SETTING_STYLE_PROFILE_EXAMPLE_COUNT: &str = "style_profile_example_count";
+/// "light" | "balanced" (default) | "full"
+pub const SETTING_REWRITE_STRENGTH: &str = "rewrite_strength";
 /// Whether local transcription falls back to the cloud on failure ("true" default | "false")
 pub const SETTING_TRANSCRIPTION_FALLBACK: &str = "transcription_fallback";
 
@@ -132,6 +139,17 @@ impl Storage {
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS style_examples (
+                id TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                said TEXT NOT NULL,
+                flow_output TEXT NOT NULL,
+                sent TEXT NOT NULL,
+                edited INTEGER NOT NULL,
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
@@ -156,6 +174,7 @@ impl Storage {
             CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
             CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
             CREATE INDEX IF NOT EXISTS idx_style_samples_app ON style_samples(app_name);
+            CREATE INDEX IF NOT EXISTS idx_style_examples_created ON style_examples(created_at);
             CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(name);
             CREATE INDEX IF NOT EXISTS idx_contacts_frequency ON contacts(frequency DESC);
             "#,
@@ -846,6 +865,103 @@ impl Storage {
         Ok(samples)
     }
 
+    // ========== Style example methods ==========
+
+    pub fn save_style_example(&self, example: &StyleExample) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            r#"
+            INSERT INTO style_examples (id, category, said, flow_output, sent, edited, source, created_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "#,
+            params![
+                example.id.to_string(),
+                example.category,
+                example.said,
+                example.flow_output,
+                example.sent,
+                example.edited as i64,
+                example.source.as_str(),
+                example.created_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Most recent examples first
+    pub fn get_style_examples(&self, limit: usize) -> Result<Vec<StyleExample>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, category, said, flow_output, sent, edited, source, created_at
+            FROM style_examples
+            ORDER BY created_at DESC
+            LIMIT ?1
+            "#,
+        )?;
+
+        let examples = stmt
+            .query_map(params![limit as i64], |row| {
+                let id: String = row.get(0)?;
+                let source: String = row.get(6)?;
+                let created_at: String = row.get(7)?;
+                Ok(StyleExample {
+                    id: Uuid::parse_str(&id).unwrap_or_else(|_| Uuid::new_v4()),
+                    category: row.get(1)?,
+                    said: row.get(2)?,
+                    flow_output: row.get(3)?,
+                    sent: row.get(4)?,
+                    edited: row.get::<_, i64>(5)? != 0,
+                    source: ExampleSource::parse(&source),
+                    created_at: DateTime::parse_from_rfc3339(&created_at)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(examples)
+    }
+
+    pub fn count_style_examples(&self) -> Result<usize> {
+        let conn = self.conn.lock();
+        let count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM style_examples", [], |row| row.get(0))?;
+        Ok(count as usize)
+    }
+
+    /// Edit stats over dictations: (edited, total) overall and for the last `recent` dictations
+    pub fn get_edit_stats(&self, recent: usize) -> Result<EditStats> {
+        let conn = self.conn.lock();
+        let (edited, total): (i64, i64) = conn.query_row(
+            "SELECT COALESCE(SUM(edited), 0), COUNT(*) FROM style_examples WHERE source = 'dictation'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let (recent_edited, recent_total): (i64, i64) = conn.query_row(
+            r#"
+            SELECT COALESCE(SUM(edited), 0), COUNT(*) FROM (
+                SELECT edited FROM style_examples WHERE source = 'dictation'
+                ORDER BY created_at DESC LIMIT ?1
+            )
+            "#,
+            params![recent as i64],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        Ok(EditStats {
+            edited: edited as usize,
+            total: total as usize,
+            recent_edited: recent_edited as usize,
+            recent_total: recent_total as usize,
+        })
+    }
+
+    pub fn delete_all_style_examples(&self) -> Result<usize> {
+        let conn = self.conn.lock();
+        Ok(conn.execute("DELETE FROM style_examples", [])?)
+    }
+
     // ========== Stats methods ==========
 
     /// Get total transcription time in milliseconds
@@ -1110,6 +1226,27 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_style_examples_and_edit_stats() {
+        let storage = Storage::in_memory().unwrap();
+
+        let kept = StyleExample::dictation("partner", "omw", "omw 🫶", "omw 🫶");
+        let edited = StyleExample::dictation("partner", "i miss you", "I miss you, love!", "miss u bub");
+        let imported = StyleExample::imported("friend", "lol no");
+        for example in [&kept, &edited, &imported] {
+            storage.save_style_example(example).unwrap();
+        }
+
+        assert_eq!(storage.count_style_examples().unwrap(), 3);
+        let loaded = storage.get_style_examples(10).unwrap();
+        assert!(loaded.iter().any(|e| e.sent == "miss u bub" && e.edited));
+
+        // Imported messages are not dictations, so they stay out of the edit rate
+        let stats = storage.get_edit_stats(20).unwrap();
+        assert_eq!((stats.edited, stats.total), (1, 2));
+        assert!((stats.rate() - 0.5).abs() < f32::EPSILON);
+    }
 
     #[test]
     fn test_storage_crud() {

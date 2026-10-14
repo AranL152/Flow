@@ -21,6 +21,8 @@ pub struct CompletionRequest {
     pub max_tokens: Option<u32>,
     /// Instruction to preserve shortcut text word-for-word
     pub shortcut_preservation: Option<String>,
+    /// User style profile and examples, see `style::build_personalization`
+    pub personalization: Option<String>,
 }
 
 impl CompletionRequest {
@@ -32,6 +34,7 @@ impl CompletionRequest {
             app_context: None,
             max_tokens: None,
             shortcut_preservation: None,
+            personalization: None,
         }
     }
 
@@ -52,6 +55,11 @@ impl CompletionRequest {
 
     pub fn with_shortcut_preservation(mut self, instruction: impl Into<String>) -> Self {
         self.shortcut_preservation = Some(instruction.into());
+        self
+    }
+
+    pub fn with_personalization(mut self, personalization: impl Into<String>) -> Self {
+        self.personalization = Some(personalization.into());
         self
     }
 }
