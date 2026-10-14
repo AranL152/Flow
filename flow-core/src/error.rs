@@ -37,4 +37,7 @@ pub enum Error {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Permission needed: {0}")]
+    Permission(String),
 }

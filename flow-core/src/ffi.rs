@@ -35,7 +35,7 @@ use crate::shortcuts::ShortcutsEngine;
 use crate::storage::{
     SETTING_CLOUD_TRANSCRIPTION_PROVIDER, SETTING_COMPLETION_PROVIDER, SETTING_GEMINI_API_KEY,
     SETTING_LOCAL_WHISPER_MODEL, SETTING_OPENAI_API_KEY, SETTING_OPENROUTER_API_KEY,
-    SETTING_REWRITE_STRENGTH, SETTING_STYLE_PROFILE, SETTING_STYLE_PROFILE_EXAMPLE_COUNT,
+    SETTING_IMESSAGE_IMPORTED_THROUGH, SETTING_REWRITE_STRENGTH, SETTING_STYLE_PROFILE, SETTING_STYLE_PROFILE_EXAMPLE_COUNT,
     SETTING_TRANSCRIPTION_FALLBACK, SETTING_USE_LOCAL_TRANSCRIPTION, Storage,
 };
 use crate::style::{self, PendingDictation, RewriteStrength, StyleExample};
@@ -2583,6 +2583,46 @@ pub extern "C" fn flow_import_style_examples_json(
     imported
 }
 
+/// Import messages the user sent from Messages (needs Full Disk Access).
+/// Only messages newer than the last import are read. Returns the number imported, or -1 on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_import_imessages(handle: *mut FlowHandle, limit: u32) -> i64 {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    let since = handle
+        .storage
+        .get_setting(SETTING_IMESSAGE_IMPORTED_THROUGH)
+        .ok()
+        .flatten()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    let messages = match crate::imessage::read_sent_messages(since, limit as usize) {
+        Ok(messages) => messages,
+        Err(e) => {
+            set_last_error(handle, e.to_string());
+            return -1;
+        }
+    };
+
+    let mut imported = 0;
+    for message in &messages {
+        let example = StyleExample::imported(&message.category, &message.text);
+        if handle.storage.save_style_example(&example).is_ok() {
+            imported += 1;
+        }
+    }
+    if let Some(newest) = messages.iter().map(|m| m.date).max() {
+        let _ = handle
+            .storage
+            .set_setting(SETTING_IMESSAGE_IMPORTED_THROUGH, &newest.to_string());
+    }
+
+    log_with_time!("🎨 [RUST] Imported {} sent iMessages", imported);
+    imported
+}
+
 /// Delete all style examples and the profile
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_reset_style_learning(handle: *mut FlowHandle) -> bool {
@@ -2590,6 +2630,10 @@ pub extern "C" fn flow_reset_style_learning(handle: *mut FlowHandle) -> bool {
     *handle.pending_dictation.lock() = None;
     handle.storage.delete_all_style_examples().is_ok()
         && handle.storage.set_setting(SETTING_STYLE_PROFILE, "").is_ok()
+        && handle
+            .storage
+            .set_setting(SETTING_IMESSAGE_IMPORTED_THROUGH, "0")
+            .is_ok()
         && handle
             .storage
             .set_setting(SETTING_STYLE_PROFILE_EXAMPLE_COUNT, "0")

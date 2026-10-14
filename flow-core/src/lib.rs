@@ -8,6 +8,7 @@ pub mod audio;
 pub mod contacts;
 pub mod error;
 pub mod ffi;
+pub mod imessage;
 pub mod learning;
 pub mod macos_messages;
 pub mod metrics;

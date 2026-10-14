@@ -34,6 +34,8 @@ pub const SETTING_CLOUD_TRANSCRIPTION_PROVIDER: &str = "cloud_transcription_prov
 pub const SETTING_STYLE_PROFILE: &str = "style_profile";
 /// Example count when the profile was last built
 pub const SETTING_STYLE_PROFILE_EXAMPLE_COUNT: &str = "style_profile_example_count";
+/// Messages timestamp of the newest imported iMessage
+pub const SETTING_IMESSAGE_IMPORTED_THROUGH: &str = "imessage_imported_through";
 /// "light" | "balanced" (default) | "full"
 pub const SETTING_REWRITE_STRENGTH: &str = "rewrite_strength";
 /// Whether local transcription falls back to the cloud on failure ("true" default | "false")

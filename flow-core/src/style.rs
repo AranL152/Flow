@@ -218,6 +218,7 @@ pub fn category_label(key: &str) -> String {
         "professional" => "professional contacts".to_string(),
         "acquaintance" => "acquaintances".to_string(),
         "general" => "anyone".to_string(),
+        "group" => "group chats".to_string(),
         other => match other.strip_prefix("app:") {
             Some(app) => format!("writing in {} apps", app),
             None => other.to_string(),
