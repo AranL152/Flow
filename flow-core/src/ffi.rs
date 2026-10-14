@@ -35,8 +35,10 @@ use crate::shortcuts::ShortcutsEngine;
 use crate::storage::{
     SETTING_CLOUD_TRANSCRIPTION_PROVIDER, SETTING_COMPLETION_PROVIDER, SETTING_GEMINI_API_KEY,
     SETTING_LOCAL_WHISPER_MODEL, SETTING_OPENAI_API_KEY, SETTING_OPENROUTER_API_KEY,
+    SETTING_REWRITE_STRENGTH, SETTING_STYLE_PROFILE, SETTING_STYLE_PROFILE_EXAMPLE_COUNT,
     SETTING_TRANSCRIPTION_FALLBACK, SETTING_USE_LOCAL_TRANSCRIPTION, Storage,
 };
+use crate::style::{self, PendingDictation, RewriteStrength, StyleExample};
 use crate::types::{
     ContactCategory, Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus,
 };
@@ -50,6 +52,9 @@ macro_rules! log_with_time {
         let _ = std::io::stdout().flush();
     }};
 }
+
+/// Examples loaded when choosing which to show the formatter
+const STYLE_EXAMPLE_POOL: usize = 5000;
 
 /// Opaque handle to the Flow engine
 pub struct FlowHandle {
@@ -73,6 +78,8 @@ pub struct FlowHandle {
     /// Temporary storage for audio between stop and transcribe (ensures mic is fully released)
     pending_audio: Mutex<Option<crate::AudioData>>,
     pending_sample_rate: Mutex<Option<u32>>,
+    /// Last dictation, waiting for the text the user finally sent
+    pending_dictation: Mutex<Option<PendingDictation>>,
 }
 
 #[derive(Serialize)]
@@ -336,6 +343,7 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
         captured_contact: Mutex::new(None),
         pending_audio: Mutex::new(None),
         pending_sample_rate: Mutex::new(None),
+        pending_dictation: Mutex::new(None),
     };
 
     load_persisted_configuration(&mut handle);
@@ -563,50 +571,9 @@ fn transcribe_with_audio(
     sample_rate: u32,
     app_name: Option<String>,
 ) -> crate::error::Result<String> {
-    // Determine writing mode - use contact captured at recording start for Messages
-    let mut recipient: Option<ContactCategory> = None;
-    let mode = if let Some(ref name) = app_name {
-        // Check if this is Messages.app
-        if name.to_lowercase().contains("messages") || name == "com.apple.MobileSMS" {
-            // Use the contact that was captured when recording started
-            // This avoids race conditions where the window focus changes during recording
-            let captured = handle.captured_contact.lock().clone();
-
-            if let Some(contact_name) = captured {
-                debug!("Using captured Messages contact: {}", contact_name);
-
-                // Classify the contact
-                let input = ContactInput {
-                    name: contact_name.clone(),
-                    organization: String::new(),
-                };
-                let category = handle.contact_classifier.classify(&input);
-                let contact_mode = category.suggested_writing_mode();
-
-                log_with_time!(
-                    "👤 [RUST] Messages contact classified as {:?}, using {:?} mode",
-                    category,
-                    contact_mode
-                );
-
-                // Record the interaction
-                handle.contact_classifier.record_interaction(&contact_name);
-
-                recipient = Some(category);
-                contact_mode
-            } else {
-                log_with_time!("👤 [RUST] No Messages contact captured, using app default mode");
-                let mut modes = handle.modes.lock();
-                modes.get_mode_with_storage(name, &handle.storage)
-            }
-        } else {
-            // Not Messages - use app-based mode
-            let mut modes = handle.modes.lock();
-            modes.get_mode_with_storage(name, &handle.storage)
-        }
-    } else {
-        WritingMode::Casual
-    };
+    let captured = handle.captured_contact.lock().clone();
+    let (mode, recipient) = resolve_recipient(handle, app_name.as_deref(), captured.as_deref());
+    let category = style::category_key(recipient, Some(handle.app_tracker.current_category()));
 
     let transcription_provider = Arc::clone(&handle.transcription);
     let app_context = handle.app_tracker.current_app();
@@ -620,24 +587,12 @@ fn transcribe_with_audio(
         .map(|s| s == "true")
         .unwrap_or(false);
 
-    // App context sent to the formatter, including who the message is for (category only, never the name)
-    let format_context = match (&app_name, recipient) {
-        (Some(name), Some(category)) => Some(format!(
-            "{}, writing to {}",
-            name,
-            category.recipient_context()
-        )),
-        (Some(name), None) => Some(name.clone()),
-        (None, _) => None,
-    };
+    let format_context = format_context(app_name.as_deref(), recipient);
 
-    // Build mode string for worker
-    let mode_str = match mode {
-        WritingMode::Formal => "formal",
-        WritingMode::Casual => "casual",
-        WritingMode::VeryCasual => "very_casual",
-        WritingMode::Excited => "excited",
-    };
+    // The transcript is unknown until the worker returns, so examples are picked by recipient only
+    let personalization = personalization_for(handle, "", &category);
+
+    let mode_str = mode.worker_name();
 
     // Always attach completion params. In cloud (auto) mode the worker uses
     // them to transcribe and format in one request. In local mode the Whisper
@@ -653,6 +608,7 @@ fn transcribe_with_audio(
         app_context: format_context.clone(),
         shortcuts_triggered: Vec::new(),
         voice_instruction: None, // Worker auto-detects from transcription
+        personalization: personalization.clone(),
     });
 
     // Perform transcription
@@ -681,6 +637,10 @@ fn transcribe_with_audio(
         let mut request = CompletionRequest::new(text_with_corrections.clone(), mode);
         if let Some(ref context) = format_context {
             request = request.with_app_context(context.clone());
+        }
+        if let Some(personalization) = personalization_for(handle, &text_with_corrections, &category)
+        {
+            request = request.with_personalization(personalization);
         }
         let completion_provider = Arc::clone(&handle.completion);
         match handle
@@ -735,7 +695,99 @@ fn transcribe_with_audio(
         error!("Failed to save transcription history: {}", e);
     }
 
+    *handle.pending_dictation.lock() = Some(PendingDictation {
+        category,
+        said: record.raw_text.clone(),
+        flow_output: processed_text.clone(),
+    });
+
     Ok(processed_text)
+}
+
+/// Pick the writing mode for a message, using the Messages contact when there is one
+fn resolve_recipient(
+    handle: &FlowHandle,
+    app_name: Option<&str>,
+    contact_name: Option<&str>,
+) -> (WritingMode, Option<ContactCategory>) {
+    let Some(name) = app_name else {
+        return (WritingMode::Casual, None);
+    };
+
+    let is_messages = name.to_lowercase().contains("messages") || name == "com.apple.MobileSMS";
+    if is_messages && let Some(contact_name) = contact_name {
+        let category = handle.contact_classifier.classify(&ContactInput {
+            name: contact_name.to_string(),
+            organization: String::new(),
+        });
+        let mode = category.suggested_writing_mode();
+        log_with_time!(
+            "👤 [RUST] Messages contact classified as {:?}, using {:?} mode",
+            category,
+            mode
+        );
+        handle.contact_classifier.record_interaction(contact_name);
+        return (mode, Some(category));
+    }
+
+    if is_messages {
+        log_with_time!("👤 [RUST] No Messages contact captured, using app default mode");
+    }
+    let mut modes = handle.modes.lock();
+    (modes.get_mode_with_storage(name, &handle.storage), None)
+}
+
+/// App context sent to the formatter, including who the message is for (category only, never the name)
+fn format_context(app_name: Option<&str>, recipient: Option<ContactCategory>) -> Option<String> {
+    match (app_name, recipient) {
+        (Some(name), Some(category)) => Some(format!(
+            "{}, writing to {}",
+            name,
+            category.recipient_context()
+        )),
+        (Some(name), None) => Some(name.to_string()),
+        (None, _) => None,
+    }
+}
+
+fn rewrite_strength(storage: &Storage) -> RewriteStrength {
+    storage
+        .get_setting(SETTING_REWRITE_STRENGTH)
+        .ok()
+        .flatten()
+        .map(|s| RewriteStrength::parse(&s))
+        .unwrap_or_default()
+}
+
+/// Profile, matching examples and rewrite strength for the prompt. None keeps the generic prompt.
+fn personalization_for(handle: &FlowHandle, said: &str, category: &str) -> Option<String> {
+    let strength = rewrite_strength(&handle.storage);
+    let profile = handle
+        .storage
+        .get_setting(SETTING_STYLE_PROFILE)
+        .ok()
+        .flatten();
+    let examples = handle
+        .storage
+        .get_style_examples(STYLE_EXAMPLE_POOL)
+        .unwrap_or_default();
+    let selected = style::select_examples(&examples, said, category, style::EXAMPLES_PER_REQUEST);
+
+    if profile.is_none() && selected.is_empty() && strength == RewriteStrength::Balanced {
+        return None;
+    }
+
+    log_with_time!(
+        "🎨 [RUST] Personalizing with {} examples, profile: {}, strength: {}",
+        selected.len(),
+        profile.is_some(),
+        strength.as_str()
+    );
+    Some(style::build_personalization(
+        profile.as_deref(),
+        &selected,
+        strength,
+    ))
 }
 
 /// Transcribe the recorded audio and process it
@@ -2262,4 +2314,284 @@ pub extern "C" fn flow_set_transcription_fallback(
 pub extern "C" fn flow_get_transcription_fallback(handle: *mut FlowHandle) -> bool {
     let handle = unsafe { &*handle };
     transcription_fallback_enabled(&handle.storage)
+}
+
+// ============ Style learning ============
+
+fn c_str<'a>(ptr: *const c_char) -> Option<&'a str> {
+    if ptr.is_null() {
+        return None;
+    }
+    unsafe { CStr::from_ptr(ptr) }.to_str().ok()
+}
+
+fn into_c_string(value: impl Into<Vec<u8>>) -> *mut c_char {
+    CString::new(value).map_or(ptr::null_mut(), CString::into_raw)
+}
+
+fn uses_worker(storage: &Storage) -> bool {
+    !matches!(
+        storage
+            .get_setting(SETTING_CLOUD_TRANSCRIPTION_PROVIDER)
+            .ok()
+            .flatten()
+            .as_deref(),
+        Some("openai")
+    )
+}
+
+/// Format typed text as if it had been dictated (caller must free with flow_free_string).
+/// contact_name may be null; when set it is classified like a Messages contact.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_format_text(
+    handle: *mut FlowHandle,
+    text: *const c_char,
+    app_name: *const c_char,
+    contact_name: *const c_char,
+) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    let Some(text) = c_str(text).map(str::trim).filter(|t| !t.is_empty()) else {
+        set_last_error(handle, "No text to format");
+        return ptr::null_mut();
+    };
+    let app_name = c_str(app_name);
+
+    let (mode, recipient) = resolve_recipient(handle, app_name, c_str(contact_name));
+    let category = style::category_key(recipient, Some(handle.app_tracker.current_category()));
+    let context = format_context(app_name, recipient);
+    let personalization = personalization_for(handle, text, &category);
+
+    let (shortcut_text, _) = handle.shortcuts.process(text);
+    let (corrected, _) = handle.learning.apply_corrections(&shortcut_text);
+
+    let result = if uses_worker(&handle.storage) {
+        let params = TranscriptionCompletionParams {
+            mode: mode.worker_name().to_string(),
+            app_context: context,
+            shortcuts_triggered: Vec::new(),
+            voice_instruction: None,
+            personalization,
+        };
+        handle
+            .runtime
+            .block_on(crate::providers::format_text(&corrected, params))
+    } else {
+        let mut request = CompletionRequest::new(corrected.clone(), mode);
+        if let Some(context) = context {
+            request = request.with_app_context(context);
+        }
+        if let Some(personalization) = personalization {
+            request = request.with_personalization(personalization);
+        }
+        let completion = Arc::clone(&handle.completion);
+        handle
+            .runtime
+            .block_on(async { completion.complete(request).await })
+            .map(|response| response.text)
+    };
+
+    match result {
+        Ok(output) => {
+            *handle.pending_dictation.lock() = Some(PendingDictation {
+                category,
+                said: text.to_string(),
+                flow_output: output.clone(),
+            });
+            into_c_string(output)
+        }
+        Err(e) => {
+            set_last_error(handle, e.to_string());
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Record what the user finally sent for the last dictation.
+/// Returns 1 when the style profile is due for a rebuild, 0 when recorded, -1 when nothing was pending.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_record_final_text(handle: *mut FlowHandle, final_text: *const c_char) -> i32 {
+    let handle = unsafe { &*handle };
+
+    let Some(pending) = handle.pending_dictation.lock().take() else {
+        return -1;
+    };
+    let sent = c_str(final_text)
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .unwrap_or(&pending.flow_output);
+
+    let example =
+        StyleExample::dictation(&pending.category, &pending.said, &pending.flow_output, sent);
+    log_with_time!(
+        "🎨 [RUST] Recorded {} dictation for {}",
+        if example.edited { "edited" } else { "unedited" },
+        example.category
+    );
+    if let Err(e) = handle.storage.save_style_example(&example) {
+        error!("Failed to save style example: {}", e);
+        return -1;
+    }
+
+    i32::from(profile_rebuild_due(&handle.storage))
+}
+
+fn profile_rebuild_due(storage: &Storage) -> bool {
+    let total = storage.count_style_examples().unwrap_or(0);
+    let at_last_build = storage
+        .get_setting(SETTING_STYLE_PROFILE_EXAMPLE_COUNT)
+        .ok()
+        .flatten()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(0);
+    total >= at_last_build + style::PROFILE_REBUILD_INTERVAL
+}
+
+/// Rebuild the style profile from stored examples. Blocks on a network call, so run off the main thread.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_rebuild_style_profile(handle: *mut FlowHandle) -> bool {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    let examples = handle
+        .storage
+        .get_style_examples(STYLE_EXAMPLE_POOL)
+        .unwrap_or_default();
+    let sample = style::sample_for_profile(&examples, style::PROFILE_EXAMPLES_PER_CATEGORY);
+    let current = handle
+        .storage
+        .get_setting(SETTING_STYLE_PROFILE)
+        .ok()
+        .flatten();
+
+    match handle.runtime.block_on(crate::providers::build_style_profile(
+        &sample,
+        current.as_deref(),
+    )) {
+        Ok(profile) => {
+            let saved = handle.storage.set_setting(SETTING_STYLE_PROFILE, &profile).is_ok()
+                && handle
+                    .storage
+                    .set_setting(SETTING_STYLE_PROFILE_EXAMPLE_COUNT, &examples.len().to_string())
+                    .is_ok();
+            log_with_time!(
+                "🎨 [RUST] Rebuilt style profile from {} examples",
+                sample.len()
+            );
+            saved
+        }
+        Err(e) => {
+            set_last_error(handle, e.to_string());
+            false
+        }
+    }
+}
+
+/// Style profile Markdown, empty when none exists (caller must free with flow_free_string)
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_get_style_profile(handle: *mut FlowHandle) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    let profile = handle
+        .storage
+        .get_setting(SETTING_STYLE_PROFILE)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    into_c_string(profile)
+}
+
+/// Replace the style profile with the user's edited version
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_set_style_profile(handle: *mut FlowHandle, profile: *const c_char) -> bool {
+    let handle = unsafe { &*handle };
+    let Some(profile) = c_str(profile) else {
+        return false;
+    };
+    handle
+        .storage
+        .set_setting(SETTING_STYLE_PROFILE, profile.trim())
+        .is_ok()
+}
+
+/// strength: 0 = light, 1 = balanced, 2 = full
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_set_rewrite_strength(handle: *mut FlowHandle, strength: u8) -> bool {
+    let handle = unsafe { &*handle };
+    handle
+        .storage
+        .set_setting(
+            SETTING_REWRITE_STRENGTH,
+            RewriteStrength::from_u8(strength).as_str(),
+        )
+        .is_ok()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_get_rewrite_strength(handle: *mut FlowHandle) -> u8 {
+    let handle = unsafe { &*handle };
+    rewrite_strength(&handle.storage).to_u8()
+}
+
+/// Edit rate and example counts as JSON (caller must free with flow_free_string)
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_get_style_stats_json(handle: *mut FlowHandle) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    let stats = handle
+        .storage
+        .get_edit_stats(style::RECENT_DICTATIONS)
+        .unwrap_or_default();
+
+    let json = serde_json::json!({
+        "edited": stats.edited,
+        "total": stats.total,
+        "rate": stats.rate(),
+        "recent_edited": stats.recent_edited,
+        "recent_total": stats.recent_total,
+        "recent_rate": stats.recent_rate(),
+        "examples": handle.storage.count_style_examples().unwrap_or(0),
+    });
+    into_c_string(json.to_string())
+}
+
+/// Import messages the user wrote themselves: JSON array of {"category", "text"}.
+/// Returns the number imported, or -1 on invalid input.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_import_style_examples_json(
+    handle: *mut FlowHandle,
+    json: *const c_char,
+) -> i64 {
+    #[derive(serde::Deserialize)]
+    struct Entry {
+        category: String,
+        text: String,
+    }
+
+    let handle = unsafe { &*handle };
+    let Some(entries) = c_str(json).and_then(|j| serde_json::from_str::<Vec<Entry>>(j).ok()) else {
+        set_last_error(handle, "Expected a JSON array of {category, text}");
+        return -1;
+    };
+
+    let mut imported = 0;
+    for entry in entries.iter().filter(|e| !e.text.trim().is_empty()) {
+        let example = StyleExample::imported(&entry.category, entry.text.trim());
+        if handle.storage.save_style_example(&example).is_ok() {
+            imported += 1;
+        }
+    }
+    imported
+}
+
+/// Delete all style examples and the profile
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_reset_style_learning(handle: *mut FlowHandle) -> bool {
+    let handle = unsafe { &*handle };
+    *handle.pending_dictation.lock() = None;
+    handle.storage.delete_all_style_examples().is_ok()
+        && handle.storage.set_setting(SETTING_STYLE_PROFILE, "").is_ok()
+        && handle
+            .storage
+            .set_setting(SETTING_STYLE_PROFILE_EXAMPLE_COUNT, "0")
+            .is_ok()
 }

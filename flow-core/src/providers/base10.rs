@@ -12,11 +12,20 @@ use tracing::{debug, error};
 
 use crate::error::{Error, Result};
 
-use super::{TranscriptionProvider, TranscriptionRequest, TranscriptionResponse};
+use super::{
+    TranscriptionCompletionParams as CompletionParams, TranscriptionProvider, TranscriptionRequest,
+    TranscriptionResponse,
+};
+use crate::style::{ExampleSource, StyleExample};
 
 const BASE10_PROXY_URL: &str = "https://base10-proxy.old-resonance-ed75.workers.dev";
 const BASE10_VALIDATE_URL: &str =
     "https://base10-proxy.old-resonance-ed75.workers.dev/validate-corrections";
+const STYLE_PROFILE_URL: &str =
+    "https://base10-proxy.old-resonance-ed75.workers.dev/style-profile";
+
+/// Examples sent per profile build, newest first
+const PROFILE_SAMPLE_SIZE: usize = 200;
 
 /// Base10 transcription provider (with integrated completion)
 pub struct Base10TranscriptionProvider {
@@ -87,6 +96,87 @@ pub async fn validate_corrections(
     Ok(validation_response.results)
 }
 
+async fn post_worker<T: Serialize, R: serde::de::DeserializeOwned>(url: &str, body: &T) -> Result<R> {
+    let response = Client::new().post(url).json(body).send().await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        error!("Worker error: {} - {}", status, error_text);
+        return Err(Error::Transcription(format!(
+            "Worker error: {} - {}",
+            status, error_text
+        )));
+    }
+
+    Ok(response.json().await?)
+}
+
+/// Format typed text through the worker, as if it had been dictated
+pub async fn format_text(text: &str, completion: CompletionParams) -> Result<String> {
+    let request = WorkerRequest {
+        whisper_input: WhisperInput {
+            audio: None,
+            text: Some(text.to_string()),
+            whisper_params: WhisperParams {
+                audio_language: "en".to_string(),
+            },
+        },
+        completion: completion.into(),
+    };
+
+    let response: WorkerResponse = post_worker(BASE10_PROXY_URL, &request).await?;
+    Ok(response.text)
+}
+
+#[derive(Debug, Serialize)]
+struct ProfileExample<'a> {
+    category: &'a str,
+    sent: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    formatter_wrote: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
+struct StyleProfileRequest<'a> {
+    examples: Vec<ProfileExample<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    current_profile: Option<&'a str>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StyleProfileResponse {
+    profile: String,
+}
+
+/// Summarise the user's messages into a Markdown style profile
+pub async fn build_style_profile(
+    examples: &[StyleExample],
+    current_profile: Option<&str>,
+) -> Result<String> {
+    let request = StyleProfileRequest {
+        examples: examples
+            .iter()
+            .filter(|e| !e.sent.trim().is_empty())
+            .take(PROFILE_SAMPLE_SIZE)
+            .map(|e| ProfileExample {
+                category: &e.category,
+                sent: &e.sent,
+                formatter_wrote: (e.edited && e.source == ExampleSource::Dictation)
+                    .then_some(e.flow_output.as_str()),
+            })
+            .collect(),
+        current_profile,
+    };
+
+    if request.examples.is_empty() {
+        return Err(Error::Transcription("No examples to build a profile from".to_string()));
+    }
+
+    let response: StyleProfileResponse = post_worker(STYLE_PROFILE_URL, &request).await?;
+    Ok(response.profile)
+}
+
 impl Base10TranscriptionProvider {
     pub fn new(_api_key: Option<String>) -> Self {
         Self {
@@ -103,7 +193,11 @@ struct WorkerRequest {
 
 #[derive(Debug, Serialize)]
 struct WhisperInput {
-    audio: AudioInput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    audio: Option<AudioInput>,
+    /// Typed text; the worker skips transcription when set
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
     whisper_params: WhisperParams,
 }
 
@@ -125,6 +219,20 @@ struct WorkerCompletionParams {
     shortcuts_triggered: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     voice_instruction: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    personalization: Option<String>,
+}
+
+impl From<CompletionParams> for WorkerCompletionParams {
+    fn from(params: CompletionParams) -> Self {
+        Self {
+            mode: params.mode,
+            app_context: params.app_context,
+            shortcuts_triggered: params.shortcuts_triggered,
+            voice_instruction: params.voice_instruction,
+            personalization: params.personalization,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,19 +261,15 @@ impl TranscriptionProvider for Base10TranscriptionProvider {
 
         let worker_request = WorkerRequest {
             whisper_input: WhisperInput {
-                audio: AudioInput {
+                audio: Some(AudioInput {
                     audio_b64: audio_base64,
-                },
+                }),
+                text: None,
                 whisper_params: WhisperParams {
                     audio_language: language,
                 },
             },
-            completion: WorkerCompletionParams {
-                mode: completion.mode,
-                app_context: completion.app_context,
-                shortcuts_triggered: completion.shortcuts_triggered,
-                voice_instruction: completion.voice_instruction,
-            },
+            completion: completion.into(),
         };
 
         debug!("Sending combined transcription+completion request to worker");

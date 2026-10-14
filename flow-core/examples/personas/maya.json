@@ -1,0 +1,67 @@
+{
+  "name": "Maya",
+  "contacts": {
+    "partner": "💛 Theo",
+    "family": "Mom",
+    "professional": "Dr. Patel",
+    "friend": "jess"
+  },
+  "messages": [
+    { "category": "partner", "text": "omw home bub 🫶" },
+    { "category": "partner", "text": "ily sm" },
+    { "category": "partner", "text": "did u eat yet bub" },
+    { "category": "partner", "text": "lowkey miss u already 🥹" },
+    { "category": "partner", "text": "can u grab oat milk on the way" },
+    { "category": "partner", "text": "proud of u fr 🫶" },
+    { "category": "partner", "text": "sleep well bub ily" },
+    { "category": "partner", "text": "wait thats so cute 🥹" },
+    { "category": "partner", "text": "running 10 min late sorry bub" },
+    { "category": "partner", "text": "cant wait to see u tmrw" },
+
+    { "category": "family", "text": "Hi ma! Just landed, will call you tonight ❤️" },
+    { "category": "family", "text": "Love you ma ❤️" },
+    { "category": "family", "text": "Yes I ate, don't worry lol" },
+    { "category": "family", "text": "Can you send me grandma's recipe for the soup?" },
+    { "category": "family", "text": "Happy birthday ma!! Love you so much ❤️" },
+    { "category": "family", "text": "I'll be home for dinner on Sunday" },
+    { "category": "family", "text": "Ok ma, talk soon ❤️" },
+    { "category": "family", "text": "Did dad get the package?" },
+
+    { "category": "professional", "text": "Hi! Just following up on the draft, let me know if you need anything else. Thanks so much!" },
+    { "category": "professional", "text": "Sounds great, I'll have it ready by Thursday. Thanks so much!" },
+    { "category": "professional", "text": "Hi! Quick question about the deadline for the lab report." },
+    { "category": "professional", "text": "Totally understand, I'll make those edits today. Thanks so much!" },
+    { "category": "professional", "text": "Hi! Would Tuesday at 2 work for a quick meeting?" },
+    { "category": "professional", "text": "Got it, thank you for the feedback!" },
+    { "category": "professional", "text": "Hi! Attached is the updated version. Thanks so much!" },
+    { "category": "professional", "text": "Apologies for the delay, I'll send it over within the hour." },
+
+    { "category": "friend", "text": "LMAOOO no way 😭" },
+    { "category": "friend", "text": "ur so real for that" },
+    { "category": "friend", "text": "deadass tho" },
+    { "category": "friend", "text": "omw rn" },
+    { "category": "friend", "text": "bro i cant 😭😭" },
+    { "category": "friend", "text": "wyd tonight" },
+    { "category": "friend", "text": "ngl that was kinda fire" },
+    { "category": "friend", "text": "say less" },
+    { "category": "friend", "text": "u coming saturday or nah" },
+    { "category": "friend", "text": "im so tired lmao" }
+  ],
+  "corrections": [
+    { "contact": "partner", "said": "goodnight i love you", "sent": "night bub ily 🫶" },
+    { "contact": "partner", "said": "are you free for dinner tomorrow", "sent": "u free for dinner tmrw bub?" },
+    { "contact": "partner", "said": "i'm so proud of you", "sent": "so proud of u fr 🥹" },
+    { "contact": "friend", "said": "that is so funny", "sent": "LMAOOO 😭" },
+    { "contact": "friend", "said": "do you want to get food later", "sent": "u tryna get food later" },
+    { "contact": "family", "said": "i miss you mom", "sent": "Miss you ma ❤️" },
+    { "contact": "professional", "said": "thanks for the update i will look at it today", "sent": "Thanks so much for the update! I'll take a look today." }
+  ],
+  "held_out": [
+    { "contact": "partner", "said": "hi how are you doing" },
+    { "contact": "partner", "said": "what time are you getting home tonight" },
+    { "contact": "partner", "said": "i miss you" },
+    { "contact": "family", "said": "i will call you after work" },
+    { "contact": "professional", "said": "can you send me the report by friday" },
+    { "contact": "friend", "said": "are you coming to the party tonight" }
+  ]
+}

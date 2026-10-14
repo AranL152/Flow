@@ -18,6 +18,12 @@ pub const EXAMPLES_PER_REQUEST: usize = 6;
 /// Rebuild the style profile after this many new examples
 pub const PROFILE_REBUILD_INTERVAL: usize = 10;
 
+/// Examples per recipient category sent when building the profile
+pub const PROFILE_EXAMPLES_PER_CATEGORY: usize = 40;
+
+/// Window for the recent edit rate
+pub const RECENT_DICTATIONS: usize = 20;
+
 /// How far the formatter may move away from the user's own words
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RewriteStrength {
@@ -278,6 +284,23 @@ pub fn select_examples<'a>(
     scored.into_iter().take(limit).map(|(_, e)| e).collect()
 }
 
+/// Balanced sample for profile building: corrections first, then newest, capped per category
+pub fn sample_for_profile(examples: &[StyleExample], per_category: usize) -> Vec<StyleExample> {
+    let mut sorted: Vec<&StyleExample> = examples.iter().collect();
+    sorted.sort_by(|a, b| b.edited.cmp(&a.edited).then(b.created_at.cmp(&a.created_at)));
+
+    let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    sorted
+        .into_iter()
+        .filter(|e| {
+            let count = counts.entry(e.category.as_str()).or_insert(0);
+            *count += 1;
+            *count <= per_category
+        })
+        .cloned()
+        .collect()
+}
+
 /// Build the personalization section appended to the formatting prompt
 pub fn build_personalization(
     profile: Option<&str>,
@@ -324,7 +347,10 @@ pub fn build_personalization(
 
     out.push_str("\nRewrite strength: ");
     out.push_str(strength.instruction());
-    out.push_str("\nNever copy an example verbatim unless the user said the same thing.");
+    out.push_str(
+        "\nBorrow their style (spelling, slang, emoji, pet names), never their content: \
+         do not reuse sentences from the examples or add words that change what the user said.",
+    );
     out
 }
 
@@ -397,6 +423,20 @@ mod tests {
         assert!(text.contains("user changed it to: \"miss u bub\""));
         assert!(text.contains("\"omw home 🫶\""));
         assert!(text.contains("LIGHT TOUCH"));
+    }
+
+    #[test]
+    fn test_sample_for_profile_caps_categories_and_keeps_corrections() {
+        let mut examples: Vec<StyleExample> = (0..10)
+            .map(|i| StyleExample::imported("friend", &format!("msg {i}")))
+            .collect();
+        examples.push(StyleExample::dictation("friend", "hi", "Hello!", "yo"));
+        examples.push(StyleExample::imported("partner", "omw"));
+
+        let sample = sample_for_profile(&examples, 3);
+        assert_eq!(sample.iter().filter(|e| e.category == "friend").count(), 3);
+        assert!(sample.iter().any(|e| e.edited));
+        assert!(sample.iter().any(|e| e.category == "partner"));
     }
 
     #[test]

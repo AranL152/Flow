@@ -39,6 +39,16 @@ pub enum WritingMode {
 
 impl WritingMode {
     /// Get the system prompt modifier for this mode
+    /// Mode name the worker expects
+    pub fn worker_name(&self) -> &'static str {
+        match self {
+            Self::Formal => "formal",
+            Self::Casual => "casual",
+            Self::VeryCasual => "very_casual",
+            Self::Excited => "excited",
+        }
+    }
+
     pub fn prompt_modifier(&self) -> &'static str {
         match self {
             Self::Formal => {

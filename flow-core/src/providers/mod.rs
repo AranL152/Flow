@@ -12,7 +12,8 @@ mod streaming;
 mod transcription;
 
 pub use base10::{
-    Base10TranscriptionProvider, CorrectionPair, CorrectionValidation, validate_corrections,
+    Base10TranscriptionProvider, CorrectionPair, CorrectionValidation, build_style_profile,
+    format_text, validate_corrections,
 };
 pub use completion::{CompletionProvider, CompletionRequest, CompletionResponse, TokenUsage};
 pub use fallback::FallbackTranscriptionProvider;

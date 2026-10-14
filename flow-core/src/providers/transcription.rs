@@ -33,6 +33,8 @@ pub struct CompletionParams {
     /// Voice instruction (e.g., "reject him politely", "translate to Spanish")
     /// When present, worker uses instruction mode instead of normal formatting
     pub voice_instruction: Option<String>,
+    /// User style profile and examples, see `style::build_personalization`
+    pub personalization: Option<String>,
 }
 
 impl TranscriptionRequest {
