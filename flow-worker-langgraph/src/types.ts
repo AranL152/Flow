@@ -5,8 +5,9 @@
 import type { CommandAction, ResolvedCommand } from "./commands.js";
 
 export interface Env {
-  BASETEN_API_KEY: string;
-  OPENROUTER_API_KEY: string;
+  AI: Ai;
+  /** Optional Workers AI chat model override (see ai.ts for the default) */
+  CHAT_MODEL?: string;
 }
 
 /**
@@ -57,52 +58,6 @@ export interface CombinedResponse {
   command?: string;
   /** Side effect for the client to perform locally */
   action?: CommandAction;
-}
-
-// ============ Base10 Types ============
-
-export interface Base10Request {
-  whisper_input: {
-    audio: {
-      audio_b64: string;
-    };
-    whisper_params: {
-      prompt?: string;
-      audio_language: string;
-    };
-  };
-}
-
-export interface Base10Response {
-  segments?: Array<{ text: string }>;
-  text?: string;
-}
-
-// ============ OpenRouter Types ============
-
-export interface OpenRouterRequest {
-  models: string[];
-  messages: Array<{
-    role: string;
-    content: string;
-  }>;
-  max_tokens: number;
-  temperature: number;
-  provider: {
-    allow_fallbacks: boolean;
-    sort: {
-      by: string;
-      partition: string;
-    };
-  };
-}
-
-export interface OpenRouterResponse {
-  choices: Array<{
-    message: {
-      content: string;
-    };
-  }>;
 }
 
 // ============ Validation Types ============

@@ -1,22 +1,14 @@
 /**
- * OpenRouter chat client.
+ * Workers AI chat client.
  *
- * The model list, provider routing and request shape live here so formatting,
- * ghostwriting and correction validation all share one definition instead of
- * repeating the same request block.
+ * Formatting, ghostwriting, correction validation and profile building share
+ * this one call. The model can be overridden with the CHAT_MODEL var.
  */
 
-import { UpstreamError, postJson } from "./http.js";
-import type { OpenRouterRequest, OpenRouterResponse } from "./types.js";
+import { UpstreamError } from "./http.js";
+import type { Env } from "./types.js";
 
-const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-const TIMEOUT_MS = 20_000;
-
-const MODELS = [
-  "meta-llama/llama-4-maverick:nitro",
-  "openai/gpt-oss-120b:nitro",
-  "openrouter/auto",
-];
+const DEFAULT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 export interface ChatOptions {
   maxTokens: number;
@@ -25,39 +17,35 @@ export interface ChatOptions {
 
 /** Send a system/user pair and return the assistant's text. */
 export async function completeChat(
-  apiKey: string,
+  env: Env,
   system: string,
   user: string,
   options: ChatOptions
 ): Promise<string> {
-  const request: OpenRouterRequest = {
-    models: MODELS,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-    max_tokens: options.maxTokens,
-    temperature: options.temperature,
-    provider: {
-      allow_fallbacks: true,
-      sort: {
-        by: "throughput",
-        partition: "none",
-      },
-    },
-  };
+  const model = (env.CHAT_MODEL || DEFAULT_MODEL) as typeof DEFAULT_MODEL;
+  const started = Date.now();
 
-  const response = await postJson<OpenRouterResponse>({
-    service: "OpenRouter",
-    url: OPENROUTER_API_URL,
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: request,
-    timeoutMs: TIMEOUT_MS,
-  });
+  let result: { response?: unknown };
+  try {
+    result = (await env.AI.run(model, {
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      max_tokens: options.maxTokens,
+      temperature: options.temperature,
+    })) as { response?: unknown };
+  } catch (err) {
+    throw new UpstreamError("Workers AI", 502, err instanceof Error ? err.message : String(err));
+  }
+  console.log(`chat ${Date.now() - started}ms model=${model}`);
 
-  const content = response.choices?.[0]?.message?.content?.trim();
-  if (!content) {
-    throw new UpstreamError("OpenRouter", 0, "no completion returned");
+  // Workers AI parses JSON-looking output into an object
+  const response = result.response;
+  const content = (typeof response === "string" ? response : JSON.stringify(response ?? ""))
+    .trim();
+  if (!content || content === '""') {
+    throw new UpstreamError("Workers AI", 0, "no completion returned");
   }
 
   return content;

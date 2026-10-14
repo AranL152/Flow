@@ -45,11 +45,13 @@ when the utterance was executed rather than sent to a model.
 A provider failure answers `502`; a malformed request answers `400` naming the
 first bad field.
 
-## Secrets
+## Models
+
+Whisper and the chat model run on Workers AI through the `AI` binding, so no
+API keys are needed. Override the chat model with a var:
 
 ```sh
-wrangler secret put BASETEN_API_KEY
-wrangler secret put OPENROUTER_API_KEY
+wrangler deploy --var CHAT_MODEL:@cf/meta/llama-3.1-8b-instruct-fp8
 ```
 
 ## Develop

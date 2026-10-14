@@ -29,9 +29,7 @@ const app = new Hono<{ Bindings: Env }>();
  * broken" and retry accordingly.
  */
 function statusForGraphError(message: string): 500 | 502 {
-  const fromProvider =
-    message.startsWith("OpenRouter error") || message.startsWith("Baseten error");
-  return fromProvider ? 502 : 500;
+  return message.startsWith("Workers AI error") ? 502 : 500;
 }
 
 app.get("/health", (c) => c.json({ status: "ok" }));

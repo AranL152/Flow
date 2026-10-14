@@ -24,7 +24,7 @@ export async function validateCorrections(
   }
 
   const content = await completeChat(
-    env.OPENROUTER_API_KEY,
+    env,
     buildValidationPrompt(),
     `Validate these corrections:\n${JSON.stringify(corrections)}`,
     { maxTokens: 500, temperature: 0.1 }

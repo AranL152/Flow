@@ -1,7 +1,7 @@
 /**
  * LangGraph node functions for the Flow worker.
  *
- * Nodes stay thin: the provider calls live in the baseten and llm clients, so a
+ * Nodes stay thin: the provider calls live in the whisper and llm clients, so a
  * node is responsible only for picking the prompt and mapping a thrown
  * provider error onto the graph's error field.
  */
@@ -9,7 +9,7 @@
 import type { RunnableConfig } from "@langchain/core/runnables";
 import type { Env, FlowConfigurable, FlowState } from "./types.js";
 import { resolveCommand } from "./commands.js";
-import { transcribeAudio } from "./baseten.js";
+import { transcribeAudio } from "./whisper.js";
 import { completeChat } from "./llm.js";
 import { buildFormattingPrompt, buildInstructionPrompt } from "./prompts.js";
 
@@ -21,7 +21,7 @@ function toError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Pull the worker env out of the runtime config, where the secrets live. */
+/** Pull the worker env out of the runtime config, where the AI binding lives. */
 function requireEnv(config?: RunnableConfig): Env {
   const env = (config?.configurable as FlowConfigurable | undefined)?.env;
   if (!env) {
@@ -45,7 +45,7 @@ export async function transcribeNode(
     promptHint && promptHint.length > 0 ? `Hey Flow. ${promptHint}` : "Hey Flow.";
 
   try {
-    const transcription = await transcribeAudio(requireEnv(config).BASETEN_API_KEY, {
+    const transcription = await transcribeAudio(requireEnv(config), {
       audioB64,
       language: audioLanguage,
       prompt,
@@ -144,7 +144,7 @@ export async function formatNode(
 
   try {
     const formattedText = await completeChat(
-      requireEnv(config).OPENROUTER_API_KEY,
+      requireEnv(config),
       buildFormattingPrompt(mode, appContext, shortcutsTriggered),
       `<TRANSCRIPTION>\n${transcription}\n</TRANSCRIPTION>`,
       COMPLETION_OPTIONS
@@ -170,7 +170,7 @@ export async function instructNode(
 
   try {
     const formattedText = await completeChat(
-      requireEnv(config).OPENROUTER_API_KEY,
+      requireEnv(config),
       buildInstructionPrompt(),
       detectedCommand,
       COMPLETION_OPTIONS
