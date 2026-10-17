@@ -1,0 +1,94 @@
+{
+  "kind": "synthetic live integration test",
+  "checks": {
+    "edit_recorded": true,
+    "held_out_uses_learned_phrasing": true,
+    "held_out_preserves_content": true,
+    "recipient_isolation": true,
+    "emoji_allowed_in_new_context": true,
+    "forget_removes_evidence": true,
+    "multiple_real_stream_chunks": true
+  },
+  "results": [
+    {
+      "case": "held-out baseline",
+      "recipient": "alex",
+      "context": "Project review",
+      "input": "Can you check the slides tomorrow?",
+      "output": "can u check the slides tomorrow?",
+      "stream_output": "can u check the slides tomorrow?",
+      "preserved_original": false,
+      "evidence_ids": [],
+      "chunks": 3,
+      "first_token_ms": 2577,
+      "complete_ms": 2717
+    },
+    {
+      "case": "message to edit",
+      "recipient": "alex",
+      "context": "Project review",
+      "input": "Can you check the draft?",
+      "output": "can u check the draft?",
+      "stream_output": "can u check the draft?",
+      "preserved_original": false,
+      "evidence_ids": [],
+      "chunks": 3,
+      "first_token_ms": 322,
+      "complete_ms": 422
+    },
+    {
+      "case": "held-out after edit",
+      "recipient": "alex",
+      "context": "Project review",
+      "input": "Can you check the slides tomorrow?",
+      "output": "got a sec to check the slides tomorrow?",
+      "stream_output": "got a sec to check the slides tomorrow?",
+      "preserved_original": false,
+      "evidence_ids": [
+        "8a90f03f-ece7-440a-8179-eff6e1873e76"
+      ],
+      "chunks": 4,
+      "first_token_ms": 446,
+      "complete_ms": 621
+    },
+    {
+      "case": "recipient isolation",
+      "recipient": "mum",
+      "context": "Project review",
+      "input": "Can you check the slides tomorrow?",
+      "output": "Can you take a look at the slides tomorrow, mum?",
+      "stream_output": "Can you take a look at the slides tomorrow, mum?",
+      "preserved_original": false,
+      "evidence_ids": [],
+      "chunks": 7,
+      "first_token_ms": 527,
+      "complete_ms": 792
+    },
+    {
+      "case": "serious message",
+      "recipient": "alex",
+      "context": "Serious update",
+      "input": "The deadline moved to Friday. Add a worried emoji.",
+      "output": "yo the deadline moved to Friday 😟",
+      "stream_output": "yo the deadline moved to Friday 😟",
+      "preserved_original": false,
+      "evidence_ids": [],
+      "chunks": 5,
+      "first_token_ms": 637,
+      "complete_ms": 833
+    },
+    {
+      "case": "emoji remains allowed",
+      "recipient": "alex",
+      "context": "Celebration",
+      "input": "Congratulations on the launch! Add a party emoji.",
+      "output": "congrats on the launch 🎉",
+      "stream_output": "congrats on the launch 🎉",
+      "preserved_original": false,
+      "evidence_ids": [],
+      "chunks": 4,
+      "first_token_ms": 795,
+      "complete_ms": 991
+    }
+  ]
+}

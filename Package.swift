@@ -70,6 +70,7 @@ let package = Package(
             dependencies: ["CFlow"],
             path: "Sources/Flow"
         ),
+        .testTarget(name: "FlowTests", dependencies: ["Flow"]),
         // macOS App
         .executableTarget(
             name: "FlowApp",

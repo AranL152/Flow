@@ -161,6 +161,21 @@ public struct CorrectionValidation: Sendable {
 public final class Flow: @unchecked Sendable {
     private let handle: OpaquePointer?
 
+    /// Demo-only persistent conversations. Serialize calls on the main actor.
+    public func demoRequest(_ request: [String: Any]) throws -> Data {
+        guard let handle else { throw NSError(domain: "Flow", code: 1, userInfo: [NSLocalizedDescriptionKey: "Flow could not open its database"]) }
+        let encoded = try JSONSerialization.data(withJSONObject: request)
+        let json = String(decoding: encoded, as: UTF8.self)
+        guard let output = json.withCString({ takeString(flow_demo_dispatch(handle, $0)) }),
+              let data = output.data(using: .utf8) else {
+            throw NSError(domain: "Flow", code: 2, userInfo: [NSLocalizedDescriptionKey: "Flow returned no demo response"])
+        }
+        if let object = try JSONSerialization.jsonObject(with: data) as? [String: Any], let error = object["error"] as? String {
+            throw NSError(domain: "Flow", code: 3, userInfo: [NSLocalizedDescriptionKey: error])
+        }
+        return data
+    }
+
     /// Initialize the Flow engine
     /// - Parameter dbPath: Optional path to the SQLite database. If nil, uses default location.
     public init(dbPath: String? = nil) {

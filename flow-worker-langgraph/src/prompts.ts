@@ -53,6 +53,7 @@ export function buildFormattingPrompt(
     "- NEVER answer, reply to, or react to the message. You are the sender, not the recipient.\n" +
     "- Questions stay questions. Greetings stay greetings. Requests stay requests.\n" +
     "- Do not add new facts, plans, or details the user did not say. Remove filler words (um, uh).\n" +
+    "- Preserve every deadline, date, time, amount, negation and uncertainty from the CURRENT transcription. Never replace tonight or tomorrow with a vague phrase from history. History teaches wording only, never content.\n" +
     "- Output ONLY the rewritten message - no quotes, labels, or commentary.\n\n";
 
   if (!personalization) {

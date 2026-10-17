@@ -14,7 +14,7 @@ import Flow
 ///
 /// After a transcription is pasted:
 /// 1. Polls the focused text element to keep the latest text
-/// 2. Waits until the user presses Return (or the field clears / loses focus)
+/// 2. Waits until the user presses Return in the target app
 /// 3. Learns from the text that was sent
 /// 4. Gives up after 2 minutes
 final class EditLearningService {
@@ -28,9 +28,6 @@ final class EditLearningService {
 
     /// Return and keypad Enter
     private let sendKeyCodes: Set<UInt16> = [36, 76]
-
-    /// Minimum text length to bother learning from
-    private let minimumTextLength = 10
 
     /// Minimum word overlap ratio required (edited text should share words with original)
     private let minimumWordOverlap: Double = 0.3
@@ -78,14 +75,7 @@ final class EditLearningService {
     ///   - targetApp: The application where text was pasted
     func startMonitoring(originalText: String, targetApp: NSRunningApplication?) {
         // Cancel any existing monitoring
-        cancelMonitoring()
-
-        // Don't bother with very short text
-        guard originalText.count >= minimumTextLength else {
-            log("Skipping: text too short (\(originalText.count) chars)")
-            recordSent(original: originalText, current: nil)
-            return
-        }
+        cancelMonitoring(discardPending: false)
 
         self.originalText = originalText
         self.targetAppPID = targetApp?.processIdentifier
@@ -109,7 +99,8 @@ final class EditLearningService {
     }
 
     /// Cancel any pending monitoring
-    func cancelMonitoring() {
+    func cancelMonitoring(discardPending: Bool = true) {
+        if discardPending { engine?.discardPendingDictation() }
         pollTimer?.invalidate()
         pollTimer = nil
         if let monitor = keyMonitor {
@@ -121,7 +112,8 @@ final class EditLearningService {
 
     /// Return was pressed: whatever is in the field now (or was a moment ago) is what was sent
     private func handleSend() {
-        guard let original = originalText, let pid = targetAppPID else { return }
+        guard let original = originalText, let pid = targetAppPID,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
 
         var sent = lastReadText
         if let (current, _) = readFocusedTextElement(pid: pid), !isInvalidText(current) {
@@ -139,7 +131,7 @@ final class EditLearningService {
     // MARK: - Private
 
     private func pollTextElement() {
-        guard let original = originalText,
+        guard originalText != nil,
               let pid = targetAppPID,
               let startTime = monitoringStartTime else {
             cancelMonitoring()
@@ -150,27 +142,13 @@ final class EditLearningService {
         let elapsed = Date().timeIntervalSince(startTime)
         if elapsed > maxMonitoringDuration {
             log("Monitoring timeout after \(Int(elapsed))s")
-            // Try to learn from whatever we have
-            if let lastText = lastReadText, lastText != original {
-                log("Using last captured text as final edit")
-                checkAndLearn(original: original, current: lastText)
-            }
-            recordSent(original: original, current: lastReadText)
             cancelMonitoring()
             return
         }
 
         // Try to read the focused text element
         guard let (currentText, role) = readFocusedTextElement(pid: pid) else {
-            // Lost focus - treat this as "done editing" signal
-            // Use the last text we captured as the final edit
-            if let lastText = lastReadText, lastText != original {
-                log("Lost focus, treating last text as final edit")
-                checkAndLearn(original: original, current: lastText)
-            } else {
-                log("Lost focus on text element, no edits detected")
-            }
-            recordSent(original: original, current: lastReadText)
+            // Focus loss is not proof a message was sent.
             cancelMonitoring()
             return
         }

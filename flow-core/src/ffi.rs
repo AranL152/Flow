@@ -82,6 +82,21 @@ pub struct FlowHandle {
     pending_dictation: Mutex<Option<PendingDictation>>,
 }
 
+/// Demo conversation state, requests and explicit Send receipts. Caller serializes
+/// calls; returned JSON is owned by the caller and freed with flow_free_string.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_demo_dispatch(handle: *mut FlowHandle, request: *const c_char) -> *mut c_char {
+    if handle.is_null() { return ptr::null_mut(); }
+    let handle = unsafe { &*handle };
+    let result = c_str(request).ok_or_else(|| "Missing request".to_string())
+        .and_then(|s| serde_json::from_str(s).map_err(|e| format!("Invalid JSON: {e}")))
+        .and_then(|request| crate::demo::dispatch(&handle.storage, request));
+    match result {
+        Ok(value) => into_c_string(value.to_string()),
+        Err(error) => into_c_string(serde_json::json!({"error": error}).to_string()),
+    }
+}
+
 #[derive(Serialize)]
 struct TranscriptionSummary {
     id: String,

@@ -6,6 +6,7 @@
 pub mod apps;
 pub mod audio;
 pub mod contacts;
+pub mod demo;
 pub mod error;
 pub mod ffi;
 pub mod imessage;

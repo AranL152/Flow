@@ -10,7 +10,9 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         DispatchQueue.main.async { @MainActor in
-            Analytics.shared.configure(apiKey: "874bf4de55312a14f9b942ab3ab21423")
+            if !ProcessInfo.processInfo.arguments.contains("--demo") {
+                Analytics.shared.configure(apiKey: "874bf4de55312a14f9b942ab3ab21423")
+            }
             Analytics.shared.track("App Launched")
 
             NSApp.setActivationPolicy(.regular)

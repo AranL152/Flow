@@ -364,6 +364,10 @@ bool flow_reset_style_learning(FlowHandle* handle);
 
 // ============ Error Handling ============
 
+/// JSON request/response for isolated demo conversations. Caller serializes calls.
+/// Free the response with flow_free_string.
+char* flow_demo_dispatch(FlowHandle* handle, const char* request);
+
 /// Get the last error message
 /// @param handle Engine handle
 /// @return Error string (caller must free with flow_free_string) or NULL if none

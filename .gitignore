@@ -12,3 +12,5 @@ target
 .env
 
 node_modules/
+.wrangler/
+__pycache__/

@@ -25,11 +25,15 @@ struct FlowApp: App {
     var body: some Scene {
         // main window
         WindowGroup {
-            ContentView()
-                .environmentObject(appState)
+            if ProcessInfo.processInfo.arguments.contains("--demo") {
+                DemoView().frame(minWidth: 1000, minHeight: 760)
+            } else {
+                ContentView().environmentObject(appState)
+            }
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: WindowSize.width, height: WindowSize.height)
+        .defaultSize(width: ProcessInfo.processInfo.arguments.contains("--demo") ? 1180 : WindowSize.width,
+                     height: ProcessInfo.processInfo.arguments.contains("--demo") ? 850 : WindowSize.height)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }

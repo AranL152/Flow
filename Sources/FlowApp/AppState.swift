@@ -87,11 +87,16 @@ final class AppState: ObservableObject {
     private static let onboardingKey = "onboardingComplete"
 
     init() {
-        self.engine = Flow()
+        let demoOnly = ProcessInfo.processInfo.arguments.contains("--demo")
+        self.engine = Flow(dbPath: demoOnly ? ":memory:" : nil)
         self.isConfigured = engine.isConfigured
         self.hotkey = Hotkey.load()
         self.isOnboardingComplete = UserDefaults.standard.bool(forKey: Self.onboardingKey)
         self.isAccessibilityEnabled = GlobeKeyHandler.isAccessibilityAuthorized()
+
+        // A recording demo must not install global hotkeys, inspect other apps,
+        // or touch the user's production dictation history.
+        if demoOnly { return }
 
         setupGlobeKey()
         setupLifecycleObserver()
