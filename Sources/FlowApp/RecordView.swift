@@ -58,6 +58,28 @@ struct RecordView: View {
                     .padding(.top, FW.spacing24)
 
                 // Output area
+                if appState.isRecording || !appState.liveTranscript.isEmpty {
+                    VStack(alignment: .leading, spacing: FW.spacing8) {
+                        HStack {
+                            Label("You said", systemImage: "mic.fill")
+                            Spacer()
+                            Text(appState.isRecording ? "LIVE" : "Speech transcript")
+                                .foregroundStyle(appState.isRecording ? FW.recording : FW.textMuted)
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(FW.textMuted)
+                        Text(appState.liveTranscript.isEmpty ? appState.liveCaptionStatus : appState.liveTranscript)
+                            .font(.body)
+                            .foregroundStyle(appState.liveTranscript.isEmpty ? FW.textMuted : FW.textPrimary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(FW.spacing12)
+                            .fwSection()
+                    }
+                    .padding(.horizontal, FW.spacing32)
+                    .padding(.top, FW.spacing16)
+                    .accessibilityIdentifier("live-transcript")
+                }
                 if let text = appState.lastTranscription {
                     outputSection(text)
                         .padding(.horizontal, FW.spacing32)
