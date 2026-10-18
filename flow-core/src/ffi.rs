@@ -681,6 +681,7 @@ fn transcribe_with_audio(
     sample_rate: u32,
     app_name: Option<String>,
     on_delta: Option<crate::providers::DictationDelta>,
+    final_transcript: Option<String>,
 ) -> crate::error::Result<String> {
     *handle.pending_attachment.lock() = None;
     let captured = handle.captured_contact.lock().clone();
@@ -732,6 +733,7 @@ fn transcribe_with_audio(
     // Perform transcription
     let transcription = handle.runtime.block_on(async {
         let mut request = TranscriptionRequest::new(audio_data, sample_rate);
+        request.final_transcript = final_transcript;
         if let Some(params) = completion_params {
             request = request.with_completion(params);
         }
@@ -974,7 +976,7 @@ fn personalization_for(
 /// Processed text (caller must free with flow_free_string), or NULL on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_transcribe(handle: *mut FlowHandle, app_name: *const c_char) -> *mut c_char {
-    transcribe_pending(handle, app_name, None)
+    transcribe_pending(handle, app_name, None, None)
 }
 
 /// Receives real completion deltas on the transcription thread. Copy strings
@@ -996,7 +998,37 @@ pub extern "C" fn flow_transcribe_stream(
         let Ok(delta) = CString::new(delta) else { return false; };
         callback(delta.as_ptr(), context_address as *mut c_void)
     }) as crate::providers::DictationDelta);
-    transcribe_pending(handle, app_name, on_delta)
+    transcribe_pending(handle, app_name, on_delta, None)
+}
+
+/// Format finalized real-time ASR through the recorded-audio pipeline. Stop
+/// recording first. Preserves recipient context, attachment parsing, history,
+/// retry audio and send-only learning. NULL uses the normal audio ASR fallback.
+/// Only cloud Auto supports this path; no partial transcript is accepted.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_transcribe_realtime_stream(
+    handle: *mut FlowHandle,
+    app_name: *const c_char,
+    final_transcript: *const c_char,
+    callback: extern "C" fn(delta: *const c_char, context: *mut c_void) -> bool,
+    context: *mut c_void,
+) -> *mut c_char {
+    if handle.is_null() { return ptr::null_mut(); }
+    let engine = unsafe { &*handle };
+    let transcript = c_str(final_transcript).map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned);
+    if transcript.as_ref().is_some_and(|s| s.chars().count() > 5000) {
+        set_last_error(engine, "Real-time transcript exceeds 5000 characters"); return ptr::null_mut();
+    }
+    if transcript.is_some() && (!uses_worker(&engine.storage) ||
+        engine.storage.get_setting(SETTING_USE_LOCAL_TRANSCRIPTION).ok().flatten().as_deref() == Some("true")) {
+        set_last_error(engine, "Real-time transcription requires cloud Auto mode"); return ptr::null_mut();
+    }
+    let context_address = context as usize;
+    let on_delta = Some(Arc::new(move |delta: &str| {
+        let Ok(delta) = CString::new(delta) else { return false; };
+        callback(delta.as_ptr(), context_address as *mut c_void)
+    }) as crate::providers::DictationDelta);
+    transcribe_pending(handle, app_name, on_delta, transcript)
 }
 
 /// Process supplied mono signed PCM16 through the normal streaming pipeline.
@@ -1010,6 +1042,23 @@ pub extern "C" fn flow_transcribe_audio_stream(
     sample_rate: u32,
     app_name: *const c_char,
     contact_name: *const c_char,
+    callback: extern "C" fn(delta: *const c_char, context: *mut c_void) -> bool,
+    context: *mut c_void,
+) -> *mut c_char {
+    flow_transcribe_audio_realtime_stream(handle, pcm, byte_count, sample_rate, app_name, contact_name, ptr::null(), callback, context)
+}
+
+/// Imported audio plus finalized real-time ASR. Same limits, context and learning
+/// as microphone dictation; NULL transcript retains recorded-audio fallback.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_transcribe_audio_realtime_stream(
+    handle: *mut FlowHandle,
+    pcm: *const u8,
+    byte_count: usize,
+    sample_rate: u32,
+    app_name: *const c_char,
+    contact_name: *const c_char,
+    final_transcript: *const c_char,
     callback: extern "C" fn(delta: *const c_char, context: *mut c_void) -> bool,
     context: *mut c_void,
 ) -> *mut c_char {
@@ -1027,10 +1076,10 @@ pub extern "C" fn flow_transcribe_audio_stream(
     *engine.pending_audio.lock() = Some(unsafe { std::slice::from_raw_parts(pcm, byte_count) }.to_vec());
     *engine.pending_sample_rate.lock() = Some(sample_rate);
     *engine.captured_contact.lock() = c_str(contact_name).map(str::to_owned);
-    flow_transcribe_stream(handle, app_name, callback, context)
+    flow_transcribe_realtime_stream(handle, app_name, final_transcript, callback, context)
 }
 
-fn transcribe_pending(handle: *mut FlowHandle, app_name: *const c_char, on_delta: Option<crate::providers::DictationDelta>) -> *mut c_char {
+fn transcribe_pending(handle: *mut FlowHandle, app_name: *const c_char, on_delta: Option<crate::providers::DictationDelta>, final_transcript: Option<String>) -> *mut c_char {
     if handle.is_null() { return ptr::null_mut(); }
     let handle = unsafe { &*handle };
 
@@ -1070,7 +1119,7 @@ fn transcribe_pending(handle: *mut FlowHandle, app_name: *const c_char, on_delta
     let duration_ms = estimate_duration_ms(audio_data.len(), sample_rate);
     *handle.last_audio.lock() = Some(audio_data.clone());
     *handle.last_audio_sample_rate.lock() = Some(sample_rate);
-    let result = transcribe_with_audio(handle, audio_data, sample_rate, app, on_delta);
+    let result = transcribe_with_audio(handle, audio_data, sample_rate, app, on_delta, final_transcript);
 
     // Clear the captured contact after transcription (whether success or failure)
     *handle.captured_contact.lock() = None;
@@ -1129,7 +1178,7 @@ pub extern "C" fn flow_retry_last_transcription(
     };
 
     let duration_ms = estimate_duration_ms(audio_data.len(), sample_rate);
-    let result = transcribe_with_audio(handle, audio_data, sample_rate, app, None);
+    let result = transcribe_with_audio(handle, audio_data, sample_rate, app, None, None);
 
     match result {
         Ok(text) => {
@@ -3314,6 +3363,48 @@ mod dictation_stream_tests {
     use crate::providers::{DictationDelta, TranscriptionResponse};
 
     struct StreamFixture;
+
+    #[test]
+    fn realtime_asr_preserves_the_audio_pipeline_and_contact_learning() {
+        struct RealtimeFixture;
+        #[async_trait::async_trait]
+        impl TranscriptionProvider for RealtimeFixture {
+            fn name(&self) -> &'static str { "finalized realtime fixture" }
+            fn is_configured(&self) -> bool { true }
+            async fn transcribe(&self, _: TranscriptionRequest) -> crate::error::Result<TranscriptionResponse> { unreachable!() }
+            async fn transcribe_stream(&self, request: TranscriptionRequest, callback: DictationDelta) -> crate::error::Result<TranscriptionResponse> {
+                assert_eq!(request.audio.len(), 32000, "keep the original recording retryable");
+                let text = request.final_transcript.expect("real-time ASR was lost");
+                assert_eq!(text, "Can you review the slides?");
+                assert!(request.completion.unwrap().attachment_commands_enabled);
+                assert!(callback("got a sec to review the deck?"));
+                Ok(TranscriptionResponse { text, completed_text: Some("got a sec to review the deck?".into()),
+                    attachment: None, confidence: None, language: None, duration_ms: 1000, segments: None })
+            }
+        }
+        let db = CString::new(":memory:").unwrap();
+        let handle = flow_init(db.as_ptr());
+        let engine = unsafe { &mut *handle };
+        engine.transcription = Arc::new(RealtimeFixture);
+        let pcm = vec![0; 32000];
+        let app = CString::new("Messages").unwrap();
+        let contact = CString::new("Alex").unwrap();
+        let transcript = CString::new("Can you review the slides?").unwrap();
+        let mut state = CallbackState { chunks: vec![], cancel: false };
+        let result = flow_transcribe_audio_realtime_stream(handle, pcm.as_ptr(), pcm.len(), 16000,
+            app.as_ptr(), contact.as_ptr(), transcript.as_ptr(), receive, &mut state as *mut _ as *mut c_void);
+        assert!(!result.is_null());
+        assert_eq!(state.chunks, ["got a sec to review the deck?"]);
+        assert!(engine.storage.get_style_examples(10).unwrap().is_empty(), "dictation alone must not train");
+        let pending = engine.pending_dictation.lock();
+        assert_eq!(pending.as_ref().unwrap().said, "Can you review the slides?");
+        assert_eq!(pending.as_ref().unwrap().contact_key, style::contact_key("Alex"));
+        drop(pending);
+        let edit = CString::new("yo can u check the deck?").unwrap();
+        flow_record_final_text_for_contact(handle, edit.as_ptr(), contact.as_ptr());
+        assert_eq!(engine.storage.get_style_examples(10).unwrap()[0].sent, "yo can u check the deck?");
+        flow_free_string(result); flow_destroy(handle);
+    }
     #[async_trait::async_trait]
     impl TranscriptionProvider for StreamFixture {
         fn name(&self) -> &'static str { "controlled stream fixture" }

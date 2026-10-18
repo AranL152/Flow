@@ -30,6 +30,8 @@ pub struct TranscriptionRequest {
     pub prompt: Option<String>,
     /// Optional completion parameters for combined transcription+completion
     pub completion: Option<CompletionParams>,
+    /// Finalized real-time ASR, supplied only to the Auto worker. Never interim text.
+    pub final_transcript: Option<String>,
 }
 
 /// Parameters for completion (used in combined transcription+completion flow)
@@ -61,6 +63,7 @@ impl TranscriptionRequest {
             language: None,
             prompt: None,
             completion: None,
+            final_transcript: None,
         }
     }
 

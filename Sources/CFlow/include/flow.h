@@ -146,6 +146,18 @@ char *flow_transcribe_stream(struct FlowHandle *handle,
                              void *context);
 
 /**
+ * Format finalized real-time ASR through the recorded-audio pipeline. Stop
+ * recording first. Preserves recipient context, attachment parsing, history,
+ * retry audio and send-only learning. NULL uses the normal audio ASR fallback.
+ * Only cloud Auto supports this path; no partial transcript is accepted.
+ */
+char *flow_transcribe_realtime_stream(struct FlowHandle *handle,
+                                      const char *app_name,
+                                      const char *final_transcript,
+                                      bool (*callback)(const char *delta, void *context),
+                                      void *context);
+
+/**
  * Process supplied mono signed PCM16 through the normal streaming pipeline.
  * The host must serialize transcription calls for this handle. Audio is copied
  * before processing. This supports imported recordings and isolated simulations.
@@ -158,6 +170,20 @@ char *flow_transcribe_audio_stream(struct FlowHandle *handle,
                                    const char *contact_name,
                                    bool (*callback)(const char *delta, void *context),
                                    void *context);
+
+/**
+ * Imported audio plus finalized real-time ASR. Same limits, context and learning
+ * as microphone dictation; NULL transcript retains recorded-audio fallback.
+ */
+char *flow_transcribe_audio_realtime_stream(struct FlowHandle *handle,
+                                            const uint8_t *pcm,
+                                            size_t byte_count,
+                                            uint32_t sample_rate,
+                                            const char *app_name,
+                                            const char *contact_name,
+                                            const char *final_transcript,
+                                            bool (*callback)(const char *delta, void *context),
+                                            void *context);
 
 /**
  * Retry the last transcription using cached audio

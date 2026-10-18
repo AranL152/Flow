@@ -336,9 +336,10 @@ impl TranscriptionProvider for AutoTranscriptionProvider {
     async fn transcribe_stream(&self, request: TranscriptionRequest, on_delta: super::DictationDelta) -> Result<TranscriptionResponse> {
         if !on_delta("") { return Err(Error::Transcription("Dictation cancelled".into())); }
         let completion = request.completion.ok_or_else(|| Error::Transcription("Completion params required for Auto mode".into()))?;
-        let wav = pcm_to_wav(&request.audio, request.sample_rate, 1);
         let body = WorkerRequest { whisper_input: WhisperInput {
-            audio: Some(AudioInput { audio_b64: STANDARD.encode(wav) }), text: None,
+            audio: request.final_transcript.is_none().then(|| AudioInput {
+                audio_b64: STANDARD.encode(pcm_to_wav(&request.audio, request.sample_rate, 1)),
+            }), text: request.final_transcript,
             whisper_params: WhisperParams { audio_language: request.language.unwrap_or_else(|| "auto".into()) },
         }, completion: completion.into() };
         let endpoint = std::env::var("FLOW_STREAM_ENDPOINT").unwrap_or_else(|_| format!("{BASE10_PROXY_URL}/transcribe-stream"));
