@@ -2,6 +2,7 @@ import Foundation
 
 public enum DictationStreamEvent: Equatable, Sendable {
     case delta(String)
+    case attachment(AttachmentPlan)
     case completed(String)
 }
 

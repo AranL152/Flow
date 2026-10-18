@@ -222,6 +222,10 @@ final class EditLearningService {
     /// `current` is nil when the field was never read (usually sent right away, unchanged).
     private func recordSent(original: String, current: String?) {
         guard let engine = engine else { return }
+        // Rich composers represent attachments with U+FFFC. It is not wording
+        // the user chose and must not become a learned style correction.
+        let current = current?.replacingOccurrences(of: "\u{FFFC}", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let sent: String?
         if let current = current, current != original {

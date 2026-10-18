@@ -260,6 +260,13 @@ public final class Flow: @unchecked Sendable {
 
     // MARK: - Transcription
 
+    /// Validated inert request from the latest completed dictation, never a path.
+    public var pendingAttachmentPlan: AttachmentPlan? {
+        guard let handle, let json = takeString(flow_get_attachment_plan(handle)),
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(AttachmentPlan.self, from: data)
+    }
+
     /// Ordered real provider deltas, followed by one validated completed result.
     /// Providers without streaming support emit only the completed result.
     public func transcribeStream(appName: String? = nil) -> AsyncThrowingStream<DictationStreamEvent, Error> {
@@ -303,6 +310,7 @@ public final class Flow: @unchecked Sendable {
                         userInfo: [NSLocalizedDescriptionKey: self.lastError ?? "Dictation streaming failed"]))
                     return
                 }
+                if let plan = self.pendingAttachmentPlan { continuation.yield(.attachment(plan)) }
                 continuation.yield(.completed(String(cString: result)))
                 continuation.finish()
             }

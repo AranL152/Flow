@@ -91,6 +91,12 @@ struct RecordView: View {
                 }
 
                 // History
+                if !appState.isVoiceSimulation {
+                    AttachmentCard(session: appState.attachments, engine: appState.engine)
+                        .padding(.horizontal, FW.spacing32)
+                        .padding(.top, FW.spacing16)
+                }
+
                 HistoryListView()
                     .padding(.horizontal, FW.spacing32)
                     .padding(.top, FW.spacing24)
@@ -230,6 +236,9 @@ struct RecordView: View {
             }
 
             // Shortcut hint
+            Text("Try: ‘Here’s the deck. Flow, attach the PDF I just downloaded.’")
+                .font(.caption).foregroundStyle(FW.textMuted)
+                .multilineTextAlignment(.center)
             if appState.isVoiceSimulation {
                 Text("Generated audio · no microphone capture")
                     .font(FW.fontMonoSmall)

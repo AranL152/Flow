@@ -4,16 +4,16 @@
   "configured_trigger": "my email",
   "configured_value": "aran@example.test",
   "typed_output": "You can reach me at aran@example.test",
-  "audio_stream_output": "You can reach me at my email.",
+  "audio_stream_output": "You can reach me at aran@example.test.",
   "audio_model_chunks": [
     "You",
-    " can reach",
-    " me at my",
-    " email."
+    " can reach me",
+    " at aran",
+    "@example.test."
   ],
   "checks": {
     "typed_expansion_works": true,
-    "auto_audio_expansion_works": false
+    "auto_audio_expansion_works": true
   },
-  "scope": "diagnostic only; no production fix, clipboard writes or real messages"
+  "scope": "live verification of configured snippets; fixture data only, no clipboard writes or real messages"
 }

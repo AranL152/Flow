@@ -44,6 +44,8 @@ final class AppState: ObservableObject {
     private var streamTargetUnchanged = true
     private var recordingUsesStreaming = false
     private var streamedInsertion: StreamedTextInsertion?
+    let attachments: AttachmentSession
+    private var attachmentPreview: AttachmentPreviewWindow?
     var streamOutputEnabled: Bool { UserDefaults.standard.object(forKey: "streamOutputEnabled") as? Bool ?? true }
 
     /// Last transcribed text
@@ -106,7 +108,8 @@ final class AppState: ObservableObject {
 
     private static let onboardingKey = "onboardingComplete"
 
-    init() {
+    init(attachmentDownloads: AttachmentDownloads? = nil) {
+        self.attachments = AttachmentSession(downloads: attachmentDownloads ?? AttachmentDownloads())
         let demoOnly = ProcessInfo.processInfo.arguments.contains("--demo")
             || ProcessInfo.processInfo.arguments.contains("--recording-preview")
             || ProcessInfo.processInfo.arguments.contains("--stream-insertion-preview")
@@ -134,9 +137,12 @@ final class AppState: ObservableObject {
 
         // Configure the edit learning service
         EditLearningService.shared.configure(engine: engine)
+        attachments.startObservingDownloads()
     }
 
     func cleanup() {
+        attachmentPreview?.hide()
+        attachments.stopObservingDownloads()
         streamTask?.cancel()
         stopStreamInputMonitor()
         streamedInsertion?.cancel(restoringOriginal: true)
@@ -508,6 +514,8 @@ final class AppState: ObservableObject {
 
         EditLearningService.shared.cancelMonitoring()
         targetApplication = NSWorkspace.shared.frontmostApplication
+        attachmentPreview?.hide()
+        attachments.begin(app: targetApplication, contact: engine.activeMessagesContact)
         stopStreamInputMonitor()
         streamTargetUnchanged = true
         streamedOutput = ""; isStreamingOutput = false
@@ -655,6 +663,20 @@ final class AppState: ObservableObject {
                     self.log("📝 [TRANSCRIBE] Result: \(text.prefix(100))...")
                     self.lastTranscription = text
                     self.errorMessage = nil
+                    if let plan = self.engine.pendingAttachmentPlan {
+                        self.receiveAttachment(plan)
+                        guard self.attachments.targetMatches(engine: self.engine) else {
+                            self.engine.discardPendingDictation()
+                            self.errorMessage = "Draft and attachment ready in Flow. The composer could not be verified, so nothing was pasted."
+                            self.refreshHistory(); self.finishProcessing()
+                            return
+                        }
+                        if text.isEmpty {
+                            Task { await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: true) }
+                            self.refreshHistory(); self.finishProcessing()
+                            return
+                        }
+                    }
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
                     self.log("📋 [CLIPBOARD] Text copied to clipboard")
@@ -662,6 +684,7 @@ final class AppState: ObservableObject {
                     self.activateTargetAppIfNeeded()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                         self?.pasteText()
+                        if let self { Task { await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: true) } }
                         self?.finishProcessing()
                     }
                     self.refreshHistory()
@@ -709,11 +732,15 @@ final class AppState: ObservableObject {
                             guard insertion.apply(output: self.streamedOutput) else { throw CancellationError() }
                             lastWrite = Date()
                         }
+                    case .attachment(let plan):
+                        self.receiveAttachment(plan)
                     case .completed(let text):
-                        guard !text.isEmpty else { throw NSError(domain: "Flow.Stream", code: 3,
+                        guard !text.isEmpty || self.attachments.plan != nil else { throw NSError(domain: "Flow.Stream", code: 3,
                             userInfo: [NSLocalizedDescriptionKey: "The model returned an empty draft"]) }
                         self.stopStreamInputMonitor()
-                        if let insertion {
+                        if text.isEmpty {
+                            insertion?.cancel(restoringOriginal: false)
+                        } else if let insertion {
                             guard insertion.finish(output: text) else { throw CancellationError() }
                             EditLearningService.shared.startMonitoring(originalText: text, targetApp: self.targetApplication)
                         } else {
@@ -736,11 +763,14 @@ final class AppState: ObservableObject {
                         self.streamedOutput = text
                         self.errorMessage = nil
                         completed = true
+                        await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: self.streamTargetUnchanged)
                     }
                 }
                 if !completed { throw NSError(domain: "Flow.Stream", code: 4,
                     userInfo: [NSLocalizedDescriptionKey: "The stream ended before the draft was complete"]) }
             } catch {
+                self.attachments.dismiss()
+                self.attachmentPreview?.hide()
                 let restored = insertion?.cancel(restoringOriginal: true) ?? false
                 self.engine.discardPendingDictation()
                 EditLearningService.shared.cancelMonitoring()
@@ -756,6 +786,13 @@ final class AppState: ObservableObject {
 
     private func stopStreamInputMonitor() {
         if let streamInputMonitor { NSEvent.removeMonitor(streamInputMonitor); self.streamInputMonitor = nil }
+    }
+
+    private func receiveAttachment(_ plan: AttachmentPlan) {
+        attachments.onDismiss = { [weak self] in self?.attachmentPreview?.hide() }
+        attachments.receive(plan)
+        if attachmentPreview == nil { attachmentPreview = AttachmentPreviewWindow(session: attachments, engine: engine) }
+        attachmentPreview?.show(candidateCount: attachments.candidates.count)
     }
 
     func updateLiveCaptions(enabled: Bool) {

@@ -169,6 +169,7 @@ final class VoiceSimulationModel: ObservableObject {
                 for try await event in state.engine.transcribeAudioStream(pcm16: pcm, sampleRate: 16000, appName: "Messages", contactName: "Alex") {
                     try Task.checkCancellation()
                     switch event {
+                    case .attachment(let plan): note("attachment_request", text: plan.command)
                     case .delta(let text): note("model_delta_received", text: text)
                     case .completed(let text): note("model_complete_received", text: text)
                     }
@@ -181,6 +182,7 @@ final class VoiceSimulationModel: ObservableObject {
         for try await event in queue.stream {
             try Task.checkCancellation()
             switch event {
+            case .attachment(let plan): state.attachments.receive(plan)
             case .delta(let delta):
                 state.isStreamingOutput = true; state.streamedOutput += delta
                 draft = state.streamedOutput; chunkCount += 1

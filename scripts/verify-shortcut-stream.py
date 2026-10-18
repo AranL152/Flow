@@ -46,7 +46,7 @@ try:
         'speech':speech,'configured_trigger':'my email','configured_value':address,
         'typed_output':typed,'audio_stream_output':streamed,'audio_model_chunks':chunks,
         'checks':{'typed_expansion_works':bool(typed) and address in typed,'auto_audio_expansion_works':bool(streamed) and address in streamed},
-        'scope':'diagnostic only; no production fix, clipboard writes or real messages'}
+        'scope':'live verification of configured snippets; fixture data only, no clipboard writes or real messages'}
     (ROOT/'review/shortcut-stream-verification.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result,indent=2))
     if not all(result["checks"].values()): raise SystemExit(1)
