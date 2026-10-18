@@ -140,6 +140,10 @@ final class HelperManager {
         // Check multiple locations for the helper binary
 
         // 1. Inside the app bundle (for production)
+        let bundled = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/FlowHelper")
+        if FileManager.default.isExecutableFile(atPath: bundled.path) {
+            return bundled
+        }
         if let bundleURL = Bundle.main.url(forResource: "FlowHelper", withExtension: nil, subdirectory: "Helpers") {
             log("Found helper in bundle: \(bundleURL.path)")
             return bundleURL

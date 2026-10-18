@@ -165,6 +165,10 @@ jobs:
               <true/>
               <key>NSHumanReadableCopyright</key>
               <string>Copyright © 2025</string>
+              <key>NSMicrophoneUsageDescription</key>
+              <string>Flow uses your microphone to transcribe your speech.</string>
+              <key>NSSpeechRecognitionUsageDescription</key>
+              <string>Flow uses on-device recognition to show live speech captions.</string>
           </dict>
           </plist>
           EOF
