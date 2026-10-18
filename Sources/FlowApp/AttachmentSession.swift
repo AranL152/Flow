@@ -14,9 +14,7 @@ private final class AttachmentPasteTarget {
         guard AXIsProcessTrusted(), let app, app.bundleIdentifier == "com.apple.MobileSMS",
               let contact, !contact.isEmpty,
               let element = AXEditMonitorService.getFocusedTextElement(pid: app.processIdentifier) else { return nil }
-        var role: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role) == .success,
-              let role = role as? String, ["AXTextArea", "AXTextView"].contains(role) else { return nil }
+        guard AXEditMonitorService.isMessagesComposer(element) else { return nil }
         self.app = app; self.element = element; self.contact = contact
     }
 
@@ -37,6 +35,7 @@ final class AttachmentSession: ObservableObject {
     @Published private(set) var status = ""
     @Published private(set) var busy = false
     @Published private(set) var pasteRequested = false
+    @Published private(set) var attachmentConfirmed = false
     @Published private(set) var needsChoice = false
     private var clipboard: AttachmentClipboardSnapshot?
     private var clipboardChanged = false
@@ -105,7 +104,7 @@ final class AttachmentSession: ObservableObject {
     }
 
     private func resolve() {
-        candidates = []; selectedID = nil; needsChoice = false; pasteRequested = false
+        candidates = []; selectedID = nil; needsChoice = false; pasteRequested = false; attachmentConfirmed = false
         guard let plan else { return }
         if let clarification = plan.clarification { status = clarification; return }
         guard let request = plan.request else { return }
@@ -158,6 +157,7 @@ final class AttachmentSession: ObservableObject {
         }
         do {
             try candidate.validate()
+            let before = AXEditMonitorService.attachmentCount(in: target.element)
             let board = NSPasteboard.general
             let previous = (board.pasteboardItems ?? []).map { item in
                 item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
@@ -176,6 +176,11 @@ final class AttachmentSession: ObservableObject {
             // Restore only our own write. A later copy by the user always wins.
             try? await Task.sleep(for: .milliseconds(600))
             restore(previous, board: board, expectedCount: writtenCount)
+            if sessionID == session, let before,
+               let after = AXEditMonitorService.attachmentCount(in: target.element), after > before {
+                attachmentConfirmed = true
+                status = "Attachment added to \(target.contact)’s Messages draft. Review, then send."
+            }
         } catch { status = error.localizedDescription }
     }
 
@@ -199,7 +204,7 @@ final class AttachmentSession: ObservableObject {
     func dismiss() {
         sessionID = UUID(); plan = nil; candidates = []; selectedID = nil
         clipboard = nil; target = nil; clipboardChanged = false
-        needsChoice = false; status = ""; busy = false; pasteRequested = false
+        needsChoice = false; status = ""; busy = false; pasteRequested = false; attachmentConfirmed = false
         onDismiss?()
     }
 }

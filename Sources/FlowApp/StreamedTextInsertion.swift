@@ -21,11 +21,12 @@ final class StreamedTextInsertion {
         guard AXIsProcessTrusted(), let app,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier,
               let element = AXEditMonitorService.getFocusedTextElement(pid: app.processIdentifier),
+              app.bundleIdentifier != "com.apple.MobileSMS" || AXEditMonitorService.isMessagesComposer(element),
               let text = value(of: element), let selection = selection(of: element),
               settable(kAXSelectedTextRangeAttribute, on: element),
               let buffer = try? StreamInsertionBuffer(original: text, selection: selection) else { return nil }
         let mode: Mode
-        if settable(kAXValueAttribute, on: element) { mode = .value }
+        if settable(kAXValueAttribute, on: element), (AXEditMonitorService.attachmentCount(in: element) ?? 0) == 0 { mode = .value }
         else if settable(kAXSelectedTextAttribute, on: element) { mode = .selection }
         else { return nil }
         let insertion = StreamedTextInsertion(element: element, pid: app.processIdentifier, mode: mode, buffer: buffer)
@@ -111,9 +112,7 @@ final class StreamedTextInsertion {
     }
 
     private static func value(of element: AXUIElement) -> String? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success else { return nil }
-        return value as? String
+        AXEditMonitorService.textValueIncludingEmpty(element)
     }
 
     private static func selection(of element: AXUIElement) -> NSRange? {

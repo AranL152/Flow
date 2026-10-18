@@ -164,6 +164,50 @@ final class AXEditMonitorService {
 // MARK: - Focused Element Helper
 
 extension AXEditMonitorService {
+    /// Current Messages versions expose their composer as AXTextField. Identify
+    /// it explicitly so a search field cannot become an attachment destination.
+    static func isMessagesComposer(_ element: AXUIElement) -> Bool {
+        var identifier: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXIdentifierAttribute as CFString, &identifier)
+        if identifier as? String == "messageBodyField" { return true }
+        var role: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
+        return ["AXTextArea", "AXTextView"].contains(role as? String ?? "")
+    }
+
+    /// Messages returns AXError.noValue for an empty composer. Confirm zero
+    /// characters instead of treating it as an unavailable draft.
+    static func textValueIncludingEmpty(_ element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
+        if result == .success, let text = value as? String { return text }
+        if result == .noValue {
+            var count: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &count) == .success,
+               (count as? NSNumber)?.intValue == 0 { return "" }
+        }
+        return nil
+    }
+
+    /// Messages exposes file objects in attributed text rather than AXChildren.
+    /// Count only native attachment attributes, not filenames in plain text.
+    static func attachmentCount(in element: AXUIElement) -> Int? {
+        var count: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &count) == .success,
+              let length = (count as? NSNumber)?.intValue, (0...24000).contains(length) else { return nil }
+        if length == 0 { return 0 }
+        var range = CFRange(location: 0, length: length)
+        guard let value = AXValueCreate(.cfRange, &range) else { return nil }
+        var attributed: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(element, kAXAttributedStringForRangeParameterizedAttribute as CFString, value, &attributed) == .success,
+              let text = attributed as? NSAttributedString else { return nil }
+        var found = 0
+        text.enumerateAttribute(NSAttributedString.Key("AXAttachment"), in: NSRange(location: 0, length: text.length)) { value, _, _ in
+            if value != nil { found += 1 }
+        }
+        return found
+    }
+
     /// Get the currently focused text element from an app
     /// - Parameter pid: Process ID of the target app
     /// - Returns: The focused AXUIElement if it's a text element
