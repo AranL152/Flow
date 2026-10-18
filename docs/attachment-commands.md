@@ -22,7 +22,8 @@ model or included in the cloud request.
 | Flow, attach the latest download. | Newest observed completed/stable regular file |
 | Flow, attach the presentation I just downloaded. | Matching presentation file |
 | Flow, find my robotics presentation. | Ranked local filename matches; top match appended in Messages |
-| Here's the image. Flow, find the beach trip photo. | Message streams; image filename matches appear separately |
+| Here's the image. Flow, find the beach trip photo. | Image filename matches and matching visible screenshot words |
+| Here's the issue. Flow, find the screenshot showing payment error. | Local OCR finds recent screenshots containing those words |
 
 Both an attachment-only command and a message followed by a command work. The
 parser tolerates ASR punctuation such as “Flow. Attach…”. The Whisper vocabulary
@@ -33,8 +34,9 @@ the generated-speech check. This is not a guarantee of ASR accuracy for all voic
 Quoted/reported instructions and negated cues do not select a file. Unsupported
 or ambiguous objects produce a clarification with no file action. Filename search
 uses an explicit “Flow, find…”, “Flow, search for…” or a named “Flow, attach…”
-command. Describing what is pictured (image recognition/OCR), searching document
-contents and fetching remote attachments are not implemented.
+command. Image searches also read visible words in recent screenshots locally
+with Apple Vision. General scene recognition, document-content search and remote
+attachment fetching are not implemented. See [screenshot text search](screenshot-text-search.md).
 
 ## Find an older file
 
@@ -60,8 +62,8 @@ changes the Messages draft. **Done** dismisses the picker and returns to Message
 The **…** menu exposes filename search refinement, manual file selection and copy.
 Search refinement and source changes are available before attachment insertion.
 **Choose another file…** opens the native picker if a file is not indexed, is on another
-volume or the search is too broad. Matching is by filename words, not semantic
-understanding of an image. File contents and local paths are not uploaded.
+volume or the search is too broad. Image searches also match visible words in recent screenshots; they do not infer
+the depicted scene. File contents and local paths are not uploaded.
 Spotlight results are rechecked locally; hidden files, incomplete downloads,
 symlinks, app bundles and Library files are excluded. Search cancels when the
 preview closes or another search starts, with a six-second timeout.
@@ -191,7 +193,8 @@ speech feeds real on-device captions and the native speech-level bar. Only real
 LLM chunks enter the actual Messages draft, then the production attachment
 session appends the ranked match and shows the production candidate popup.
 No Return/Send key is produced. Synthetic PDFs and dashboard PNG fixtures live
-under `~/Flow Simulation Files`; screenshot matching uses filenames, not OCR.
+under `~/Flow Simulation Files`; the original dashboard fixture still verifies
+filename matching. The separate OCR check uses generic screenshot filenames.
 
 The demo adapter inserts Unicode text events to preserve rich native objects.
 It rejects control characters, verifies focus/cursor/text for every chunk, and

@@ -14,8 +14,8 @@
     "single_match_still_requires_selection" : true
   },
   "filenames" : [
-    "flowsearch12efbbcc8d-notes.pdf",
-    "flowsearch12efbbcc8d-sketch.pdf"
+    "flowsearchb058190401-notes.pdf",
+    "flowsearchb058190401-sketch.pdf"
   ],
   "passed" : true,
   "scope" : "Real local Spotlight index and native attachment selection; synthetic files only. No Messages paste or Send. No permission requests."

@@ -4,31 +4,40 @@ The user asked to implement “Flow, attach…” and then needed to restart the
 Continue the same conversation; implementation is committed on the fork's main.
 Push only to `AranL152/Flow`, never upstream. No coauthor trailers or new branches.
 
-## Filename search and caption follow-up (October 18)
+## Current state: screenshot OCR and compact picker (October 18)
 
-Latest request: full demos in actual Messages, voice → most relevant attachment
-automatically → candidates, for PDFs and screenshots. Both passed. The new runner
-is `python3 scripts/simulate-imessage-full.py` (optional `--kind file` or
-`--kind screenshot`). See `review/imessage-full-demo-verification.json`.
-PDF: 15 caption updates, seven LLM chunks and seven native text writes.
-Screenshot: 16 caption updates, six chunks/writes. Both appended exactly one
-native attachment and preserved existing draft content/objects. Nothing was sent.
-The screenshot popup and both appended files remain in the real unsent draft.
+The user approved local screenshot-text search, then asked which LLM/API key the
+demos use. Auto's configured default is Llama 3.3 70B with Whisper Large v3 Turbo
+through Cloudflare Workers AI. The client OpenAI key is not used by Auto. Actual
+billing was not inspected. All new OCR verification was local, without model calls.
+The generic startup log was corrected to print the real selected provider name.
 
-Source now ranks exact filename stems first, then partial-name matches, with
-recency breaking ties. The pipeline auto-appends the top match after completion,
-then shows candidates. It rechecks query/contact/composer and refuses paste over
-a nonempty selection. Alternatives can be previewed/copied, not automatically
-swapped. Screenshot fixtures match names; OCR/vision is still not implemented.
+Say “Flow, find the screenshot showing payment error.” The native coordinator
+combines filename matches and Apple Vision OCR over the latest 24 screenshots
+within 30 days. Cache: ~/Library/Caches/Flow/ScreenshotOCR/text-v1.json, private,
+bounded and invalidated by identity/size/mtime. UI shows matched words; general
+photo/scene understanding is not implemented. See screenshot-text-search.md.
+
+29 Swift tests, 97 worker tests plus typecheck, 11 native Spotlight/OCR/picker
+checks and eight actual Messages OCR attachment checks passed. The latter used a
+supplied local intent (no voice/model call), auto-appended a synthetic screenshot,
+swapped to an alternative and back, preserving text and unrelated native objects.
+The OCR picker/helper remains open over Messages. Run
+`python3 scripts/verify-imessage-ocr.py` to replay that local attachment check.
+The synthetic screenshot remains in the unsent draft; no Send event was produced.
+
+Earlier complete voice demos in Messages passed for PDF and filename-based
+screenshot search. Shared model presentation now paces small frames; their 7/6
+raw chunks became 19/23 native updates, with 15/16 real caption updates. Alternatives
+can be safely swapped with Use this file. See imessage-full-demo-verification.json.
+The normal app's rich-draft final-paste fallback remains unchanged; the full demo
+uses a separately verified Unicode writer for native attachment-bearing drafts.
 
 The normal signed app was deliberately not repackaged or restarted, preserving
-new speech grants. The demo helper links the rebuilt production objects and
-embeds a speech usage string; inherited authorization worked without prompts.
-It uses a demo-only Unicode text-event adapter for rich draft streaming. Native
-chunked paste inserted unwanted spaces; Messages smart quotes are acknowledged
-while other characters/cursor/attachment checks remain exact. The normal app's
-rich-draft final-paste fallback remains unchanged. Early failed demo attempts may
-have left partial generated text in the unsent draft; no prior content was cleared.
+speech/AX grants. The open helper links rebuilt production modules. Its normal
+hotkey workflow still needs an updated installed bundle. Known helpers are stopped
+only after checking that their PID matches the expected executable. Do not send
+or clear the existing Messages draft.
 
 The paragraphs below describe the earlier manual-selection implementation.
 

@@ -1,0 +1,26 @@
+{
+  "candidate_filenames": [
+    "Screenshot 2026-10-18 at 12.00.00.png",
+    "Screenshot 2026-10-18 at 11.59.00.png"
+  ],
+  "checks": {
+    "alternative_replaces_only_flows_file": true,
+    "best_recent_match_auto_appended": true,
+    "exactly_one_native_file_added": true,
+    "found_visible_words_not_filename": true,
+    "original_choice_restored_without_changing_draft": true,
+    "original_text_preserved": true,
+    "partial_text_match_excluded": true,
+    "unrelated_native_files_preserved": true
+  },
+  "local_cache_hits": 0,
+  "local_ocr_recognitions": 3,
+  "matched_filename": "Screenshot 2026-10-18 at 12.00.00.png",
+  "matched_words": [
+    "payment",
+    "error"
+  ],
+  "scope": "Supplied local search intent \u2192 actual Spotlight and Apple Vision OCR \u2192 production auto-append and candidate replacement in actual Messages. Synthetic screenshots only. No audio, ASR or LLM API calls. No Send event.",
+  "search_and_native_paste_seconds": 1.0805190801620483,
+  "status": "ready"
+}

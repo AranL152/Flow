@@ -87,7 +87,7 @@ private func canonicalQuotes(_ text: String) -> String {
 @MainActor
 final class FullMessagesDemo {
     private let state = AppState()
-    private let session = AttachmentSession()
+    private let session: AttachmentSession
     private let captions = LiveSpeechCaptions()
     private var preview: AttachmentPreviewWindow?
     private var indicator: RecordingIndicatorWindow?
@@ -95,6 +95,14 @@ final class FullMessagesDemo {
     private var results: [[String: Any]] = []
     private var captionUpdates = 0
     private var started = Date()
+
+    init() {
+        let args = ProcessInfo.processInfo.arguments
+        let scopes = args.firstIndex(of: "--fixtures").flatMap { index in
+            args.indices.contains(index + 1) ? [URL(fileURLWithPath: args[index + 1])] : nil
+        }
+        session = AttachmentSession(fileSearch: AttachmentSearch(scopes: scopes))
+    }
 
     func run() async {
         let args = ProcessInfo.processInfo.arguments

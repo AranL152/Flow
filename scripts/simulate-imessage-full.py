@@ -35,6 +35,7 @@ def main():
     work.mkdir(parents=True, exist_ok=True)
     executable = work / 'FlowMessagesFullDemo'
     stop_previous(work, executable)
+    stop_previous(ROOT / '.build/messages-ocr-check', ROOT / '.build/messages-ocr-check/FlowMessagesOCRCheck')
     stop_previous(ROOT / '.build/messages-popup-simulation', ROOT / '.build/messages-popup-simulation/FlowMessagesPopup')
     # The existing app's signature/grants stay untouched. The CLI embeds usage
     # strings and inherits the host's already granted speech/Accessibility access.

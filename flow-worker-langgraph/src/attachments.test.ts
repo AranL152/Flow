@@ -7,6 +7,8 @@ describe("explicit attachment boundary", () => {
     ["Flow attach the beach trip photo", "", "beach trip", "image"],
     ["Flow search my files for invoice", "", "invoice", "any"],
     ["Flow find the PDF called Final Report", "", "Final Report", "pdf"],
+    ["Here's the issue. Flow, find the screenshot showing payment error.", "Here's the issue.", "showing payment error", "image"],
+    ["Flow attach the screenshot with card declined", "", "with card declined", "image"],
   ])("offers filename search for %s only to capable clients", (text, message, query, kind) => {
     expect(parse(text, true)).toMatchObject({ message, request: { source: "file_search", query, kind } });
     expect(parse(text)?.request).toBeUndefined();

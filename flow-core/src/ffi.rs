@@ -439,7 +439,10 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
             }
         }
     } else {
-        log_with_time!("☁️ [INIT] Using remote transcription (OpenAI Whisper API)");
+        log_with_time!(
+            "☁️ [INIT] Using cloud transcription: {}",
+            handle.transcription.name()
+        );
     }
 
     debug!("Flow engine initialized");
