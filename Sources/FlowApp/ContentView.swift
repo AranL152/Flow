@@ -20,7 +20,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Logo
                     HStack(spacing: FW.spacing8) {
-                        if let iconURL = Bundle.module.url(forResource: "app-icon-old", withExtension: "png"),
+                        if let iconURL = AppResources.bundle.url(forResource: "app-icon-old", withExtension: "png"),
                            let nsImage = NSImage(contentsOf: iconURL)
                         {
                             Image(nsImage: nsImage)

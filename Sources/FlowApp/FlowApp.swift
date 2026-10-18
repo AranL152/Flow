@@ -13,7 +13,7 @@ struct FlowApp: App {
     @StateObject private var appState = AppState()
 
     private var menuBarIcon: NSImage? {
-        guard let iconURL = Bundle.module.url(forResource: "menubar", withExtension: "png"),
+        guard let iconURL = AppResources.bundle.url(forResource: "menubar", withExtension: "png"),
               let icon = NSImage(contentsOf: iconURL)
         else {
             return nil
