@@ -42,10 +42,13 @@ struct LiquidCommandText: View {
                     TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !animating || reduceMotion)) { timeline in
                         let elapsed = rippleStart.map { timeline.date.timeIntervalSince($0) } ?? Self.animationDuration
                         let progress = animating && !reduceMotion ? min(1, max(0, elapsed / Self.rippleDuration)) : 1
-                        let rippling = animating && !reduceMotion && elapsed >= 0 && elapsed < Self.rippleDuration
                         let settling = (elapsed - Self.rippleDuration) / Self.settleDuration
-                        let settleGlow = animating && !reduceMotion && settling > 0 && settling < 1
+                        let settleFlash = animating && !reduceMotion && settling > 0 && settling < 1
                             ? sin(settling * .pi) : 0
+                        // Brighten the glyph fill itself: the finish has no halo
+                        // outside the cached letters, and all words flash together.
+                        let flashInk = Color(red: 0.76 + 0.20 * settleFlash,
+                                             green: 0.61 + 0.23 * settleFlash, blue: 1)
                         Canvas { context, size in
                             var image = context.resolve(Image(decorative: raster, scale: displayScale))
                             let bounds = CGRect(origin: .zero, size: size)
@@ -57,7 +60,7 @@ struct LiquidCommandText: View {
                                                                    FlowCommandBadge.ink, FlowCommandBadge.ink]),
                                                   startPoint: CGPoint(x: center - 85, y: 0),
                                                   endPoint: CGPoint(x: center + 85, y: 0))
-                                : .color(FlowCommandBadge.ink)
+                                : .color(flashInk)
                             if !active {
                                 context.draw(image, in: bounds)
                             } else {
@@ -77,9 +80,6 @@ struct LiquidCommandText: View {
                                 }
                             }
                         }
-                        .shadow(color: FlowCommandBadge.ink.opacity(0.18 + (rippling ? 0.30 : 0) + 0.70 * settleGlow),
-                                radius: 2 + (rippling ? 3 : 0) + 7 * settleGlow)
-                        .shadow(color: FlowCommandBadge.ink.opacity(0.50 * settleGlow), radius: 3)
                     }
                     .allowsHitTesting(false).accessibilityHidden(true)
                 }

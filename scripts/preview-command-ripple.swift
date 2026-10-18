@@ -56,7 +56,7 @@ final class RipplePreview: ObservableObject {
             try await Task.sleep(for: .milliseconds(250)); savePNG("command-ripple-active.png")
             try await Task.sleep(for: .seconds(LiquidCommandText.rippleDuration + LiquidCommandText.settleDuration / 2 - 0.25))
             savePNG("command-ripple-settling.png")
-            checks["settling_glow_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-settling.png").path)
+            checks["settling_text_flash_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-settling.png").path)
             try await Task.sleep(for: .seconds(LiquidCommandText.settleDuration / 2 + 0.1)); savePNG("command-ripple-settled.png")
             let plan = try JSONDecoder().decode(AttachmentPlan.self, from: Data(#"{"message":"Here's the issue.","command":"Flow, find the screenshot showing payment error.","request":{"source":"file_search","kind":"image","query":"showing payment error"}}"#.utf8))
             attachments.receive(plan)

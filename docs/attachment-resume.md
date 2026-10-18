@@ -274,3 +274,16 @@ ripple and 400 ms finish retain their timing; the extra glow is confined to the
 finish and remains disabled with Reduce Motion.
 The build and all eight native preview checks passed. The finishing frame was
 visually reviewed, and the updated Replay preview remains open.
+
+## Finishing flash inside the text (October 18)
+
+The user clarified that the finish should glow inside the text, like the ripple
+highlight, and that the whole command sentence should flash once. All outer
+shadows are removed. The finishing pulse now brightens the purple glyph fill
+across all command letters simultaneously, clipped to the cached alpha mask.
+The single 700 ms ripple and 400 ms finish retain their timing. Recipient text
+remains white, and Reduce Motion disables the flash.
+The build and eight native preview checks passed. The flash and settled frames
+were visually reviewed. A pixel comparison found 8,710 changed command pixels,
+zero changed background pixels in the command region and zero changed recipient
+text pixels. The updated Replay preview remains open.

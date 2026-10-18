@@ -8,13 +8,14 @@ caption text. Detection runs on the complete transcript before display cropping.
 This classifier only styles captions; the worker's authoritative command parser,
 message insertion and attachment safeguards are unchanged.
 
-During recording the command has a soft purple glow. When recording ends, a
+During recording the command has a static purple fill. When recording ends, a
 single 700 ms highlight and one smooth crest sweep from left to right,
 with up to 2 points of letter displacement. A Gaussian crest follows the highlight
 without oscillation or trailing ripples, with a gentle fade at either end.
-Once the crest has settled, a brighter purple glow with a broad halo and a tighter inner glow blooms once
-over 400 ms and
-fades to the static highlight. The letters stay still during this finish.
+Once the crest has settled, all command letters flash a bright luminous purple
+once over 400 ms, then fade back to their normal purple. This is a change in the
+glyph fill, using the cached glyph alpha mask, with no outer shadow or halo.
+The recipient message stays white. The letters stay still during this finish.
 The full timing is shared by rendering and animation cleanup.
 There is no replay on each partial recognition update. The glyph alpha image is
 cached per text/width/scale and drawn through narrow Canvas strips, so only the
@@ -28,7 +29,7 @@ and Needs detail for a clarification. The attachment picker repeats the Command
 badge. The full Messages runner passes its own attachment session into the HUD,
 so it observes the same real search as the popup.
 
-Reduce Motion disables the ripple and sweeping highlight while retaining static
+Reduce Motion disables the ripple, sweeping highlight and finishing flash while retaining static
 purple text, weight and the badge. A preview may request reduced motion but can
 never override the system preference to enable motion. No model calls, new
 packages or separately compiled shader resources are involved. The implementation
@@ -50,12 +51,13 @@ existing signed app bundle and permissions are preserved; this is a separate
 review helper using the updated app components.
 
 The preview exports [a GIF](../review/command-ripple.gif), stills for listening,
-mid-ripple, settling glow, settled, ordinary mentions, reduced motion and long commands, and
+mid-ripple, finishing text flash, settled, ordinary mentions, reduced motion
+and long commands, and
 [a scoped report](../review/command-ripple-verification.json). Its frame interval
 is a capture target, not a measured production frame-rate guarantee.
 
 33 Swift tests passed, including new cue-boundary, quotation, negation, Unicode
-and full-context guards. Eight native preview checks passed after the timing/glow adjustment. The exported stills
+and full-context guards. Eight native preview checks passed after the glyph-flash adjustment. The exported stills
 were visually reviewed: command motion/glow, unchanged recipient text, no
 microphone waveform during processing, readable long commands and static reduced
 motion. A pixel comparison between active/settled fixtures also found no changes
