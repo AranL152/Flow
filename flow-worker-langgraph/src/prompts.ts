@@ -106,8 +106,8 @@ export function buildProfilePrompt(): string {
   );
 }
 
-export function buildInstructionPrompt(): string {
-  return (
+export function buildInstructionPrompt(personalization?: string, appContext?: string): string {
+  const prompt = (
     "You are a ghostwriter. The user gives you a voice command describing what text to produce.\n\n" +
     "Examples:\n" +
     '- "reject this person" → Write a polite rejection message\n' +
@@ -118,6 +118,12 @@ export function buildInstructionPrompt(): string {
     'If they say "reject him", you write an actual rejection message like "Thanks for reaching out, but I\'ll have to pass."\n\n' +
     "Output ONLY the final text to send. Nothing else."
   );
+  const context = appContext ? `\nCurrent writing context: ${appContext}\n` : "";
+  const memory = personalization
+    ? "\nUse this user's saved recipient-specific edits as wording/style evidence. " +
+      "Current explicit instructions override history; preserve current facts, dates and intent.\n" + personalization
+    : "";
+  return prompt + context + memory;
 }
 
 export function buildValidationPrompt(): string {

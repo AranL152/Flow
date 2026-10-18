@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { dictationStream } from "./dictation-stream.js";
 import type { Env } from "./types.js";
 import app from "./index.js";
+import { runFlowGraph } from "./graph.js";
 
 const input = { audioB64: "AAAA", audioLanguage: "en", mode: "casual", shortcutsTriggered: [] };
 const encode = new TextEncoder();
@@ -60,4 +61,26 @@ describe("native streamed dictation", () => {
     expect(response.status).toBe(400);
     expect(run).not.toHaveBeenCalled();
   });
+  it("passes the user's current-contact edits into streamed agentic generation", async () => {
+    const run = vi.fn().mockResolvedValue(finished("yo can u check the deck on Friday?"));
+    const personalization = 'Alex correction: formatter wrote "slides" → user sent "deck"';
+    const response = await new Response(dictationStream({ AI: { run } } as unknown as Env,
+      { ...input, audioB64: "", text: "Hey Flow ask for a slides review on Friday", appContext: "Messages, current contact", personalization })).text();
+    const request = run.mock.calls[0][1];
+    expect(request.messages[0].content).toContain(personalization);
+    expect(request.messages[0].content).toContain("Current writing context: Messages, current contact");
+    expect(request.messages[0].content).toContain("Current explicit instructions override history");
+    expect(request.messages[1].content).toBe("ask for a slides review on Friday");
+    expect(response).toContain("event: done");
+  });
+
+  it("passes the same edits into buffered agentic generation", async () => {
+    const run = vi.fn().mockResolvedValue({ response: "yo can u check the deck on Friday?" });
+    const personalization = 'This user writes "deck" to Alex';
+    const result = await runFlowGraph({ ...input, audioB64: "", text: "Hey Flow ask for a slides review on Friday", personalization,
+      env: { AI: { run } } as unknown as Env });
+    expect(result.formattedText).toBe("yo can u check the deck on Friday?");
+    expect(run.mock.calls[0][1].messages[0].content).toContain(personalization);
+  });
+
 });

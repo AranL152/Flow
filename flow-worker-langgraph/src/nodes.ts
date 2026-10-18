@@ -181,7 +181,7 @@ export async function instructNode(
   try {
     const formattedText = await completeChat(
       requireEnv(config),
-      buildInstructionPrompt(),
+      buildInstructionPrompt(state.personalization, state.appContext),
       detectedCommand,
       COMPLETION_OPTIONS
     );
