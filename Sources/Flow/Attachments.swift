@@ -35,6 +35,11 @@ public struct AttachmentCandidate: Identifiable {
     public let fileURL: URL?
     public let imageData: Data?
     public let approximateRecency: Bool
+    /// Query words found by local OCR; never the image's complete extracted text.
+    public let matchedImageText: [String]
+    public var matchDescription: String? {
+        matchedImageText.isEmpty ? nil : "Text: " + matchedImageText.prefix(4).joined(separator: " · ")
+    }
     private let fileSize: Int?
     private let modified: Date?
     private let identity: NSObject?
@@ -42,10 +47,10 @@ public struct AttachmentCandidate: Identifiable {
     init(imageData: Data) {
         filename = "Clipboard image"; sourceLabel = "Image from clipboard"
         fileURL = nil; self.imageData = imageData; approximateRecency = false
-        fileSize = nil; modified = nil; identity = nil
+        fileSize = nil; modified = nil; identity = nil; matchedImageText = []
     }
 
-    public init(fileURL: URL, sourceLabel: String, approximateRecency: Bool = false) throws {
+    public init(fileURL: URL, sourceLabel: String, approximateRecency: Bool = false, matchedImageText: [String] = []) throws {
         var freshURL = fileURL
         freshURL.removeAllCachedResourceValues()
         let values = try freshURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey, .fileResourceIdentifierKey])
@@ -54,7 +59,7 @@ public struct AttachmentCandidate: Identifiable {
             throw AttachmentFailure.unavailable("That file is unavailable or is a link. Choose the original file.")
         }
         self.fileURL = fileURL; imageData = nil; filename = fileURL.lastPathComponent
-        self.sourceLabel = sourceLabel; self.approximateRecency = approximateRecency
+        self.sourceLabel = sourceLabel; self.approximateRecency = approximateRecency; self.matchedImageText = matchedImageText
         fileSize = values.fileSize; modified = values.contentModificationDate
         identity = values.fileResourceIdentifier as? NSObject
     }

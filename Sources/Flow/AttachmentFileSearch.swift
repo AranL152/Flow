@@ -1,18 +1,18 @@
 import Foundation
 
 /// Filename search in the local Spotlight index. File contents never leave the Mac.
-/// Results rank literal filename matches; no image/content inference is implied.
+/// Screenshot text recognition is handled separately by AttachmentImageTextIndex.
 @MainActor
 public final class AttachmentFileSearch {
     private var query: NSMetadataQuery?
     private var observer: NSObjectProtocol?
     private var timeout: Task<Void, Never>?
-    private var continuation: CheckedContinuation<[AttachmentCandidate], Error>?
+    private var continuation: CheckedContinuation<[URL], Error>?
     private var searchID: UUID?
 
     public init() {}
 
-    public static func terms(for text: String) throws -> [String] {
+    public nonisolated static func terms(for text: String) throws -> [String] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let words = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty, words.count <= 12, trimmed.count <= 160,
@@ -26,16 +26,36 @@ public final class AttachmentFileSearch {
 
     public func search(_ text: String, kind: AttachmentRequest.Kind, scopes: [URL]? = nil) async throws -> [AttachmentCandidate] {
         let terms = try Self.terms(for: text)
-        cancel()
-        let id = UUID()
-        searchID = id
         let metadata = NSMetadataQuery()
-        metadata.searchScopes = (scopes ?? [FileManager.default.homeDirectoryForCurrentUser]).map { $0 as Any }
         let predicates = terms.map {
             NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\($0)*")
         }
         // Spotlight rejects an AND node with only one child (an ObjC exception).
         metadata.predicate = predicates.count == 1 ? predicates[0] : NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+        return Self.candidates(from: try await gather(metadata, scopes: scopes), text: text, kind: kind)
+    }
+
+    /// Read only a bounded set of recent screenshot URLs from Spotlight. Generic
+    /// screenshot names cover captures whose screen-capture metadata was lost.
+    public func recentScreenshots(scopes: [URL]? = nil, now: Date = Date(), limit: Int = 24) async throws -> [URL] {
+        let metadata = NSMetadataQuery()
+        let screenshot = NSCompoundPredicate(orPredicateWithSubpredicates: [
+            NSPredicate(format: "%K == 1", "kMDItemIsScreenCapture"),
+            NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "Screenshot*"),
+            NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "Screen Shot*")
+        ])
+        metadata.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [screenshot,
+            NSPredicate(format: "%K >= %@", NSMetadataItemFSContentChangeDateKey, now.addingTimeInterval(-30 * 86400) as NSDate)])
+        let urls = try await gather(metadata, scopes: scopes)
+        return Array(urls.filter { Self.eligiblePath($0) && AttachmentDownloads.matches($0, kind: .image) }.prefix(max(0, min(limit, 24))))
+    }
+
+    private func gather(_ metadata: NSMetadataQuery, scopes: [URL]?) async throws -> [URL] {
+        cancel()
+        try Task.checkCancellation()
+        let id = UUID()
+        searchID = id
+        metadata.searchScopes = (scopes ?? [FileManager.default.homeDirectoryForCurrentUser]).map { $0 as Any }
         metadata.sortDescriptors = [NSSortDescriptor(key: NSMetadataItemFSContentChangeDateKey, ascending: false)]
         query = metadata
         return try await withTaskCancellationHandler {
@@ -51,7 +71,7 @@ public final class AttachmentFileSearch {
                             if let url = item.value(forAttribute: NSMetadataItemURLKey) as? URL { return url }
                             return (item.value(forAttribute: NSMetadataItemPathKey) as? String).map { URL(fileURLWithPath: $0) }
                         }
-                        self.complete(.success(Self.candidates(from: urls, text: text, kind: kind)))
+                        self.complete(.success(urls))
                     }
                 }
                 guard metadata.start() else {
@@ -74,7 +94,7 @@ public final class AttachmentFileSearch {
 
     /// Also validates Spotlight results, which may be stale or point to hidden,
     /// incomplete, unreadable or replaced files. Never recursively scans folders.
-    public static func candidates(from urls: [URL], text: String, kind: AttachmentRequest.Kind) -> [AttachmentCandidate] {
+    public nonisolated static func candidates(from urls: [URL], text: String, kind: AttachmentRequest.Kind) -> [AttachmentCandidate] {
         guard let terms = try? terms(for: text) else { return [] }
         var seen = Set<URL>()
         var results: [AttachmentCandidate] = []
@@ -85,7 +105,7 @@ public final class AttachmentFileSearch {
         }
         for (_, url) in ranked {
             guard url.isFileURL, seen.insert(url.standardizedFileURL).inserted,
-                  !url.pathComponents.contains(where: { $0.hasPrefix(".") || ["Library", "node_modules"].contains($0) || $0.hasSuffix(".app") }),
+                  eligiblePath(url),
                   !["crdownload", "download", "part", "partial", "tmp"].contains(url.pathExtension.lowercased()),
                   terms.allSatisfy({ url.lastPathComponent.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil }),
                   AttachmentDownloads.matches(url, kind: kind) else { continue }
@@ -97,7 +117,11 @@ public final class AttachmentFileSearch {
         return results
     }
 
-    private static func filenameScore(_ url: URL, terms: [String]) -> Int {
+    nonisolated static func eligiblePath(_ url: URL) -> Bool {
+        !url.pathComponents.contains { $0.hasPrefix(".") || ["Library", "node_modules"].contains($0) || $0.hasSuffix(".app") }
+    }
+
+    nonisolated static func filenameScore(_ url: URL, terms: [String]) -> Int {
         func words(_ value: String) -> [String] {
             value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
                 .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
@@ -111,7 +135,7 @@ public final class AttachmentFileSearch {
 
     public func cancel() { complete(.failure(CancellationError())) }
 
-    private func complete(_ result: Result<[AttachmentCandidate], Error>) {
+    private func complete(_ result: Result<[URL], Error>) {
         timeout?.cancel(); timeout = nil
         if let observer { NotificationCenter.default.removeObserver(observer) }
         observer = nil
