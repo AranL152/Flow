@@ -10,12 +10,13 @@ public struct AttachmentPlan: Codable, Equatable, Sendable {
 }
 
 public struct AttachmentRequest: Codable, Equatable, Sendable {
-    public enum Source: String, Codable, Sendable { case clipboard, recentDownload = "recent_download" }
+    public enum Source: String, Codable, Sendable { case clipboard, recentDownload = "recent_download", fileSearch = "file_search" }
     public enum Kind: String, Codable, Sendable { case any, image, pdf, presentation }
     public let source: Source
     public let kind: Kind
+    public let query: String?
 
-    public init(source: Source, kind: Kind) { self.source = source; self.kind = kind }
+    public init(source: Source, kind: Kind, query: String? = nil) { self.source = source; self.kind = kind; self.query = query }
 }
 
 public enum AttachmentFailure: LocalizedError {
@@ -44,7 +45,7 @@ public struct AttachmentCandidate: Identifiable {
         fileSize = nil; modified = nil; identity = nil
     }
 
-    init(fileURL: URL, sourceLabel: String, approximateRecency: Bool = false) throws {
+    public init(fileURL: URL, sourceLabel: String, approximateRecency: Bool = false) throws {
         var freshURL = fileURL
         freshURL.removeAllCachedResourceValues()
         let values = try freshURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey, .fileResourceIdentifierKey])

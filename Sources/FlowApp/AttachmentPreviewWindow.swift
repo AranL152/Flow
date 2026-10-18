@@ -14,9 +14,9 @@ final class AttachmentPreviewWindow {
         panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     }
-    func show(candidateCount: Int) {
+    func show(candidateCount: Int, isSearch: Bool = false) {
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1000, height: 800)
-        let height = min(screen.height - 60, CGFloat(260 + max(1, candidateCount) * 72))
+        let height = min(screen.height - 60, isSearch ? 720 : CGFloat(260 + max(1, candidateCount) * 72))
         panel.setContentSize(NSSize(width: 460, height: height))
         panel.setFrameOrigin(NSPoint(x: screen.maxX - 480, y: screen.minY + 30))
         panel.orderFrontRegardless()

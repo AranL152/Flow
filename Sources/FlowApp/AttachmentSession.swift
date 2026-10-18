@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Flow
+import UniformTypeIdentifiers
 
 /// Captured independently of the text writer: an attachment-only command must
 /// leave existing text and selection untouched.
@@ -37,12 +38,16 @@ final class AttachmentSession: ObservableObject {
     @Published private(set) var pasteRequested = false
     @Published private(set) var attachmentConfirmed = false
     @Published private(set) var needsChoice = false
+    @Published var searchText = ""
+    @Published private(set) var searching = false
     private var clipboard: AttachmentClipboardSnapshot?
     private var clipboardChanged = false
     private let downloads: AttachmentDownloads
     private var timer: Timer?
     private var target: AttachmentPasteTarget?
     private var sessionID = UUID()
+    private let fileSearch = AttachmentFileSearch()
+    private var searchTask: Task<Void, Never>?
     var onDismiss: (() -> Void)?
 
     var selected: AttachmentCandidate? { candidates.first { $0.id == selectedID } }
@@ -79,6 +84,7 @@ final class AttachmentSession: ObservableObject {
 
     func receive(_ plan: AttachmentPlan, board: NSPasteboard = .general) {
         self.plan = plan
+        searchText = plan.request?.query ?? ""
         clipboardChanged = clipboard.map { $0.changeCount != board.changeCount } ?? false
         if plan.request?.source == .recentDownload && timer == nil {
             // Access Downloads only after an explicit voice command. Never
@@ -115,6 +121,9 @@ final class AttachmentSession: ObservableObject {
                 candidates = [try clipboard.resolve(kind: request.kind)]
             case .recentDownload:
                 candidates = try downloads.candidates(kind: request.kind)
+            case .fileSearch:
+                searchFiles()
+                return
             }
             needsChoice = candidates.count > 1 || candidates.first?.approximateRecency == true
             if !needsChoice { selectedID = candidates.first?.id }
@@ -133,7 +142,8 @@ final class AttachmentSession: ObservableObject {
     }
 
     func automaticallyStage(engine: Flow, insertionUnchanged: Bool) async {
-        guard insertionUnchanged, !clipboardChanged, let selected, !selected.approximateRecency,
+        guard plan?.request?.source != .fileSearch,
+              insertionUnchanged, !clipboardChanged, let selected, !selected.approximateRecency,
               target?.matches(engine: engine) == true else { return }
         await stage(engine: engine, activate: false)
     }
@@ -201,7 +211,51 @@ final class AttachmentSession: ObservableObject {
         catch { status = error.localizedDescription }
     }
 
+    func searchFiles() {
+        guard !busy, !pasteRequested, let request = plan?.request, request.source == .fileSearch else { return }
+        searchTask?.cancel(); fileSearch.cancel()
+        candidates = []; selectedID = nil; needsChoice = true; searching = true
+        status = "Searching filenames on this Mac…"
+        let session = sessionID
+        let text = searchText
+        searchTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let found = try await self.fileSearch.search(text, kind: request.kind)
+                guard !Task.isCancelled, self.sessionID == session else { return }
+                self.candidates = found
+                self.status = found.isEmpty
+                    ? "No matching filenames in Spotlight. Try fewer words or choose a file manually."
+                    : "Choose a file to preview, then Add to Messages. Nothing is attached automatically."
+            } catch {
+                guard !Task.isCancelled, self.sessionID == session else { return }
+                self.status = error.localizedDescription
+            }
+            self.searching = false
+        }
+    }
+
+    func chooseFile() {
+        guard !busy, !pasteRequested else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
+        panel.prompt = "Preview attachment"
+        switch plan?.request?.kind {
+        case .image: panel.allowedContentTypes = [.image]
+        case .pdf: panel.allowedContentTypes = [.pdf]
+        case .presentation: panel.allowedContentTypes = [.presentation] + [UTType(filenameExtension: "key")].compactMap { $0 }
+        default: break
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        searchTask?.cancel(); fileSearch.cancel(); searching = false
+        do {
+            let candidate = try AttachmentCandidate(fileURL: url, sourceLabel: "Chosen file")
+            candidates = [candidate]; choose(candidate.id)
+        } catch { status = error.localizedDescription }
+    }
+
     func dismiss() {
+        searchTask?.cancel(); searchTask = nil; fileSearch.cancel(); searching = false; searchText = ""
         sessionID = UUID(); plan = nil; candidates = []; selectedID = nil
         clipboard = nil; target = nil; clipboardChanged = false
         needsChoice = false; status = ""; busy = false; pasteRequested = false; attachmentConfirmed = false

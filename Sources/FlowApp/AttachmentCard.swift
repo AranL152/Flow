@@ -17,26 +17,55 @@ struct AttachmentCard: View {
                         .buttonStyle(.plain).disabled(session.busy).help("Dismiss attachment preview")
                 }
                 Text(plan.command).font(.caption).foregroundStyle(FW.textMuted).textSelection(.enabled)
-                ForEach(session.candidates) { candidate in
-                    Button { session.choose(candidate.id) } label: {
-                        HStack(spacing: 12) {
-                            AttachmentThumbnail(candidate: candidate).frame(width: 52, height: 52)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(candidate.filename).font(.subheadline.weight(.medium)).lineLimit(2)
-                                Text(candidate.sourceLabel + (candidate.approximateRecency ? " · choose to confirm" : ""))
-                                    .font(.caption).foregroundStyle(FW.textMuted)
-                            }
-                            Spacer()
-                            if session.selectedID == candidate.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(FW.accent) }
+                if plan.request?.source == .fileSearch {
+                    HStack {
+                        TextField("Filename words", text: $session.searchText)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { session.searchFiles() }
+                            .disabled(session.busy || session.pasteRequested)
+                        Button("Search") { session.searchFiles() }
+                            .disabled(session.busy || session.pasteRequested)
+                    }
+                    Text("Matches filenames, not what an image depicts. Files stay on your Mac.")
+                        .font(.caption).foregroundStyle(FW.textMuted)
+                    if session.searching { ProgressView().controlSize(.small) }
+                }
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(session.candidates) { candidate in
+                            Button { session.choose(candidate.id) } label: {
+                                HStack(spacing: 12) {
+                                    AttachmentThumbnail(candidate: candidate).frame(width: 52, height: 52)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(candidate.filename).font(.subheadline.weight(.medium)).lineLimit(2)
+                                        Text(candidate.sourceLabel + (candidate.approximateRecency ? " · choose to confirm" : ""))
+                                            .font(.caption).foregroundStyle(FW.textMuted)
+                                    }
+                                    Spacer()
+                                    if session.selectedID == candidate.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(FW.accent) }
+                                }
+                                .padding(10)
+                                .background(session.selectedID == candidate.id ? FW.accent.opacity(0.1) : FW.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }.buttonStyle(.plain).disabled(session.busy || session.pasteRequested)
                         }
-                        .padding(10)
-                        .background(session.selectedID == candidate.id ? FW.accent.opacity(0.1) : FW.surface)
+                    }
+                }
+                .frame(height: min(CGFloat(session.candidates.count) * 82, plan.request?.source == .fileSearch ? 180 : 240))
+                if plan.request?.source == .fileSearch, let selected = session.selected {
+                    AttachmentThumbnail(candidate: selected, previewSize: 640)
+                        .frame(maxWidth: .infinity).frame(height: 140)
+                        .padding(8).background(FW.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }.buttonStyle(.plain).disabled(session.busy || session.pasteRequested)
+                        .accessibilityLabel("Preview of \(selected.filename)")
                 }
                 Text(session.status).font(.caption).foregroundStyle(FW.textSecondary)
                 HStack {
-                    Button("Refresh source") { session.refresh() }.disabled(session.busy || plan.request == nil)
+                    if plan.request?.source == .fileSearch {
+                        Button("Choose file…") { session.chooseFile() }.disabled(session.busy || session.pasteRequested)
+                    } else {
+                        Button("Refresh source") { session.refresh() }.disabled(session.busy || plan.request == nil)
+                    }
                     Spacer()
                     Button("Copy attachment") { session.copySelected() }.disabled(session.selected == nil || session.busy)
                 }.buttonStyle(FWSecondaryButtonStyle())
@@ -54,12 +83,13 @@ struct AttachmentCard: View {
 
 private struct AttachmentThumbnail: View {
     let candidate: AttachmentCandidate
+    var previewSize: CGFloat = 104
     @State private var thumbnail: NSImage?
     var body: some View {
         Image(nsImage: thumbnail ?? fallback).resizable().scaledToFit()
             .task(id: candidate.id) {
                 guard let url = candidate.fileURL else { return }
-                let request = QLThumbnailGenerator.Request(fileAt: url, size: NSSize(width: 104, height: 104), scale: 2, representationTypes: .thumbnail)
+                let request = QLThumbnailGenerator.Request(fileAt: url, size: NSSize(width: previewSize, height: previewSize), scale: 2, representationTypes: .thumbnail)
                 if let representation = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request) {
                     thumbnail = representation.nsImage
                 }

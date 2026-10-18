@@ -791,7 +791,7 @@ final class AppState: ObservableObject {
         attachments.onDismiss = { [weak self] in self?.attachmentPreview?.hide() }
         attachments.receive(plan)
         if attachmentPreview == nil { attachmentPreview = AttachmentPreviewWindow(session: attachments, engine: engine) }
-        attachmentPreview?.show(candidateCount: attachments.candidates.count)
+        attachmentPreview?.show(candidateCount: attachments.candidates.count, isSearch: plan.request?.source == .fileSearch)
     }
 
     func updateLiveCaptions(enabled: Bool) {
