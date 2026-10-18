@@ -1,0 +1,51 @@
+{
+  "kind": "live deployed worker with generated speech; no microphone or Messages automation",
+  "endpoint": "https://base10-proxy.old-resonance-ed75.workers.dev/transcribe-stream",
+  "expected_phrase": "Can you check the slides tomorrow",
+  "checks": {
+    "server_sent_events": true,
+    "asr_matches_generated_speech": true,
+    "transcription_precedes_generation": true,
+    "multiple_actual_model_deltas": true,
+    "terminal_text_matches_accumulated_deltas": true,
+    "first_delta_precedes_completion": true,
+    "no_error": true
+  },
+  "events": [
+    {
+      "event": "transcription",
+      "data": {
+        "text": "Can you check the slides tomorrow?"
+      },
+      "seconds": 1.2773
+    },
+    {
+      "event": "delta",
+      "data": {
+        "text": "Can"
+      },
+      "seconds": 1.7686
+    },
+    {
+      "event": "delta",
+      "data": {
+        "text": " you check the"
+      },
+      "seconds": 1.8118
+    },
+    {
+      "event": "delta",
+      "data": {
+        "text": " slides tomorrow?"
+      },
+      "seconds": 1.8588
+    },
+    {
+      "event": "done",
+      "data": {
+        "text": "Can you check the slides tomorrow?"
+      },
+      "seconds": 1.9062
+    }
+  ]
+}

@@ -26,47 +26,47 @@
     "status": "Simulated captions and measured-level sequence \u00b7 UI verification only"
   },
   "speech": {
-    "audio_finished_seconds": 22.12728202342987,
-    "audio_started_seconds": 18.910526037216187,
+    "audio_finished_seconds": 4.06653106212616,
+    "audio_started_seconds": 2.146228075027466,
     "events": [
       {
         "final": false,
-        "seconds": 19.917932987213135,
+        "seconds": 2.7406610250473022,
         "text": "Can"
       },
       {
         "final": false,
-        "seconds": 20.2601820230484,
+        "seconds": 3.0157910585403442,
         "text": "Can you"
       },
       {
         "final": false,
-        "seconds": 20.701731085777283,
+        "seconds": 3.2317230701446533,
         "text": "Can you check"
       },
       {
         "final": false,
-        "seconds": 21.1370290517807,
+        "seconds": 3.506848096847534,
         "text": "Can you check the"
       },
       {
         "final": false,
-        "seconds": 21.679808020591736,
+        "seconds": 3.8035120964050293,
         "text": "Can you check the slide"
       },
       {
         "final": false,
-        "seconds": 22.140483021736145,
+        "seconds": 4.075005054473877,
         "text": "Can you check the slides"
       },
       {
         "final": false,
-        "seconds": 22.145451068878174,
+        "seconds": 4.078402042388916,
         "text": "Can you check the slides tomorrow"
       },
       {
         "final": true,
-        "seconds": 22.161526083946228,
+        "seconds": 4.088896036148071,
         "text": "Can you check the slides tomorrow"
       }
     ],

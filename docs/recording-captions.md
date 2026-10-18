@@ -14,7 +14,8 @@ before the final pipeline consumes that audio.
 These are unformatted recognition results. Words can revise as more audio
 arrives, and recognition can be wrong. They are not guaranteed verbatim text
 and are not the personalized output. Automatic punctuation is disabled for the
-caption request. The existing final transcription/formatting pipeline is retained.
+caption request. The Auto provider also streams formatted model output after Stop; see
+[streamed dictation](streamed-dictation.md).
 
 The waveform samples measured microphone levels on a clock, including unchanged
 silence. A fixed loudness range and quick attack/gentler release make speech
@@ -67,7 +68,7 @@ Results: [recording verification](../review/recording-verification.json),
 The audio fixture produced eight real recognition updates and a matching final
 sentence. Unit/integration checks cover bounds, end-of-audio reads, preservation
 of final-transcription audio, waveform silence decay and input sanitization.
-337 Rust tests and six Swift tests passed (two Messages tests remain ignored).
+343 Rust tests and 11 Swift tests passed (two Messages tests remain ignored).
 
 macOS blocked System Events UI automation from this editor. The preview's own
 native rendering and recorded state were used instead; this is not an XCUITest
