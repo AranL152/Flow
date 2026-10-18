@@ -49,6 +49,7 @@ final class RipplePreview: ObservableObject {
                 try await Task.sleep(for: .milliseconds(150))
             }
             savePNG("command-ripple-listening.png")
+            checks["recording_cue_stays_plain"] = FlowCommandCaption.detect(in: state.liveTranscript, isRecording: true) == nil
             checks["explicit_cue_detected"] = FlowCommandCaption.detect(in: state.liveTranscript)?.command == "Flow, find the screenshot showing payment error."
             state.isRecording = false; state.isProcessing = true
             // A stale audio sample must not show a microphone waveform in this phase.
@@ -90,7 +91,7 @@ final class RipplePreview: ObservableObject {
             status = "Preview complete · Replay to watch again"
         } catch { status = error.localizedDescription }
         let report: [String: Any] = ["scope": "Native production caption/ripple views with labelled simulated captions and real local OCR. No microphone recording, cloud API calls or Messages changes. Still images and GIF require visual review.",
-            "checks": checks, "frames": frames.count, "frame_interval_ms_target": 50, "status": checks.count == 8 && checks.values.allSatisfy { $0 } ? "ready" : "failed"]
+            "checks": checks, "frames": frames.count, "frame_interval_ms_target": 50, "status": checks.count == 9 && checks.values.allSatisfy { $0 } ? "ready" : "failed"]
         try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: output.appendingPathComponent("command-ripple-verification.json"))
         running = false
     }

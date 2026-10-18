@@ -10,10 +10,14 @@ public struct FlowCommandCaption: Equatable, Sendable {
     private static let reported = try! NSRegularExpression(pattern: #"\b(?:said|says|say|told|tell|quote|quoted|phrase|tutorial|example|type|write|don['’]t|do\s+not|never)\b[^.!?]*$"#, options: [.caseInsensitive])
     private static let singleQuoted = try! NSRegularExpression(pattern: #"(?:^|\s|\(|\[|\{)['‘][^'’]*$"#)
 
-    public static func detect(in transcript: String) -> Self? {
-        guard transcript.utf16.count <= 20000,
+    public static func detect(in transcript: String, isRecording: Bool = false) -> Self? {
+        // Partial live speech remains ordinary caption text. Stop is the explicit
+        // end-of-utterance signal before a command can be visually recognized.
+        guard !isRecording, transcript.utf16.count <= 20000,
               let match = cue.firstMatch(in: transcript, range: NSRange(transcript.startIndex..., in: transcript)),
               let range = Range(match.range, in: transcript) else { return nil }
+        let object = transcript[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        guard !object.isEmpty else { return nil }
         let prefix = String(transcript[..<range.lowerBound])
         let prefixRange = NSRange(prefix.startIndex..., in: prefix)
         guard prefix.filter({ $0 == "\"" }).count % 2 == 0,

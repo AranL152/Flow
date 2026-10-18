@@ -17,6 +17,7 @@ def main():
     work.mkdir(parents=True, exist_ok=True)
     executable = work / 'FlowCommandRipplePreview'
     demo.stop_previous(work, executable)
+    demo.stop_previous(ROOT / '.build/messages-full-demo', ROOT / '.build/messages-full-demo/FlowMessagesFullDemo')
     demo.stop_previous(ROOT / '.build/messages-ocr-check', ROOT / '.build/messages-ocr-check/FlowMessagesOCRCheck')
     subprocess.run(['swift', 'build'], cwd=ROOT, check=True)
     binary_dir = Path(subprocess.check_output(['swift', 'build', '--show-bin-path'], cwd=ROOT, text=True).strip())

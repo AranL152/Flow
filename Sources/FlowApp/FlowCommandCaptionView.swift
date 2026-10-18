@@ -13,7 +13,7 @@ struct FlowCommandCaptionView: View {
     @State private var rippleActive = false
     @State private var played = false
 
-    private var parts: FlowCommandCaption? { FlowCommandCaption.detect(in: transcript) }
+    private var parts: FlowCommandCaption? { FlowCommandCaption.detect(in: transcript, isRecording: isRecording) }
     private var commandStatus: String {
         guard let plan = attachments.plan else { return "Flow command" }
         if plan.clarification != nil { return "Needs detail" }

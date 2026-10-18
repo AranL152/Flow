@@ -354,3 +354,23 @@ two graphemes; the final text, old draft and old attachments were preserved and
 the screenshot was confirmed with alternatives. See the updated full-demo JSON.
 Nothing was sent. The latest successful full run used the configured cloud
 pipeline; the installed app bundle and permissions were preserved.
+
+## Recognize commands visually only after the utterance (October 18)
+
+The user asked what happens when they simply say Flow, and requested that the
+effect wait until the whole command has been spoken. Caption detection now
+returns no command while recording, even after a complete cue has appeared.
+All live words stay white and the badge remains hidden. After Stop, a reserved
+Flow attach/find/search cue with a nonempty object gets the purple split, badge
+and existing single ripple/synchronized glow. Bare cues such as Flow attach
+stay plain. Ordinary Flow mentions, quoted/reported instructions and negation
+retain their guards. This remains a presentation classifier; the worker's
+authoritative attachment parser and action safeguards are unchanged.
+
+All 35 Swift tests and nine local native-preview checks passed. Listening and
+finishing screenshots were visually reviewed: the identical complete command
+is white while recording and purple only afterward. The refreshed Replay
+preview is open. Its launcher stops its checked previous Messages demo helper
+to avoid duplicate candidate popups, preserving the unsent draft and installed
+permissioned app. This verification used simulated captions and real local OCR,
+without microphone recording, new cloud requests or Messages writes.

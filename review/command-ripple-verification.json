@@ -6,6 +6,7 @@
     "long_command_preview_rendered" : true,
     "ordinary_mention_is_not_a_command" : true,
     "real_local_ocr_produces_handoff_candidates" : true,
+    "recording_cue_stays_plain" : true,
     "reduced_motion_preview_rendered" : true,
     "settling_synced_glow_preview_rendered" : true
   },

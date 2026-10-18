@@ -3,12 +3,16 @@
 Explicit “Flow, attach/find/search…” instructions appear on a separate purple,
 semibold line in the existing live-caption card. Recipient text remains white.
 A Flow command badge makes the distinction visible without relying on color.
-Ordinary mentions, quoted/reported instructions and negated cues remain normal
-caption text. Detection runs on the complete transcript before display cropping.
+Ordinary mentions, quoted/reported instructions, negated cues and bare incomplete
+forms such as “Flow, attach” remain normal caption text. Saying “Flow” alone is
+not a command. The reserved pattern is “Flow, attach/find/search…” followed by an
+object. This is a pattern-based cue, not unrestricted intent understanding.
+Detection runs on the complete transcript before display cropping.
 This classifier only styles captions; the worker's authoritative command parser,
 message insertion and attachment safeguards are unchanged.
 
-During recording the command has a static purple fill. When recording ends, a
+During recording all live captions remain plain white, with no command badge.
+After recording stops, an explicit command with an object turns purple and a
 single 700 ms highlight and one smooth crest sweep from left to right,
 with up to 2 points of letter displacement. A Gaussian crest follows the highlight
 without oscillation or trailing ripples, with a gentle fade at either end.
@@ -58,8 +62,9 @@ and long commands, and
 [a scoped report](../review/command-ripple-verification.json). Its frame interval
 is a capture target, not a measured production frame-rate guarantee.
 
-33 Swift tests passed, including new cue-boundary, quotation, negation, Unicode
-and full-context guards. Eight native preview checks passed after the synchronized-glow adjustment. The exported stills
+35 Swift tests passed, including recording-phase gating, incomplete commands,
+quotation, negation, Unicode and full-context guards. Nine native preview checks
+passed after the post-recording recognition adjustment. The exported stills
 were visually reviewed: command motion/glow, unchanged recipient text, no
 microphone waveform during processing, readable long commands and static reduced
 motion. A pixel comparison between active/settled fixtures also found no changes
