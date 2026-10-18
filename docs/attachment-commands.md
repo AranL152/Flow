@@ -21,7 +21,7 @@ model or included in the cloud request.
 | Flow, attach the PDF I just downloaded. | Newest observed matching PDF in Downloads |
 | Flow, attach the latest download. | Newest observed completed/stable regular file |
 | Flow, attach the presentation I just downloaded. | Matching presentation file |
-| Flow, find my robotics presentation. | Local Spotlight filename matches; select a result |
+| Flow, find my robotics presentation. | Ranked local filename matches; top match appended in Messages |
 | Here's the image. Flow, find the beach trip photo. | Message streams; image filename matches appear separately |
 
 Both an attachment-only command and a message followed by a command work. The
@@ -40,10 +40,15 @@ contents and fetching remote attachments are not implemented.
 
 Say part of the filename after the message: “Here's the file. Flow, find my
 robotics presentation.” Flow searches the local Spotlight index in your home
-directory, filters by the requested file type, and shows up to 12 matches with
-their folders and thumbnails. Select a result for a larger preview, then press
-**Add to Messages**. Search never attaches automatically, even for one match.
-The recipient and composer are checked again before pasting.
+directory, filters by the requested file type, and ranks up to 12 matches.
+Exact filename stems beat longer partial names; recency breaks equal-name ties.
+After the message completes, the top match is appended to the same unsent
+Messages composer, then the popup shows it alongside alternatives. Contact,
+focus and selection are checked before pasting. A changed query or target stops
+automatic insertion. Existing selected text/attachments are never overwritten.
+Outside a verified Messages target, selection and manual copy remain available.
+Selecting an alternative previews it; Copy attachment lets the user change it
+manually. Flow does not automatically delete or replace an existing attachment.
 
 The search field can refine filename words without another recording.
 **Choose file…** opens the native picker if a file is not indexed, is on another
@@ -138,7 +143,7 @@ Messages conversation is changed. Replay is available in the window.
 
 - Worker: 95 tests passed; TypeScript checking passed.
 - Rust: 351 tests passed across unit/integration/doc suites; 2 platform tests ignored.
-- Swift: 18 tests passed, including image paste into an isolated native rich-text
+- Swift: 19 tests passed, including image paste into an isolated native rich-text
   composer, clipboard retention, type filtering, file changes and cold-start review.
 - Real Rust → deployed Whisper → LLM pipeline: 7/7 generated-speech cases passed.
   Cases cover message + download, clipboard-only, recipient text, ambiguous
@@ -161,6 +166,36 @@ All 11 native checks passed, including actual indexed matches, multiword query
 refinement, explicit selection for a single result, rendering and cancellation.
 This verification does not paste a search result into a real Messages draft;
 the search path uses the same guarded staging method verified below.
+
+## Full file and screenshot demo in Messages
+
+```sh
+python3 scripts/simulate-imessage-full.py
+python3 scripts/simulate-imessage-full.py --kind file
+python3 scripts/simulate-imessage-full.py --kind screenshot
+```
+
+The default plays both cases with a seven-second pause between them. Generated
+speech feeds real on-device captions and the native speech-level bar. Only real
+LLM chunks enter the actual Messages draft, then the production attachment
+session appends the ranked match and shows the production candidate popup.
+No Return/Send key is produced. Synthetic PDFs and dashboard PNG fixtures live
+under `~/Flow Simulation Files`; screenshot matching uses filenames, not OCR.
+
+The demo adapter inserts Unicode text events to preserve rich native objects.
+It rejects control characters, verifies focus/cursor/text for every chunk, and
+accepts only the equivalent smart-quote substitutions Messages applies. Chunked
+clipboard paste was rejected because Messages added spaces between tokens.
+Normal app source retains its safe final-paste fallback for rich drafts; the
+Unicode streaming adapter currently belongs to this demo runner.
+
+Both actual Messages cases passed all eight checks. The PDF used seven model
+chunks/native writes and 15 caption updates; the screenshot used six writes and
+16 caption updates. Both attached the exact filename match, retained existing
+draft content/objects, and displayed alternatives afterward. The helper and last
+popup stay open. [Full demo report](../review/imessage-full-demo-verification.json).
+The prepared native app's code signature/grants were left unchanged; the helper
+links the updated production objects and embeds the speech usage description.
 
 For a visible replay using the already signed native app:
 

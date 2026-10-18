@@ -177,6 +177,13 @@ final class AttachmentSession: ObservableObject {
         }
         do {
             try candidate.validate()
+            var selection: CFTypeRef?
+            var range = CFRange()
+            guard AXUIElementCopyAttributeValue(target.element, kAXSelectedTextRangeAttribute as CFString, &selection) == .success,
+                  let selection, CFGetTypeID(selection) == AXValueGetTypeID(),
+                  AXValueGetValue(selection as! AXValue, .cfRange, &range), range.length == 0 else {
+                throw AttachmentFailure.unavailable("Place the cursor without selecting existing text or attachments, then add the file.")
+            }
             let before = AXEditMonitorService.attachmentCount(in: target.element)
             let board = NSPasteboard.general
             let previous = (board.pasteboardItems ?? []).map { item in

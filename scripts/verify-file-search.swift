@@ -36,7 +36,7 @@ struct SearchCheck {
                     checks["selection_exposes_preview"] = session.selected?.filename == candidate.filename
                     let engine = Flow(dbPath: ":memory:")
                     await session.automaticallyStage(engine: engine, insertionUnchanged: true)
-                    checks["search_never_auto_attaches"] = !session.pasteRequested
+                    checks["no_target_means_no_auto_paste"] = !session.pasteRequested
                     let view = NSHostingView(rootView: AttachmentCard(session: session, engine: engine).padding(16).background(FW.background))
                     view.frame = NSRect(x: 0, y: 0, width: 500, height: 850)
                     let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)

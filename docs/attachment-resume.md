@@ -6,6 +6,32 @@ Push only to `AranL152/Flow`, never upstream. No coauthor trailers or new branch
 
 ## Filename search and caption follow-up (October 18)
 
+Latest request: full demos in actual Messages, voice → most relevant attachment
+automatically → candidates, for PDFs and screenshots. Both passed. The new runner
+is `python3 scripts/simulate-imessage-full.py` (optional `--kind file` or
+`--kind screenshot`). See `review/imessage-full-demo-verification.json`.
+PDF: 15 caption updates, seven LLM chunks and seven native text writes.
+Screenshot: 16 caption updates, six chunks/writes. Both appended exactly one
+native attachment and preserved existing draft content/objects. Nothing was sent.
+The screenshot popup and both appended files remain in the real unsent draft.
+
+Source now ranks exact filename stems first, then partial-name matches, with
+recency breaking ties. The pipeline auto-appends the top match after completion,
+then shows candidates. It rechecks query/contact/composer and refuses paste over
+a nonempty selection. Alternatives can be previewed/copied, not automatically
+swapped. Screenshot fixtures match names; OCR/vision is still not implemented.
+
+The normal signed app was deliberately not repackaged or restarted, preserving
+new speech grants. The demo helper links the rebuilt production objects and
+embeds a speech usage string; inherited authorization worked without prompts.
+It uses a demo-only Unicode text-event adapter for rich draft streaming. Native
+chunked paste inserted unwanted spaces; Messages smart quotes are acknowledged
+while other characters/cursor/attachment checks remain exact. The normal app's
+rich-draft final-paste fallback remains unchanged. Early failed demo attempts may
+have left partial generated text in the unsent draft; no prior content was cleared.
+
+The paragraphs below describe the earlier manual-selection implementation.
+
 The normal app was opened after diagnosing that only the isolated simulation was
 running (simulation intentionally has no global hotkeys). It uses the default
 hold-Fn shortcut when no saved shortcut exists. Physical key delivery still needs

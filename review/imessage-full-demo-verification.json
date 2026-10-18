@@ -1,0 +1,56 @@
+{
+  "cases": [
+    {
+      "attached_filename": "Orion-review.pdf",
+      "candidates": [
+        "Orion-review.pdf",
+        "Orion-review-notes.pdf",
+        "Orion-review-deck.pdf"
+      ],
+      "caption_updates": 15,
+      "checks": {
+        "alternatives_available": true,
+        "best_filename_selected": true,
+        "command_excluded_from_message": true,
+        "live_captions": true,
+        "native_attachment_confirmed": true,
+        "original_attachments_plus_one": true,
+        "original_draft_preserved": true,
+        "real_llm_chunks_inserted": true
+      },
+      "command": "Flow, find the Orion Review PDF.",
+      "generated_message": "I've got the Orion Review right here",
+      "kind": "file",
+      "llm_chunks": 7,
+      "native_text_writes": 7,
+      "passed": true
+    },
+    {
+      "attached_filename": "Orion-dashboard.png",
+      "candidates": [
+        "Orion-dashboard.png",
+        "Orion-dashboard-notes.png"
+      ],
+      "caption_updates": 16,
+      "checks": {
+        "alternatives_available": true,
+        "best_filename_selected": true,
+        "command_excluded_from_message": true,
+        "live_captions": true,
+        "native_attachment_confirmed": true,
+        "original_attachments_plus_one": true,
+        "original_draft_preserved": true,
+        "real_llm_chunks_inserted": true
+      },
+      "command": "Flow, find the Orion dashboard image.",
+      "generated_message": "I've got the dashboard screenshot right here",
+      "kind": "screenshot",
+      "llm_chunks": 6,
+      "native_text_writes": 6,
+      "passed": true
+    }
+  ],
+  "scope": "Generated speech; actual on-device captions and waveform; real cloud LLM chunks typed into actual Messages; production ranking and automatic attachment append followed by candidate popup. No Send event. Screenshot selection uses filenames, not OCR.",
+  "seconds": 31.65531098842621,
+  "status": "ready"
+}
