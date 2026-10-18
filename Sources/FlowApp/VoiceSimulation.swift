@@ -34,8 +34,52 @@ final class VoiceSimulationModel: ObservableObject {
     private var task: Task<Void, Never>?
     private var events: [[String: Any]] = []
     private var started = Date()
+    private let attachmentDownloads: AttachmentDownloads?
+    var isAttachmentDemo: Bool { attachmentDownloads != nil }
 
-    init(state: AppState) { self.state = state }
+    init(state: AppState, attachmentDownloads: AttachmentDownloads? = nil) {
+        self.state = state; self.attachmentDownloads = attachmentDownloads
+    }
+
+    func startAttachment() {
+        guard !running, let attachmentDownloads else { return }
+        running = true; error = nil; finished = false
+        task = Task {
+            do {
+                events = []; started = Date(); sent = ""
+                let directory = attachmentDownloads.directory
+                let fixture = directory.deletingLastPathComponent().appendingPathComponent("updated-deck.pdf")
+                let latest = directory.appendingPathComponent("Project-review.pdf")
+                try? FileManager.default.removeItem(at: latest)
+                try attachmentDownloads.observe()
+                let board = NSPasteboard(name: .init("com.flow.attachment-simulation.\(UUID())"))
+                defer { board.releaseGlobally() }
+                state.attachments.begin(app: nil, contact: nil, board: board)
+                state.attachments.startObservingDownloads()
+                try FileManager.default.copyItem(at: fixture, to: latest)
+                // A new completed PDF is observed while Flow runs. Its old
+                // document mtime and a newer ZIP must not change the selection.
+                try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1)], ofItemAtPath: latest.path)
+                try attachmentDownloads.observe()
+                try Data("synthetic unrelated download".utf8).write(to: directory.appendingPathComponent("Newer-archive.zip"))
+                state.currentApp = "Messages"; state.targetAppName = "Messages · Alex (simulation)"
+                stage = "Speak a message + ‘Flow, attach…’"
+                try await take(name: "attachment")
+                guard state.attachments.plan?.request?.source == .recentDownload,
+                      state.attachments.selected?.filename == "Project-review.pdf" else {
+                    throw failure("The real pipeline did not resolve the expected PDF: \(state.attachments.status)")
+                }
+                note("attachment_resolved", text: "Project-review.pdf")
+                stage = "Message + matching PDF ready · no real message sent"
+                finished = true; saveReport(status: "passed")
+            } catch {
+                if !Task.isCancelled { self.error = error.localizedDescription; saveReport(status: "failed") }
+            }
+            captions.cancel(); player?.stop(); indicator?.hide()
+            state.isRecording = false; state.isProcessing = false; state.isStreamingOutput = false
+            running = false
+        }
+    }
 
     func start() {
         guard !running else { return }
@@ -134,7 +178,7 @@ final class VoiceSimulationModel: ObservableObject {
         }
         captions.onStatus = { [weak self] status in self?.state.liveCaptionStatus = status }
         await captions.start()
-        guard captions.isListening else { throw failure(state.liveCaptionStatus) }
+        if !captions.isListening { note("captions_unavailable", text: state.liveCaptionStatus) }
         if indicator == nil { indicator = RecordingIndicatorWindow(appState: state) }
         indicator?.show()
         player = try AVAudioPlayer(contentsOf: audioURL)
@@ -208,6 +252,9 @@ final class VoiceSimulationModel: ObservableObject {
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "--verification-report"), args.indices.contains(index + 1) else { return }
         let result: [String: Any] = ["status": status, "error": error ?? "", "events": events,
+            "attachment_command": state.attachments.plan?.command ?? "",
+            "attachment_filename": state.attachments.selected?.filename ?? "",
+            "attachment_source": state.attachments.selected?.sourceLabel ?? "",
             "edited_examples": state.engine.styleStats?.edited ?? 0, "final_draft": draft,
             "saved_edits": savedEdits.map { ["before": $0.before, "after": $0.after, "contact": "Alex", "scripted": $0.scripted] as [String: Any] },
             "saved_examples_available": savedEdits.count,
@@ -217,6 +264,38 @@ final class VoiceSimulationModel: ObservableObject {
             "scope": "isolated native simulation; generated speech; scripted edit and local send; actual Rust/cloud pipeline; no Messages AX insertion"]
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: URL(fileURLWithPath: args[index + 1]), options: .atomic)
+        }
+    }
+}
+
+private struct AttachmentSimulationConversation: View {
+    @ObservedObject var model: VoiceSimulationModel
+    @ObservedObject var state: AppState
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Label("Alex", systemImage: "person.crop.circle.fill").font(.title2.weight(.semibold))
+                Text("Simulated conversation").font(.caption).foregroundStyle(FW.textMuted)
+                Divider()
+                Label("You said", systemImage: "mic.fill").font(.caption.weight(.semibold))
+                Text(state.liveTranscript.isEmpty ? state.liveCaptionStatus : state.liveTranscript)
+                    .font(.callout).frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    .padding(10).fwSection()
+                Text(model.stage).font(.caption).foregroundStyle(FW.textSecondary)
+                HStack {
+                    Text(model.draftPhase)
+                    Spacer()
+                    Text("\(model.chunkCount) chunks")
+                }.font(.caption).foregroundStyle(FW.textMuted)
+                TextEditor(text: $model.draft).font(.body).frame(height: 65).padding(8).fwSection().disabled(model.running)
+                AttachmentCard(session: state.attachments, engine: state.engine)
+                if let error = model.error { Text(error).foregroundStyle(FW.danger).font(.caption) }
+                if !model.sent.isEmpty { Text("Simulated send: \(model.sent)").font(.caption) }
+                Button("Simulated Send") { model.simulatedSend() }.disabled(model.running || !model.canSend || model.draft.isEmpty)
+                Toggle("Readable playback", isOn: $model.readableStreaming).font(.caption).disabled(model.running)
+                Text("Generated speech · real model chunks · synthetic files. No real messages are sent.")
+                    .font(.caption2).foregroundStyle(FW.textMuted)
+            }.padding(20)
         }
     }
 }
@@ -232,12 +311,17 @@ struct VoiceSimulationView: View {
                         .font(.caption).foregroundStyle(FW.textSecondary)
                 }
                 Spacer()
-                Button(model.running ? "Running…" : "Reset and replay") { model.start() }.disabled(model.running)
+                Button(model.running ? "Running…" : "Replay") {
+                    if model.isAttachmentDemo { model.startAttachment() } else { model.start() }
+                }.disabled(model.running)
             }.padding(18).background(FW.surface)
             Divider()
             HStack(spacing: 0) {
                 RecordView().environmentObject(model.state).frame(minWidth: 560)
                 Divider()
+                if model.isAttachmentDemo {
+                    AttachmentSimulationConversation(model: model, state: model.state).frame(width: 400)
+                } else {
                 VStack(alignment: .leading, spacing: 18) {
                     Label("Alex", systemImage: "person.crop.circle.fill").font(.title2.weight(.semibold))
                     Text("Simulated conversation · Project review").font(.caption).foregroundStyle(FW.textMuted)
@@ -274,21 +358,27 @@ struct VoiceSimulationView: View {
                     }.font(.caption).foregroundStyle(FW.textMuted)
                     TextEditor(text: $model.draft).font(.body).frame(height: 100).disabled(model.running)
                         .padding(8).fwSection()
+                    AttachmentCard(session: model.state.attachments, engine: model.state.engine)
                     if !model.running && model.canSend && model.draft != model.state.lastTranscription {
                         Text("Your edit will be remembered for Alex when you send.")
                             .font(.caption).foregroundStyle(FW.accent)
                     }
                     HStack {
                         Button("Simulated Send") { model.simulatedSend() }.disabled(model.running || !model.canSend || model.draft.isEmpty)
-                        Button("Dictate again") { model.dictateAgain() }.disabled(model.running)
+                        Button("Dictate again") {
+                            if model.isAttachmentDemo { model.startAttachment() } else { model.dictateAgain() }
+                        }.disabled(model.running)
                     }
-                    Text("The first correction is scripted and labelled. No real messages are sent. Replay resets this isolated memory.")
+                    Text(model.isAttachmentDemo
+                         ? "Generated voice + real model stream. Files are synthetic fixtures in an isolated Downloads folder. No real messages are sent."
+                         : "The first correction is scripted and labelled. No real messages are sent. Replay resets this isolated memory.")
                         .font(.caption2).foregroundStyle(FW.textMuted)
                 }.padding(24).frame(width: 360)
+                }
             }
         }
         .background(FW.background)
-        .task { model.start() }
+        .task { if model.isAttachmentDemo { model.startAttachment() } else { model.start() } }
         .onDisappear { model.stop() }
     }
     private func savedEditCard(_ edit: SimulationSavedEdit) -> some View {

@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import Flow
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var verificationWindow: NSWindow?
@@ -15,7 +16,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { @MainActor in
             NSApp.setActivationPolicy(.regular)
             if ProcessInfo.processInfo.arguments.contains("--voice-simulation") {
-                let model = VoiceSimulationModel(state: AppState())
+                let args = ProcessInfo.processInfo.arguments
+                var downloads: AttachmentDownloads?
+                if args.contains("--attachment-simulation"), let index = args.firstIndex(of: "--simulation-audio-dir"), args.indices.contains(index + 1) {
+                    downloads = AttachmentDownloads(directory: URL(fileURLWithPath: args[index + 1]).appendingPathComponent("Downloads"))
+                }
+                let model = VoiceSimulationModel(state: AppState(attachmentDownloads: downloads), attachmentDownloads: downloads)
                 let host = NSHostingController(rootView: VoiceSimulationView(model: model))
                 let window = NSWindow(contentViewController: host)
                 window.title = "Flow · Live Voice Simulation"

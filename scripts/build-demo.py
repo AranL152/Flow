@@ -12,6 +12,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--endpoint", default="http://127.0.0.1:8787/format-stream")
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--bundle", type=Path, help="Separate app bundle path, preserving existing running demos")
     parser.add_argument("--open", action="store_true")
     parser.add_argument("--native", action="store_true", help="Build the normal Flow app with live captions")
     parser.add_argument("--recording-preview", action="store_true", help="Open an isolated preview of the real recording UI")
@@ -27,7 +28,7 @@ def main():
         if args.native:
             subprocess.run(["swift", "build"], cwd=ROOT/"FlowHelper", check=True)
     binary_dir = Path(subprocess.check_output(["swift", "build", "--show-bin-path"], cwd=ROOT, text=True).strip())
-    bundle = ROOT / (".build/Flow.app" if args.native else ".build/Flow Demo.app")
+    bundle = (args.bundle or ROOT / (".build/Flow.app" if args.native else ".build/Flow Demo.app")).resolve()
     contents = bundle / "Contents"
     (contents / "MacOS").mkdir(parents=True, exist_ok=True)
     (contents / "Resources").mkdir(exist_ok=True)

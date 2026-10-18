@@ -39,11 +39,11 @@ struct AttachmentCard: View {
                     Button("Refresh source") { session.refresh() }.disabled(session.busy || plan.request == nil)
                     Spacer()
                     Button("Copy attachment") { session.copySelected() }.disabled(session.selected == nil || session.busy)
-                    Button(session.pasteRequested ? "Review in Messages" : "Add to Messages") {
+                }.buttonStyle(FWSecondaryButtonStyle())
+                Button(session.pasteRequested ? "Review in Messages" : "Add to Messages") {
                         if session.pasteRequested { session.revealTarget() }
                         else { Task { await session.stage(engine: engine) } }
-                    }.disabled(session.selected == nil || session.busy)
-                }.buttonStyle(FWSecondaryButtonStyle())
+                }.buttonStyle(FWSecondaryButtonStyle()).disabled(session.selected == nil || session.busy)
             }
             .padding(16).fwSection()
             .accessibilityIdentifier("attachment-preview")
