@@ -76,7 +76,7 @@ struct FlowCommandCaptionView: View {
         .onChange(of: reduceMotion) { _, reduced in if reduced { rippleActive = false } }
         .task(id: rippleStart) {
             guard let started = rippleStart else { return }
-            do { try await Task.sleep(for: .milliseconds(650)) } catch { return }
+            do { try await Task.sleep(for: .seconds(LiquidCommandText.rippleDuration)) } catch { return }
             guard !Task.isCancelled, started == rippleStart else { return }
             rippleActive = false
         }

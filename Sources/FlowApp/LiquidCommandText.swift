@@ -4,6 +4,7 @@ import SwiftUI
 /// when its text/width changes; animation never relays out or moves message text.
 @MainActor
 struct LiquidCommandText: View {
+    static let rippleDuration: TimeInterval = 1.1
     let command: String
     let width: CGFloat
     let rippleStart: Date?
@@ -37,19 +38,19 @@ struct LiquidCommandText: View {
             .overlay(alignment: .topLeading) {
                 if let raster, renderedKey == key {
                     TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !animating || reduceMotion)) { timeline in
-                        let elapsed = rippleStart.map { timeline.date.timeIntervalSince($0) } ?? 1
-                        let progress = animating && !reduceMotion ? min(1, max(0, elapsed / 0.65)) : 1
+                        let elapsed = rippleStart.map { timeline.date.timeIntervalSince($0) } ?? Self.rippleDuration
+                        let progress = animating && !reduceMotion ? min(1, max(0, elapsed / Self.rippleDuration)) : 1
                         Canvas { context, size in
                             var image = context.resolve(Image(decorative: raster, scale: displayScale))
                             let bounds = CGRect(origin: .zero, size: size)
                             let active = progress > 0 && progress < 1
-                            let center = -36 + (size.width + 72) * progress
+                            let center = -90 + (size.width + 180) * progress
                             image.shading = active
                                 ? .linearGradient(Gradient(colors: [FlowCommandBadge.ink, FlowCommandBadge.ink,
                                                                    Color(red: 0.96, green: 0.90, blue: 1),
                                                                    FlowCommandBadge.ink, FlowCommandBadge.ink]),
-                                                  startPoint: CGPoint(x: center - 65, y: 0),
-                                                  endPoint: CGPoint(x: center + 65, y: 0))
+                                                  startPoint: CGPoint(x: center - 85, y: 0),
+                                                  endPoint: CGPoint(x: center + 85, y: 0))
                                 : .color(FlowCommandBadge.ink)
                             if !active {
                                 context.draw(image, in: bounds)
@@ -58,8 +59,10 @@ struct LiquidCommandText: View {
                                 // of bouncing whole words or affecting the message.
                                 for x in stride(from: CGFloat(0), to: size.width, by: 3) {
                                     let distance = x + 1.5 - center
-                                    let envelope = exp(-(distance * distance) / (2 * 42 * 42))
-                                    let offset = sin(distance / 11 - progress * 10) * 1.65 * envelope
+                                    let envelope = exp(-(distance * distance) / (2 * 60 * 60))
+                                    // A broader, slower swell gives the letters a liquid flow.
+                                    let fade = min(1, progress / 0.12, (1 - progress) / 0.12)
+                                    let offset = sin(distance / 16 - progress * 8) * 2.6 * envelope * fade
                                     var slice = context
                                     slice.clip(to: Path(CGRect(x: x, y: 0, width: min(3, size.width - x), height: size.height)))
                                     slice.translateBy(x: 0, y: offset)
@@ -67,7 +70,7 @@ struct LiquidCommandText: View {
                                 }
                             }
                         }
-                        .shadow(color: FlowCommandBadge.ink.opacity(animating && !reduceMotion ? 0.48 : 0.18), radius: animating && !reduceMotion ? 5 : 2)
+                        .shadow(color: FlowCommandBadge.ink.opacity(animating && !reduceMotion ? 0.55 : 0.18), radius: animating && !reduceMotion ? 6 : 2)
                     }
                     .allowsHitTesting(false).accessibilityHidden(true)
                 }

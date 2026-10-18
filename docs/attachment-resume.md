@@ -233,3 +233,14 @@ after selection. Both actual panel snapshots were visually reviewed for even
 checks passed. See review/file-search-unselected.png, file-search-preview.png
 and file-search-verification.json. No microphone, model API, Messages paste,
 permission prompts or installed-bundle replacement was involved.
+
+## Slower, stronger ripple (October 18)
+
+The user liked the effect and requested a slower ripple with stronger flow. The
+pass now lasts 1.1 seconds instead of 650 ms, with a broader wave, up to 2.6 points
+of glyph displacement and a slightly stronger glow. A short fade keeps the ends
+smooth. Renderer and cleanup share one duration, and the native preview waits for
+the longer pass before capturing its settled state.
+The build and all seven native preview checks passed; the active frame was
+visually reviewed for the stronger wave and readable letters. The refreshed
+Replay preview remains open. No model APIs or Messages writes were used.

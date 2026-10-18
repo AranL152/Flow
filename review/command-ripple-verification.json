@@ -9,7 +9,7 @@
     "reduced_motion_preview_rendered" : true
   },
   "frame_interval_ms_target" : 50,
-  "frames" : 40,
+  "frames" : 45,
   "scope" : "Native production caption\/ripple views with labelled simulated captions and real local OCR. No microphone recording, cloud API calls or Messages changes. Still images and GIF require visual review.",
   "status" : "ready"
 }

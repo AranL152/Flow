@@ -53,8 +53,8 @@ final class RipplePreview: ObservableObject {
             state.isRecording = false; state.isProcessing = true
             // A stale audio sample must not show a microphone waveform in this phase.
             state.smoothedAudioLevel = 0.9
-            try await Task.sleep(for: .milliseconds(250)); savePNG("command-ripple-active.png")
-            try await Task.sleep(for: .milliseconds(500)); savePNG("command-ripple-settled.png")
+            try await Task.sleep(for: .milliseconds(450)); savePNG("command-ripple-active.png")
+            try await Task.sleep(for: .seconds(LiquidCommandText.rippleDuration - 0.45 + 0.1)); savePNG("command-ripple-settled.png")
             let plan = try JSONDecoder().decode(AttachmentPlan.self, from: Data(#"{"message":"Here's the issue.","command":"Flow, find the screenshot showing payment error.","request":{"source":"file_search","kind":"image","query":"showing payment error"}}"#.utf8))
             attachments.receive(plan)
             checks["badge_uses_real_search_state"] = attachments.searching
