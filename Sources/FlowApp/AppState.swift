@@ -278,13 +278,10 @@ final class AppState: ObservableObject {
     }
 
     func requestAccessibilityPermission() {
-        let started = globeKeyHandler?.startListening(prompt: true) ?? false
-        if started {
-            isAccessibilityEnabled = true
-            // Restart helper now that we have permission
-            restartHelperIfNeeded()
-        } else {
-            refreshAccessibilityStatus()
+        let granted = GlobeKeyHandler.requestAccessibilityPermission()
+        refreshAccessibilityStatus()
+        if !granted, let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
         }
     }
 

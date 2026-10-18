@@ -200,6 +200,11 @@ final class GlobeKeyHandler {
         accessibilityTrusted(prompt: false)
     }
 
+    /// Only invoked by an explicit Enable action, even when no fallback tap exists.
+    static func requestAccessibilityPermission() -> Bool {
+        accessibilityTrusted(prompt: true)
+    }
+
     private static func accessibilityTrusted(prompt: Bool) -> Bool {
         let promptKey = "AXTrustedCheckOptionPrompt" as CFString
         let options = [promptKey: prompt] as CFDictionary

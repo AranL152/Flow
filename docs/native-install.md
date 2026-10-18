@@ -31,6 +31,9 @@ signatures from scratch copies proves the helper executable is unchanged.
 
 If access is unavailable, enable this Flow app under System Settings → Privacy
 & Security → Accessibility. Microphone permission is requested by recording.
+The explicit Enable action requests access and opens that pane independently
+of the optional fallback hotkey handler; it previously did nothing when that
+handler was absent. Startup continues to check access without prompting.
 Apple Speech Recognition is optional for the new cloud captions; it is used by
 the existing on-device caption fallback. Nothing sends an iMessage automatically.
 
