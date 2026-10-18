@@ -1,0 +1,21 @@
+{
+  "checks" : {
+    "cancel_stops_pending_search" : true,
+    "dismiss_clears_search_and_selection" : true,
+    "multiple_filename_words_refine_results" : true,
+    "native_preview_rendered" : true,
+    "native_session_resolves_search" : true,
+    "real_home_scope_finds_indexed_fixtures" : true,
+    "requested_type_is_respected" : true,
+    "search_never_auto_attaches" : true,
+    "selection_exposes_preview" : true,
+    "selection_is_required" : true,
+    "single_match_still_requires_selection" : true
+  },
+  "filenames" : [
+    "flowsearch2512d25508-notes.pdf",
+    "flowsearch2512d25508-sketch.pdf"
+  ],
+  "passed" : true,
+  "scope" : "Real local Spotlight index and native attachment selection; synthetic files only. No Messages paste or Send. No permission requests."
+}

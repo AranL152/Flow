@@ -41,6 +41,8 @@ def main():
         {"text": "Please attach the invoice when you reply.", "literal": True},
         {"text": "Flow, attach the one I meant earlier.", "clarification": True, "empty": True},
         {"text": "You can reach me at my email. Flow, attach the PDF I just downloaded.", "source": "recent_download", "kind": "pdf", "snippet": True},
+        {"text": "Here's the presentation. Flow, find my robotics presentation.", "source": "file_search", "kind": "presentation", "query": "robotics"},
+        {"text": "Flow, find the beach trip image.", "source": "file_search", "kind": "image", "query": "beach trip", "empty": True},
     ]
     results = []
     engine = lib.flow_init(b":memory:")
@@ -80,7 +82,10 @@ def main():
                     if case.get("clarification"):
                         checks["clarifies_without_action"] = bool(plan and plan.get("clarification") and not plan.get("request"))
                     else:
-                        checks["correct_source_and_type"] = bool(plan and plan.get("request") == {"source": case["source"], "kind": case["kind"]})
+                        expected = {"source": case["source"], "kind": case["kind"]}
+                        if "query" in case:
+                            expected["query"] = case["query"]
+                        checks["correct_source_and_type"] = bool(plan and plan.get("request") == expected)
                 if case.get("empty"):
                     checks["no_invented_message"] = output == "" and not chunks
                 if case.get("snippet"):

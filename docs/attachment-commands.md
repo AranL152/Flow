@@ -21,6 +21,8 @@ model or included in the cloud request.
 | Flow, attach the PDF I just downloaded. | Newest observed matching PDF in Downloads |
 | Flow, attach the latest download. | Newest observed completed/stable regular file |
 | Flow, attach the presentation I just downloaded. | Matching presentation file |
+| Flow, find my robotics presentation. | Local Spotlight filename matches; select a result |
+| Here's the image. Flow, find the beach trip photo. | Message streams; image filename matches appear separately |
 
 Both an attachment-only command and a message followed by a command work. The
 parser tolerates ASR punctuation such as “Flow. Attach…”. The Whisper vocabulary
@@ -29,8 +31,30 @@ the generated-speech check. This is not a guarantee of ASR accuracy for all voic
 
 “Please attach the invoice when you reply” remains a message to the recipient.
 Quoted/reported instructions and negated cues do not select a file. Unsupported
-or ambiguous objects produce a clarification with no file action. General file
-search, screenshot OCR and cloud attachments remain future work.
+or ambiguous objects produce a clarification with no file action. Filename search
+uses an explicit “Flow, find…”, “Flow, search for…” or a named “Flow, attach…”
+command. Describing what is pictured (image recognition/OCR), searching document
+contents and fetching remote attachments are not implemented.
+
+## Find an older file
+
+Say part of the filename after the message: “Here's the file. Flow, find my
+robotics presentation.” Flow searches the local Spotlight index in your home
+directory, filters by the requested file type, and shows up to 12 matches with
+their folders and thumbnails. Select a result for a larger preview, then press
+**Add to Messages**. Search never attaches automatically, even for one match.
+The recipient and composer are checked again before pasting.
+
+The search field can refine filename words without another recording.
+**Choose file…** opens the native picker if a file is not indexed, is on another
+volume or the search is too broad. Matching is by filename words, not semantic
+understanding of an image. File contents and local paths are not uploaded.
+Spotlight results are rechecked locally; hidden files, incomplete downloads,
+symlinks, app bundles and Library files are excluded. Search cancels when the
+preview closes or another search starts, with a six-second timeout.
+
+Search capability is advertised separately by the native client. Older clients
+continue receiving the original clipboard/download plans and clarifications.
 
 ## Preview and Messages staging
 
@@ -75,6 +99,10 @@ The app no longer scans Downloads at launch or during ordinary recording. It
 first accesses that folder after an explicit recent-download command. Observation
 stops if access fails. Speech replay checks existing authorization and does not
 open permission dialogs; requesting speech access is an explicit Settings action.
+If captions say to enable speech recognition, use Flow → Settings → General →
+**Enable speech recognition for captions**. Microphone permission alone does not
+grant this access. If previously denied, that action instead opens Speech
+Recognition settings. Recording still does not trigger permission requests.
 
 For file access, macOS has Privacy & Security → Files & Folders and Full Disk
 Access. Enable the app actually named in the dialog; permissions are per app.
@@ -108,13 +136,15 @@ Messages conversation is changed. Replay is available in the window.
 
 ## Verification
 
-- Worker: 84 tests passed; TypeScript checking passed.
-- Rust: 350 tests passed across unit/integration/doc suites; 2 platform tests ignored.
-- Swift: 16 tests passed, including image paste into an isolated native rich-text
+- Worker: 95 tests passed; TypeScript checking passed.
+- Rust: 351 tests passed across unit/integration/doc suites; 2 platform tests ignored.
+- Swift: 18 tests passed, including image paste into an isolated native rich-text
   composer, clipboard retention, type filtering, file changes and cold-start review.
-- Real Rust → deployed Whisper → LLM pipeline: 5/5 generated-speech cases passed.
+- Real Rust → deployed Whisper → LLM pipeline: 7/7 generated-speech cases passed.
   Cases cover message + download, clipboard-only, recipient text, ambiguous
   missing context, and a configured email combined with an attachment command.
+  Two additional cases verify message-plus-search and attachment-only filename
+  searches, including exact search terms through the Rust decoder.
 - A Rust integration test verifies that sending an edited message with an
   attachment saves the wording for Alex while excluding the attachment command.
 
@@ -122,6 +152,15 @@ Messages conversation is changed. Replay is available in the window.
 [email results](../review/shortcut-stream-verification.json).
 The first failing audio run is retained in
 [initial results](../review/attachment-stream-initial-verification.json).
+
+`python3 scripts/verify-file-search.py` indexes disposable PDFs in a dedicated
+home folder, tests real Spotlight results and the native selection/preview flow,
+and removes the fixtures. It never pastes into Messages or requests permissions.
+See [file search results](../review/file-search-verification.json).
+All 11 native checks passed, including actual indexed matches, multiword query
+refinement, explicit selection for a single result, rendering and cancellation.
+This verification does not paste a search result into a real Messages draft;
+the search path uses the same guarded staging method verified below.
 
 After the restart, the prepared GUI demo was reopened without rebuilding or
 re-signing. It passed, presented five real model chunks and selected the matching

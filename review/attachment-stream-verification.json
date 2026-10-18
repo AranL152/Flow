@@ -1,7 +1,7 @@
 {
   "scope": "Generated speech, real Rust + deployed Workers AI pipeline, isolated user. No actual Downloads selection, Messages insertion or sending.",
   "passed": true,
-  "cases": 5,
+  "cases": 7,
   "results": [
     {
       "input": "Here's the deck. Flow, attach the PDF I just downloaded.",
@@ -123,6 +123,61 @@
         "no_command_in_output": true,
         "correct_source_and_type": true,
         "configured_email_preserved": true
+      },
+      "passed": true
+    },
+    {
+      "input": "Here's the presentation. Flow, find my robotics presentation.",
+      "raw_transcription": "Here's the presentation. Flow, find my robotics presentation.",
+      "output": "I am sharing the presentation with you.",
+      "chunks": [
+        "I",
+        " am",
+        " sharing",
+        " the presentation with",
+        " you."
+      ],
+      "plan": {
+        "message": "Here's the presentation.",
+        "command": "Flow, find my robotics presentation.",
+        "request": {
+          "source": "file_search",
+          "kind": "presentation",
+          "query": "robotics"
+        },
+        "clarification": null
+      },
+      "checks": {
+        "completed": true,
+        "deltas_match_final": true,
+        "separate_plan": true,
+        "no_command_in_output": true,
+        "correct_source_and_type": true
+      },
+      "passed": true
+    },
+    {
+      "input": "Flow, find the beach trip image.",
+      "raw_transcription": "Flow, find the beach trip image.",
+      "output": "",
+      "chunks": [],
+      "plan": {
+        "message": "",
+        "command": "Flow, find the beach trip image.",
+        "request": {
+          "source": "file_search",
+          "kind": "image",
+          "query": "beach trip"
+        },
+        "clarification": null
+      },
+      "checks": {
+        "completed": true,
+        "deltas_match_final": true,
+        "separate_plan": true,
+        "no_command_in_output": true,
+        "correct_source_and_type": true,
+        "no_invented_message": true
       },
       "passed": true
     }

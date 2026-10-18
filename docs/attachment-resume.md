@@ -4,6 +4,33 @@ The user asked to implement “Flow, attach…” and then needed to restart the
 Continue the same conversation; implementation is committed on the fork's main.
 Push only to `AranL152/Flow`, never upstream. No coauthor trailers or new branches.
 
+## Filename search and caption follow-up (October 18)
+
+The normal app was opened after diagnosing that only the isolated simulation was
+running (simulation intentionally has no global hotkeys). It uses the default
+hold-Fn shortcut when no saved shortcut exists. Physical key delivery still needs
+the user's check.
+
+The user then requested matching older files with preview/selection. The native
+app now supports local Spotlight filename search via “Flow, find my robotics
+presentation”, query refinement and a native file-picker fallback. Search results
+require selection and Add to Messages, even for a single match. No recursive
+file scan, content/image understanding or remote file upload is implemented.
+Clipboard and recent-download behavior is preserved. The updated worker version
+is `4082e438-703d-4ada-b7a3-c6e5c35e68cf`, with capability gating for old clients.
+
+Live captions were gated by the separate Speech Recognition permission. Errors
+and Settings now distinguish not requested, denied and restricted. Only the
+explicit Enable button requests permission; denied access links to system
+settings. No automatic permission request was added.
+
+Verification: 95 worker tests plus typecheck, 351 Rust tests (2 ignored), 18 Swift
+tests, 7/7 generated-speech pipeline cases and 11/11 real Spotlight/native preview
+checks passed. The normal app was rebuilt/repackaged once after testing, then
+reopened at `.build/Flow Attachments.app`; the older simulation bundle was left
+unchanged. Caption authorization still requires the user's explicit Settings
+action. No new Messages paste or Send was performed during the search checks.
+
 ## Completed
 
 - Explicit voice command parsing before formatting, with separate inert source
