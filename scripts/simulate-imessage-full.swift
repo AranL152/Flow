@@ -11,15 +11,19 @@ private final class DemoMessageStream {
     private let app: NSRunningApplication
     private let composer: AXUIElement
     private var expected: String
+    private let originalLength: Int
     private let attachmentCount: Int
     private var output = ""
+    private var pending = ""
+    var insertedText: String { output }
+    private(set) var largestWrite = 0
     private(set) var writes = 0
 
     init(app: NSRunningApplication, composer: AXUIElement) throws {
         self.app = app; self.composer = composer
         guard let text = AXEditMonitorService.textValueIncludingEmpty(composer),
               let count = AXEditMonitorService.attachmentCount(in: composer) else { throw demoError("Cannot read the existing Messages draft.") }
-        expected = text; attachmentCount = count
+        expected = text; originalLength = canonicalQuotes(text).utf16.count; attachmentCount = count
         var range = CFRange(location: (text as NSString).length, length: 0)
         guard let value = AXValueCreate(.cfRange, &range),
               AXUIElementSetAttributeValue(composer, kAXSelectedTextRangeAttribute as CFString, value) == .success else {
@@ -28,18 +32,41 @@ private final class DemoMessageStream {
     }
 
     func append(_ delta: String) async throws {
-        guard !delta.isEmpty else { return }
+        try Task.checkCancellation()
+        pending += delta
+        // Messages handles tiny Unicode packets more reliably than isolated
+        // keystrokes. Keep at most one grapheme waiting between display frames.
+        while pending.count >= 2 {
+            let frame = String(pending.prefix(2))
+            try await insert(frame)
+            pending.removeFirst(frame.count)
+        }
+        if pending.last.map({ ".,!?;:\n".contains($0) }) == true { try await finish() }
+    }
+
+    func finish() async throws {
+        try Task.checkCancellation()
+        guard !pending.isEmpty else { return }
+        try await insert(pending)
+        pending = ""
+    }
+
+    private func insert(_ delta: String) async throws {
+        try Task.checkCancellation()
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier else {
             throw demoError("Messages lost foreground focus after \(writes) text updates.")
         }
         guard let focused = AXEditMonitorService.getFocusedTextElement(pid: app.processIdentifier), CFEqual(focused, composer) else {
             throw demoError("The composer lost focus after \(writes) text updates.")
         }
-        guard let actual = AXEditMonitorService.textValueIncludingEmpty(composer), canonicalQuotes(actual) == canonicalQuotes(expected) else {
-            throw demoError("The draft changed after \(writes) text updates. Further insertion stopped.")
+        guard let actual = AXEditMonitorService.textValueIncludingEmpty(composer) else {
+            throw demoError("The draft became unreadable after \(writes) text updates. Further insertion stopped.")
+        }
+        guard canonicalQuotes(actual) == canonicalQuotes(expected) else {
+            throw demoError("The draft changed after \(writes) text updates. \(mismatch(expected: expected, observed: actual)) Further insertion stopped.")
         }
         guard AXEditMonitorService.attachmentCount(in: composer) == attachmentCount else {
-            throw demoError("Attachments changed after \(writes) text updates. Further insertion stopped.")
+            throw demoError("Attachments changed after \(writes) text updates (expected \(attachmentCount), observed \(AXEditMonitorService.attachmentCount(in: composer).map(String.init) ?? "unavailable")). Further insertion stopped.")
         }
         var selection: CFTypeRef?
         guard AXUIElementCopyAttributeValue(composer, kAXSelectedTextRangeAttribute as CFString, &selection) == .success,
@@ -67,11 +94,20 @@ private final class DemoMessageStream {
         for _ in 0..<40 {
             try await Task.sleep(for: .milliseconds(20))
             if let actual = AXEditMonitorService.textValueIncludingEmpty(composer), canonicalQuotes(actual) == canonicalQuotes(next) {
-                expected = actual; output += delta; writes += 1
+                expected = actual; output += delta; writes += 1; largestWrite = max(largestWrite, delta.count)
                 return
             }
         }
-        throw demoError("Messages did not confirm the new text. Further insertion stopped.")
+        let observedAfterWrite = AXEditMonitorService.textValueIncludingEmpty(composer) ?? ""
+        throw demoError("Messages did not confirm text update \(writes + 1). \(mismatch(expected: next, observed: observedAfterWrite)) Further insertion stopped.")
+    }
+
+    private func mismatch(expected: String, observed: String) -> String {
+        let wanted = Array(canonicalQuotes(expected).utf16), actual = Array(canonicalQuotes(observed).utf16)
+        let first = zip(wanted, actual).enumerated().first(where: { $0.element.0 != $0.element.1 })?.offset ?? min(wanted.count, actual.count)
+        guard first >= originalLength else { return "The original draft changed." }
+        func unit(_ units: [UInt16]) -> String { first < units.count ? String(format: "U+%04X", units[first]) : "end" }
+        return "Flow output offset \(first - originalLength): expected \(unit(wanted)), observed \(unit(actual)); lengths \(wanted.count)/\(actual.count)."
     }
 }
 
@@ -153,7 +189,7 @@ final class FullMessagesDemo {
                 try await speak(kind, folder: folder)
                 let pcm = try Data(contentsOf: folder.appendingPathComponent(kind + ".pcm"))
                 state.isProcessing = true
-                var output = "", chunks = 0, rawOutput = "", rawChunks = 0
+                var output = "", chunks = 0, rawOutput = "", rawChunks = 0, largestDisplayChunk = 0
                 var firstFrame: Date?, lastFrame: Date?
                 var plan: AttachmentPlan?
                 let queue = AsyncThrowingStream<DictationStreamEvent, Error>.makeStream()
@@ -171,7 +207,7 @@ final class FullMessagesDemo {
                     switch event {
                     case .delta(let delta):
                         guard state.engine.activeMessagesContact == contact else { throw demoError("The conversation changed during streaming.") }
-                        chunks += 1; output += delta
+                        chunks += 1; output += delta; largestDisplayChunk = max(largestDisplayChunk, delta.count)
                         if firstFrame == nil { firstFrame = Date() }; lastFrame = Date()
                         state.isStreamingOutput = true
                         try await writer.append(delta)
@@ -180,6 +216,7 @@ final class FullMessagesDemo {
                         guard final == output.trimmingCharacters(in: .whitespacesAndNewlines) else { throw demoError("The model stream was not complete.") }
                     }
                 }
+                try await writer.finish()
                 guard let plan, plan.request?.source == .fileSearch else { throw demoError("The voice command did not resolve a filename search.") }
                 session.receive(plan)
                 await session.automaticallyStage(engine: state.engine, insertionUnchanged: true)
@@ -209,11 +246,15 @@ final class FullMessagesDemo {
                         && MessagesAttachmentSnapshot.read(composer)?.text == snapshot.text
                         && AXEditMonitorService.attachmentCount(in: composer) == after
                 }
+                let revealSeconds = lastFrame?.timeIntervalSince(firstFrame ?? Date()) ?? 0
+                let minimumRevealSeconds = output.count <= 240 ? Double(max(0, output.count - 1)) * 0.035 : 0.2
                 var checks: [String: Bool] = [
                     "live_captions": captionUpdates > 0,
                     "command_effect_detected": FlowCommandCaption.detect(in: state.liveTranscript) != nil,
-                    "real_llm_chunks_inserted": rawChunks > 1 && writer.writes == chunks && rawOutput == output,
-                    "paced_display_frames": chunks > 1 && (lastFrame?.timeIntervalSince(firstFrame ?? Date()) ?? 0) >= 0.2,
+                    "real_llm_chunks_inserted": rawChunks > 1 && writer.writes > 1 && writer.insertedText == output && rawOutput == output,
+                    "paced_display_frames": chunks > 1 && revealSeconds >= minimumRevealSeconds,
+                    "small_display_chunks": largestDisplayChunk <= 4,
+                    "small_native_writes": writer.largestWrite <= 2,
                     "original_draft_preserved": original != nil && textNow.map { canonicalQuotes($0).hasPrefix(canonicalQuotes(original!)) } == true,
                     "original_attachments_plus_one": before != nil && after == before! + 1,
                     "best_filename_selected": session.selected?.filename == expectedFile,
@@ -225,7 +266,7 @@ final class FullMessagesDemo {
                 preview?.show(candidateCount: session.candidates.count, isSearch: true)
                 results.append(["kind": kind, "generated_message": output, "command": plan.command,
                     "caption_updates": captionUpdates, "llm_chunks": rawChunks, "display_frames": chunks, "native_text_writes": writer.writes,
-                    "display_reveal_seconds": lastFrame?.timeIntervalSince(firstFrame ?? Date()) ?? 0,
+                    "display_reveal_seconds": revealSeconds, "largest_display_chunk": largestDisplayChunk, "largest_native_write": writer.largestWrite,
                     "attached_filename": session.selected?.filename ?? "", "candidates": session.candidates.map(\.filename),
                     "replacement": replacementDetails, "checks": checks, "passed": checks.values.allSatisfy { $0 }])
                 save("running")
@@ -268,6 +309,9 @@ final class FullMessagesDemo {
 
     private func makeScreenshots(in folder: URL) throws {
         for (filename, notes) in [("Orion-dashboard.png", false), ("Orion-dashboard-notes.png", true)] {
+            // Replays may still have this file attached in Messages. Leave the
+            // source intact instead of triggering a native attachment refresh.
+            if FileManager.default.fileExists(atPath: folder.appendingPathComponent(filename).path) { continue }
             let image = NSImage(size: NSSize(width: 900, height: 540))
             image.lockFocus()
             NSColor(calibratedWhite: 0.96, alpha: 1).setFill(); NSRect(x: 0, y: 0, width: 900, height: 540).fill()

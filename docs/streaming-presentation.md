@@ -2,8 +2,10 @@
 
 `DictationPresentation.smooth` sits between genuine Rust/model events and the
 native UI. Receiving continues independently; it is not slowed by display pacing.
-Ordinary text appears in two-character frames about 45 ms apart, with a short
-punctuation pause. Large backlogs use larger frames to catch up. Frames preserve
+Ordinary text appears one grapheme at a time about 40 ms apart (roughly 25
+characters per second), with an extra 80 ms at commas/colons/semicolons and 160 ms
+at sentence punctuation or newlines. Backlogs above 240 graphemes use small
+catch-up frames capped at four graphemes, avoiding large visual jumps. Frames preserve
 Unicode graphemes and metadata order; completion waits until all received text
 has been presented. Errors discard queued presentation; cancellation stops both
 tasks. Display time is deliberately different from model generation latency.
@@ -16,8 +18,23 @@ The native app still requires a safe Accessibility insertion path for incrementa
 writes into another app. Its existing final-paste fallback remains for rich drafts
 without a writable selected-text range. The Messages demo uses the previously
 verified Unicode-event writer to preserve existing native attachment objects.
+It combines adjacent display graphemes into native writes of at most two
+graphemes, flushing the final remainder and punctuation. This keeps small native
+inserts reliable without speeding up the reveal. A buffered grapheme is never
+treated as inserted: final verification compares the acknowledged native text to
+the complete model output.
 
 Verification: `swift test` includes burst splitting, Unicode fidelity, event order,
-steady presentation intervals, cancellation and upstream failure. The Messages
-runner records raw provider chunk count, display frame count, native write count
-and presentation duration separately.
+steady presentation intervals, bounded catch-up frames, cancellation and upstream
+failure. All 34 Swift tests passed after the pacing adjustment. The Messages
+runner records raw provider chunk count, display frame count, largest display
+chunk, native write size/count and presentation duration separately. Its checks enforce
+the slower reveal for short messages, a four-grapheme limit on display chunks
+and a two-grapheme limit on native writes. Replays reuse existing screenshot
+fixtures instead of rewriting source files that may already be attached.
+
+The latest real Messages screenshot run passed all 12 checks: six genuine model
+chunks became 44 single-grapheme display frames and 22 native writes over about
+1.82 seconds, compared with 1.17 seconds in the prior replay. Final text and
+existing native attachments were preserved; nothing was sent. See
+[the scoped report](../review/imessage-full-demo-verification.json).

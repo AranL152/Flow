@@ -81,8 +81,9 @@ draft and appends a synthetic screenshot. It never sends. Unlike the isolated
 visual preview, this path makes real ASR/LLM requests. Existing text and files
 remain intact, and the installed permissioned app bundle is not replaced.
 
-The October 18 run passed ten checks: 16 live-caption updates detected the real
-Flow cue, six model chunks were paced into 23 native writes over about 1.05
-seconds, and the screenshot was confirmed with an alternative candidate.
+The latest October 18 run passed 12 checks: 16 live-caption updates detected the
+real Flow cue, six model chunks became 44 small display frames and 22 native
+writes over about 1.82 seconds, and the screenshot was confirmed with an
+alternative candidate. The reveal is paced more slowly for readability.
 See review/imessage-full-demo-verification.json. The processing label is now
 centered with balanced spinner space and a visible spinner on the dark pill.

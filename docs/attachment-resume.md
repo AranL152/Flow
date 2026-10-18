@@ -327,3 +327,30 @@ confirmed, with an alternative available. Existing text and native attachments
 were preserved; the draft and candidate picker remain open, and nothing was sent.
 This full run used the configured cloud pipeline, unlike local-only UI checks.
 The existing installed app bundle and permissions were preserved.
+
+## Smoother streamed output (October 18)
+
+The user found the real LLM reveal too fast and abrupt. Shared presentation now
+reveals ordinary messages one grapheme every 40 ms, with 80 ms comma/colon/
+semicolon pauses and 160 ms sentence/newline pauses. Catch-up frames are bounded
+to four graphemes. Model receipt remains independent, event order and Unicode
+are preserved, and cancellation/errors still stop buffered output. All 34 Swift
+tests passed, including the added long-burst jump limit.
+
+Initial native checks stopped conservatively on draft/attachment changes; single
+grapheme Unicode-event inserts were unreliable in this Messages draft. The demo
+writer now combines adjacent display frames into native inserts of at most two
+graphemes, flushes punctuation and the final remainder, and verifies acknowledged
+text against the model output before staging the attachment. Focus, selection,
+text and attachment guards remain. Error diagnostics report mismatch positions
+and code units without printing the existing draft. Replays also leave existing
+screenshot fixture files intact instead of rewriting attached sources.
+
+A local native-only pacing check passed with 22 writes over about 1.84 seconds,
+without model calls. The subsequent genuine screenshot demo passed all 12 checks:
+six provider chunks became 44 single-grapheme display frames and 22 native writes
+over 1.82 seconds (previous replay: 1.17 seconds). Maximum native write size was
+two graphemes; the final text, old draft and old attachments were preserved and
+the screenshot was confirmed with alternatives. See the updated full-demo JSON.
+Nothing was sent. The latest successful full run used the configured cloud
+pipeline; the installed app bundle and permissions were preserved.
