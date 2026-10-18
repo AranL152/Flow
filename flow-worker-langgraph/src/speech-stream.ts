@@ -10,15 +10,18 @@ export async function speechStream(request: Request, env: Env): Promise<Response
     return Response.json({ error: "Expected mono PCM16 at 8–48 kHz" }, { status: 400 });
   }
   try {
-    // The binding's older batch-only schema requires audio even for WebSockets.
+    // WebSocket model parameters are strings, unlike the batch model schema.
     const input = {
-      encoding: "linear16" as const, sample_rate: rate, channels: 1,
-      language: "en", interim_results: true, punctuate: true,
-      smart_format: false, endpointing: "300", keyterm: "Flow",
+      encoding: "linear16", sample_rate: String(rate), channels: "1",
+      language: "en", interim_results: "true", punctuate: "true",
+      smart_format: "false", endpointing: "300", keyterm: "Flow",
     };
     const response = await env.AI.run("@cf/deepgram/nova-3", input as unknown as Ai_Cf_Deepgram_Nova_3_Input, { websocket: true });
     const upstream = response.webSocket;
-    if (!upstream) return Response.json({ error: "Real-time speech unavailable" }, { status: 502 });
+    if (!upstream) {
+      console.warn("Speech upgrade unavailable", response.status, (await response.text()).slice(0, 1000));
+      return Response.json({ error: "Real-time speech unavailable" }, { status: 502 });
+    }
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     server.accept(); upstream.accept();

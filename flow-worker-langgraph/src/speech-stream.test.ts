@@ -17,6 +17,6 @@ describe("real-time speech upgrade", () => {
     const run = vi.fn().mockResolvedValue(new Response("unavailable", { status: 503 }));
     const response = await speechStream(new Request("https://flow/speech-stream?sample_rate=16000", { headers: { Upgrade: "websocket" } }), { AI: { run } } as unknown as Env);
     expect(response.status).toBe(502);
-    expect(run).toHaveBeenCalledWith("@cf/deepgram/nova-3", expect.objectContaining({ encoding: "linear16", sample_rate: 16000, interim_results: true }), { websocket: true });
+    expect(run).toHaveBeenCalledWith("@cf/deepgram/nova-3", expect.objectContaining({ encoding: "linear16", sample_rate: "16000", interim_results: "true" }), { websocket: true });
   });
 });
