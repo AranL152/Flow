@@ -30,6 +30,9 @@ final class AppState: ObservableObject {
     @Published var liveTranscript = ""
     @Published var liveCaptionStatus = "Listening…"
     private let speechCaptions = LiveSpeechCaptions()
+    private let cloudSpeech = CloudSpeechStream()
+    private var recordingUsesCloudSpeech = false
+    private var cloudHasTranscript = false
     private var captionTask: Task<Void, Never>?
     var isVoiceSimulation: Bool { ProcessInfo.processInfo.arguments.contains("--voice-simulation") }
     var liveCaptionsEnabled: Bool {
@@ -536,6 +539,8 @@ final class AppState: ObservableObject {
             streamedInsertion?.onInterrupted = { [weak self] in self?.streamTask?.cancel() }
         }
         liveTranscript = ""
+        cloudSpeech.cancel(); cloudHasTranscript = false
+        recordingUsesCloudSpeech = false
         liveCaptionStatus = liveCaptionsEnabled ? "Listening…" : "Live captions are off"
 
         log("🎤 [RECORDING] Starting recording - App: \(currentApp), Mode: \(currentMode.displayName)")
@@ -561,6 +566,16 @@ final class AppState: ObservableObject {
             let engineStart = CFAbsoluteTimeGetCurrent()
             if self.engine.startRecording() {
                 self.startLiveCaptions()
+                self.recordingUsesCloudSpeech = self.recordingUsesStreaming && self.engine.supportsRealtimeCloudSpeech
+                if self.recordingUsesCloudSpeech {
+                    self.cloudSpeech.onText = { [weak self] text in
+                        guard let self else { return }
+                        self.cloudHasTranscript = true
+                        if self.liveCaptionsEnabled { self.liveTranscript = text }
+                    }
+                    self.cloudSpeech.onFailure = { [weak self] in self?.cloudHasTranscript = false }
+                    self.cloudSpeech.start()
+                }
                 self.log("⏱️ [TIMING] engine.startRecording: \(Int((CFAbsoluteTimeGetCurrent() - engineStart) * 1000))ms")
                 self.log("⏱️ [TIMING] TOTAL: \(Int((CFAbsoluteTimeGetCurrent() - totalStart) * 1000))ms")
 
@@ -591,6 +606,7 @@ final class AppState: ObservableObject {
                         let smoothingFactor: Float = 0.8
                         self.smoothedAudioLevel = self.smoothedAudioLevel * (1 - smoothingFactor) + newLevel * smoothingFactor
                         self.speechCaptions.feed(from: self.engine)
+                        if self.recordingUsesCloudSpeech { self.cloudSpeech.feed(from: self.engine) }
                     }
                 }
             } else {
@@ -623,7 +639,7 @@ final class AppState: ObservableObject {
         let duration = engine.stopRecording()
         captionTask?.cancel()
         if duration > 0 { speechCaptions.finish(from: engine) }
-        else { speechCaptions.cancel() }
+        else { speechCaptions.cancel(); cloudSpeech.cancel() }
         isRecording = false
 
         // Restore volume immediately (was muted to prevent feedback)
@@ -713,6 +729,7 @@ final class AppState: ObservableObject {
                 self.streamedInsertion = nil
                 self.stopStreamInputMonitor()
                 self.streamTask = nil
+                self.cloudSpeech.cancel()
                 self.isStreamingOutput = false
                 self.refreshHistory()
                 self.finishProcessing()
@@ -721,10 +738,19 @@ final class AppState: ObservableObject {
                 if !self.streamTargetUnchanged || insertion?.interrupted == true { throw CancellationError() }
                 var lastWrite = Date.distantPast
                 var completed = false
-                for try await event in DictationPresentation.smooth(self.engine.transcribeStream(appName: appName)) {
+                let stopped = ContinuousClock.now
+                let transcript = self.recordingUsesCloudSpeech ? await self.cloudSpeech.finish(from: self.engine) : nil
+                try Task.checkCancellation()
+                self.log("⏱️ [CLOUD SPEECH] Finalization: \(stopped.duration(to: .now)); real-time transcript: \(transcript != nil)")
+                var receivedFirstDelta = false
+                for try await event in DictationPresentation.smooth(self.engine.transcribeStream(appName: appName, finalTranscript: transcript)) {
                     try Task.checkCancellation()
                     switch event {
                     case .delta(let delta):
+                        if !receivedFirstDelta {
+                            receivedFirstDelta = true
+                            self.log("⏱️ [CLOUD SPEECH] Stop to first displayed LLM delta: \(stopped.duration(to: .now))")
+                        }
                         self.streamedOutput += delta
                         self.isStreamingOutput = true
                         if let insertion, Date().timeIntervalSince(lastWrite) >= 0.04 {
@@ -810,7 +836,10 @@ final class AppState: ObservableObject {
     private func startLiveCaptions() {
         captionTask?.cancel(); speechCaptions.cancel()
         guard liveCaptionsEnabled else { return }
-        speechCaptions.onText = { [weak self] text, _ in self?.liveTranscript = text }
+        speechCaptions.onText = { [weak self] text, _ in
+            guard let self, !self.cloudHasTranscript else { return }
+            self.liveTranscript = text
+        }
         speechCaptions.onStatus = { [weak self] status in self?.liveCaptionStatus = status }
         captionTask = Task { [weak self] in
             guard let self else { return }

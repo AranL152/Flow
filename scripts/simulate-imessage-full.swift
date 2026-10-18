@@ -125,6 +125,8 @@ final class FullMessagesDemo {
     private let state = AppState()
     private let session: AttachmentSession
     private let captions = LiveSpeechCaptions()
+    private let cloudSpeech = CloudSpeechStream()
+    private var cloudCaptionReceived = false
     private var preview: AttachmentPreviewWindow?
     private var indicator: RecordingIndicatorWindow?
     private var player: AVAudioPlayer?
@@ -189,13 +191,16 @@ final class FullMessagesDemo {
                 try await speak(kind, folder: folder)
                 let pcm = try Data(contentsOf: folder.appendingPathComponent(kind + ".pcm"))
                 state.isProcessing = true
+                let stopped = Date()
+                let realtimeTranscript = await cloudSpeech.finish()
+                let finalizationMs = Date().timeIntervalSince(stopped) * 1000
                 var output = "", chunks = 0, rawOutput = "", rawChunks = 0, largestDisplayChunk = 0
                 var firstFrame: Date?, lastFrame: Date?
                 var plan: AttachmentPlan?
                 let queue = AsyncThrowingStream<DictationStreamEvent, Error>.makeStream()
                 let receiving = Task { @MainActor in
                     do {
-                        for try await event in state.engine.transcribeAudioStream(pcm16: pcm, sampleRate: 16000, appName: "Messages", contactName: contact) {
+                        for try await event in state.engine.transcribeAudioStream(pcm16: pcm, sampleRate: 16000, appName: "Messages", contactName: contact, finalTranscript: realtimeTranscript) {
                             if case .delta(let text) = event { rawChunks += 1; rawOutput += text }
                             queue.continuation.yield(event)
                         }
@@ -271,6 +276,8 @@ final class FullMessagesDemo {
                     try bitmap.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("attachment-popup.png"))
                 }
                 results.append(["kind": kind, "generated_message": output, "command": plan.command,
+                    "used_realtime_cloud_asr": realtimeTranscript != nil, "asr_finalization_ms": finalizationMs,
+                    "stop_to_first_display_ms": firstFrame.map { $0.timeIntervalSince(stopped) * 1000 } ?? -1,
                     "caption_updates": captionUpdates, "llm_chunks": rawChunks, "display_frames": chunks, "native_text_writes": writer.writes,
                     "display_reveal_seconds": revealSeconds, "largest_display_chunk": largestDisplayChunk, "largest_native_write": writer.largestWrite,
                     "attached_filename": session.selected?.filename ?? "", "candidates": session.candidates.map(\.filename),
@@ -292,7 +299,16 @@ final class FullMessagesDemo {
         let file = try AVAudioFile(forReading: audioURL)
         let rate = file.processingFormat.sampleRate
         captionUpdates = 0; state.liveTranscript = ""; state.isRecording = true; state.isProcessing = false
-        captions.onText = { [weak self] text, _ in self?.state.liveTranscript = text; self?.captionUpdates += 1 }
+        cloudSpeech.start()
+        cloudCaptionReceived = false
+        cloudSpeech.onText = { [weak self] text in
+            self?.cloudCaptionReceived = true; self?.state.liveTranscript = text; self?.captionUpdates += 1
+        }
+        cloudSpeech.onFailure = { [weak self] in self?.cloudCaptionReceived = false }
+        captions.onText = { [weak self] text, _ in
+            guard let self, !self.cloudCaptionReceived else { return }
+            self.state.liveTranscript = text; self.captionUpdates += 1
+        }
         captions.onStatus = { [weak self] text in self?.state.liveCaptionStatus = text }
         await captions.start()
         guard captions.isListening else { throw demoError(state.liveCaptionStatus) }
@@ -304,6 +320,7 @@ final class FullMessagesDemo {
             try file.read(into: buffer)
             let samples = Array(UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength)))
             captions.append(samples: samples, sampleRate: UInt32(rate))
+            cloudSpeech.append(samples: samples, sampleRate: UInt32(rate))
             let rms = sqrt(samples.reduce(Float(0)) { $0 + $1 * $1 } / Float(max(1, samples.count)))
             state.audioLevel = min(1, rms * 3); state.smoothedAudioLevel = state.audioLevel
             state.recordingDuration = UInt64(Date().timeIntervalSince(start) * 1000)
