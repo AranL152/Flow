@@ -4,7 +4,7 @@ import Foundation
 /// genuine model deltas are revealed, and completion waits for their display.
 public enum DictationPresentation {
     public static func smooth(_ source: AsyncThrowingStream<DictationStreamEvent, Error>) -> AsyncThrowingStream<DictationStreamEvent, Error> {
-        smooth(source, interval: .milliseconds(45))
+        smooth(source, interval: .milliseconds(40))
     }
 
     static func smooth(_ source: AsyncThrowingStream<DictationStreamEvent, Error>, interval: Duration) -> AsyncThrowingStream<DictationStreamEvent, Error> {
@@ -31,7 +31,12 @@ public enum DictationPresentation {
                         try Task.checkCancellation()
                         if case .terminated = continuation.yield(event) { break }
                         if case .delta(let text) = event {
-                            let pause: Duration = text.last.map { ".,!?;:\n".contains($0) } == true ? .milliseconds(70) : .zero
+                            let pause: Duration
+                            switch text.last {
+                            case ".", "!", "?", "\n": pause = .milliseconds(160)
+                            case ",", ";", ":": pause = .milliseconds(80)
+                            default: pause = .zero
+                            }
                             nextUpdate = clock.now.advanced(by: interval + pause)
                         } else { nextUpdate = nil }
                     }
@@ -77,9 +82,9 @@ private actor PresentationBuffer {
         if let error { throw error }
         guard let event = events.first else { return nil }
         if case .delta(let text) = event {
-            // Small, grapheme-safe frames at ordinary lengths. Catch up on long
-            // bursts rather than making a large dictation take minutes to read.
-            let count = min(24, max(2, (text.count + 89) / 90))
+            // Reveal ordinary messages one grapheme at a time. Bound catch-up
+            // to four graphemes so long provider bursts never become big jumps.
+            let count = min(4, max(1, (text.count + 239) / 240))
             var end = text.index(text.startIndex, offsetBy: min(count, text.count))
             if let punctuation = text[..<end].firstIndex(where: { ".,!?;:\n".contains($0) }) {
                 end = text.index(after: punctuation)

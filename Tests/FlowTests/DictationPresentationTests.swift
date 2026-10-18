@@ -13,7 +13,7 @@ final class DictationPresentationTests: XCTestCase {
             switch event {
             case .delta(let frame):
                 XCTAssertFalse(completed)
-                XCTAssertLessThanOrEqual(frame.count, 2)
+                XCTAssertEqual(frame.count, 1)
                 frames.append(frame)
             case .completed(let final):
                 completed = true
@@ -70,10 +70,37 @@ final class DictationPresentationTests: XCTestCase {
         for try await event in DictationPresentation.smooth(source) {
             if case .delta = event { times.append(clock.now) }
         }
-        XCTAssertEqual(times.count, 4)
+        XCTAssertEqual(times.count, 8)
         for (before, after) in zip(times, times.dropFirst()) {
-            XCTAssertGreaterThanOrEqual(before.duration(to: after), .milliseconds(40))
+            XCTAssertGreaterThanOrEqual(before.duration(to: after), .milliseconds(35))
         }
+    }
+
+    func testLongBurstsCatchUpWithoutLargeVisualJumps() async throws {
+        let text = String(repeating: "abcd", count: 300)
+        let source = AsyncThrowingStream<DictationStreamEvent, Error> { c in
+            c.yield(.delta(text)); c.yield(.completed(text)); c.finish()
+        }
+        var output = ""
+        var largestFrame = 0
+        var completed = false
+        for try await event in DictationPresentation.smooth(source, interval: .zero) {
+            switch event {
+            case .delta(let frame):
+                XCTAssertFalse(completed)
+                XCTAssertFalse(frame.isEmpty)
+                largestFrame = max(largestFrame, frame.count)
+                XCTAssertLessThanOrEqual(frame.count, 4)
+                output += frame
+            case .completed(let final):
+                completed = true
+                XCTAssertEqual(output, final)
+            default: XCTFail("Unexpected event")
+            }
+        }
+        XCTAssertTrue(completed)
+        XCTAssertGreaterThan(largestFrame, 1)
+        XCTAssertEqual(output, text)
     }
 
     func testUpstreamFailureDoesNotBecomeCompletion() async {
