@@ -11,6 +11,7 @@ import SwiftUI
 @MainActor
 final class RecordingIndicatorWindow {
     private let window: NSPanel
+    private var visibility = UUID()
 
     init(appState: AppState) {
         let view = RecordingIndicatorView()
@@ -27,20 +28,22 @@ final class RecordingIndicatorWindow {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
-        panel.setFrame(NSRect(x: 0, y: 0, width: 400, height: 32), display: false)
+        panel.setFrame(NSRect(x: 0, y: 0, width: 500, height: 150), display: false)
 
         window = panel
         positionWindow()
     }
 
     func show() {
+        visibility = UUID()
+        let session = visibility
         window.alphaValue = 0
         positionWindow()
         window.orderFrontRegardless()
 
         // Small delay to ensure layout is settled before animating
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { [weak self] in
-            guard let self else { return }
+            guard let self, self.visibility == session else { return }
             // Reposition after layout settles to fix first-show centering
             self.positionWindow()
             NSAnimationContext.runAnimationGroup { context in
@@ -52,6 +55,8 @@ final class RecordingIndicatorWindow {
     }
 
     func hide() {
+        visibility = UUID()
+        let session = visibility
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.4
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
@@ -61,10 +66,11 @@ final class RecordingIndicatorWindow {
             var frame = window.frame
             frame.origin.y -= 15
             window.animator().setFrame(frame, display: true)
-        } completionHandler: {
-            self.window.orderOut(nil)
-            self.window.alphaValue = 1
+        } completionHandler: { [weak self] in
             Task { @MainActor in
+                guard let self, self.visibility == session else { return }
+                self.window.orderOut(nil)
+                self.window.alphaValue = 1
                 self.positionWindow() // Reset position for next show
             }
         }
@@ -83,58 +89,60 @@ final class RecordingIndicatorWindow {
     }
 }
 
-private struct RecordingIndicatorView: View {
+struct RecordingIndicatorView: View {
     @EnvironmentObject var appState: AppState
-    @State private var pulse = false
-
-    var showPill: Bool {
-        appState.isRecording || appState.isProcessing || appState.isInitializingModel
-    }
-
     var body: some View {
-        HStack(spacing: FW.spacing6) {
-            // Left side: Circle or Spinner (fixed 14x14 to prevent shifts)
-            ZStack {
-                // Show pulsing dot when recording or idle (always present to avoid disappearing)
-                Circle()
-                    .fill(appState.isRecording ? FW.recording : FW.accent)
-                    .frame(width: 8, height: 8)
-                    .opacity((appState.isProcessing && !appState.isRecording) ? 0 : (pulse ? 0.6 : 1.0))
-                    .animation(.linear(duration: 0.15), value: appState.isRecording) // Smooth color transition
-
-                // Show spinner when processing (overlaid)
-                if appState.isProcessing && !appState.isRecording {
+        VStack(spacing: 10) {
+            if appState.liveCaptionsEnabled && !appState.isInitializingModel {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mic.fill")
+                        Text(appState.isRecording ? "YOU’RE SAYING" : "YOU SAID")
+                        Spacer()
+                        if appState.isRecording { Text("LIVE").foregroundStyle(FW.recording) }
+                    }
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.5))
+                    Text(appState.liveTranscript.isEmpty ? appState.liveCaptionStatus : String(appState.liveTranscript.suffix(160)))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white.opacity(appState.liveTranscript.isEmpty ? 0.5 : 0.95))
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                        .contentTransition(.opacity)
+                        .accessibilityIdentifier("recording-live-transcript")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(width: 440)
+                .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.88)))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+            }
+            HStack(spacing: 10) {
+                if appState.isProcessing || appState.isInitializingModel {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .controlSize(.small)
-                        .tint(.white.opacity(0.9))
+                        .tint(.white)
+                } else {
+                    Circle().fill(FW.recording).frame(width: 7, height: 7)
+                }
+                CompactWaveformView(isRecording: appState.isRecording, audioLevel: appState.smoothedAudioLevel)
+                Text(appState.isInitializingModel ? "Loading model…" : (appState.isProcessing ? "Formatting…" : "Listening"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                if appState.isRecording {
+                    Text(String(format: "%d:%02d", appState.recordingDuration / 60000, appState.recordingDuration / 1000 % 60))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.45))
                 }
             }
-            .frame(width: 14, height: 14)
-
-            // Right side: Waveform or text (fixed width to prevent shifts)
-            if appState.isInitializingModel {
-                Text("Initializing Whisper model...")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .frame(height: 14)
-            } else {
-                // Always show waveform, let it decay naturally
-                CompactWaveformView(isRecording: appState.isRecording, audioLevel: appState.smoothedAudioLevel)
-            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.black.opacity(0.9)))
+            .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, FW.spacing6)
-        .background(
-            Capsule()
-                .fill(Color.black.opacity(0.55))
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .compositingGroup()
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
     }
 }
