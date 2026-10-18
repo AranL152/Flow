@@ -21,7 +21,7 @@
       },
       "command": "Flow, find the Orion dashboard image.",
       "display_frames": 23,
-      "display_reveal_seconds": 1.0502959489822388,
+      "display_reveal_seconds": 1.173704981803894,
       "generated_message": "I've got the dashboard screenshot right here",
       "kind": "screenshot",
       "llm_chunks": 6,
@@ -31,6 +31,6 @@
     }
   ],
   "scope": "Generated speech; actual on-device captions and waveform; real cloud LLM chunks typed into actual Messages; production ranking and automatic attachment append followed by candidate popup. No Send event. Screenshot selection uses filenames, not OCR.",
-  "seconds": 14.432976007461548,
+  "seconds": 13.194739937782288,
   "status": "ready"
 }
