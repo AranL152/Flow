@@ -27,5 +27,5 @@ pub use streaming::{
 };
 pub use transcription::{
     CompletionParams as TranscriptionCompletionParams, DictationDelta, TranscriptionProvider, TranscriptionRequest,
-    TranscriptionResponse,
+    TranscriptionResponse, ShortcutDefinition,
 };

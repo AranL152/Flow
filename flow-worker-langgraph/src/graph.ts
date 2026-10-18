@@ -51,6 +51,7 @@ const FlowStateAnnotation = Annotation.Root({
   mode: Annotation<string>(),
   appContext: Annotation<string | undefined>(),
   shortcutsTriggered: Annotation<string[]>(),
+  shortcutDefinitions: Annotation<import("./types.js").ShortcutDefinition[] | undefined>(),
   voiceInstruction: Annotation<string | undefined>(),
   text: Annotation<string | undefined>(),
   personalization: Annotation<string | undefined>(),
@@ -58,6 +59,7 @@ const FlowStateAnnotation = Annotation.Root({
 
   // Intermediate
   transcription: Annotation<string | undefined>(),
+  messageText: Annotation<string | undefined>(),
   detectedCommand: Annotation<string | undefined>(),
   resolvedCommand: Annotation<ResolvedCommand | undefined>(),
 
@@ -102,6 +104,7 @@ export interface FlowGraphInput {
   mode: string;
   appContext?: string;
   shortcutsTriggered?: string[];
+  shortcutDefinitions?: import("./types.js").ShortcutDefinition[];
   voiceInstruction?: string;
   text?: string;
   personalization?: string;

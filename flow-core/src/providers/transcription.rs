@@ -10,6 +10,13 @@ use crate::error::Result;
 /// Return false to cancel. Empty strings are liveness checks, not tokens.
 pub type DictationDelta = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortcutDefinition {
+    pub trigger: String,
+    pub replacement: String,
+    pub case_sensitive: bool,
+}
+
 /// Request for transcription
 #[derive(Debug, Clone)]
 pub struct TranscriptionRequest {
@@ -34,6 +41,8 @@ pub struct CompletionParams {
     pub app_context: Option<String>,
     /// Shortcut replacement texts that must be preserved exactly
     pub shortcuts_triggered: Vec<String>,
+    /// Enabled static snippets expanded immediately after cloud ASR.
+    pub shortcut_definitions: Vec<ShortcutDefinition>,
     /// Voice instruction (e.g., "reject him politely", "translate to Spanish")
     /// When present, worker uses instruction mode instead of normal formatting
     pub voice_instruction: Option<String>,

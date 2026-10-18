@@ -221,6 +221,7 @@ struct WorkerCompletionParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     app_context: Option<String>,
     shortcuts_triggered: Vec<String>,
+    shortcut_definitions: Vec<super::transcription::ShortcutDefinition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     voice_instruction: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -234,6 +235,7 @@ impl From<CompletionParams> for WorkerCompletionParams {
             mode: params.mode,
             app_context: params.app_context,
             shortcuts_triggered: params.shortcuts_triggered,
+            shortcut_definitions: params.shortcut_definitions,
             voice_instruction: params.voice_instruction,
             personalization: params.personalization,
             auto_rewriting_enabled: params.auto_rewriting_enabled,

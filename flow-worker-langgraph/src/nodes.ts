@@ -13,7 +13,14 @@ import { transcribeAudio } from "./whisper.js";
 import { completeChat } from "./llm.js";
 import { buildFormattingPrompt, buildInstructionPrompt } from "./prompts.js";
 
+import { expandSnippets } from "./snippets.js";
+
 const WAKE_PHRASE = "hey flow";
+
+function prepareTranscription(state: FlowState, transcription: string): Partial<FlowState> {
+  const expanded = expandSnippets(transcription, state.shortcutDefinitions ?? []);
+  return { transcription, messageText: expanded.text, shortcutsTriggered: [...state.shortcutsTriggered, ...expanded.replacements] };
+}
 
 const COMPLETION_OPTIONS = { maxTokens: 1000, temperature: 0.3 };
 
@@ -40,7 +47,7 @@ export async function transcribeNode(
   const { audioB64, audioLanguage, promptHint, text } = state;
 
   if (text) {
-    return { transcription: text.trim() };
+    return prepareTranscription(state, text.trim());
   }
 
   // Seed the wake phrase into the decoder hint so Whisper spells it
@@ -57,7 +64,7 @@ export async function transcribeNode(
 
     // Length only: transcriptions are user speech and do not belong in logs.
     console.log(`transcribed ${transcription.length} chars`);
-    return { transcription };
+    return prepareTranscription(state, transcription);
   } catch (err) {
     return { error: toError(err) };
   }
@@ -77,7 +84,7 @@ export function detectWakePhraseNode(state: FlowState): Partial<FlowState> {
   const { transcription, voiceInstruction } = state;
 
   // An explicit instruction from the client wins over phrase detection.
-  const utterance = voiceInstruction ?? extractUtterance(transcription);
+  const utterance = voiceInstruction ?? extractUtterance(state.messageText ?? transcription);
 
   if (!utterance) {
     return { detectedCommand: undefined, resolvedCommand: undefined };
@@ -144,9 +151,10 @@ export async function formatNode(
   config?: RunnableConfig
 ): Promise<Partial<FlowState>> {
   if (state.autoRewritingEnabled === false) {
-    return { formattedText: state.transcription };
+    return { formattedText: state.messageText ?? state.transcription };
   }
-  const { transcription, mode, appContext, shortcutsTriggered, personalization } = state;
+  const { mode, appContext, shortcutsTriggered, personalization } = state;
+  const transcription = state.messageText ?? state.transcription;
 
   if (!transcription) {
     return { error: "No transcription to format" };

@@ -696,6 +696,9 @@ fn transcribe_with_audio(
         mode: mode.worker_name().to_string(),
         app_context: format_context.clone(),
         shortcuts_triggered: Vec::new(),
+        shortcut_definitions: handle.shortcuts.get_all().into_iter().map(|s| crate::providers::ShortcutDefinition {
+            trigger: s.trigger, replacement: s.replacement, case_sensitive: s.case_sensitive,
+        }).collect(),
         voice_instruction: None,
         personalization: if auto_rewriting_enabled {
             personalization
@@ -2618,14 +2621,15 @@ pub extern "C" fn flow_format_text(
     let context = format_context(app_name, recipient);
     let personalization = personalization_for(handle, text, &category, &contact);
 
-    let (shortcut_text, _) = handle.shortcuts.process(text);
+    let (shortcut_text, triggered) = handle.shortcuts.process(text);
     let (corrected, _) = handle.learning.apply_corrections(&shortcut_text);
 
     let result = if uses_worker(&handle.storage) {
         let params = TranscriptionCompletionParams {
             mode: mode.worker_name().to_string(),
             app_context: context,
-            shortcuts_triggered: Vec::new(),
+            shortcuts_triggered: triggered.into_iter().map(|s| s.replacement).collect(),
+            shortcut_definitions: Vec::new(),
             voice_instruction: None,
             personalization,
             auto_rewriting_enabled: true,

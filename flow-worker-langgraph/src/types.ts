@@ -49,6 +49,8 @@ export interface WhisperParams {
   prompt?: string;
 }
 
+export interface ShortcutDefinition { trigger: string; replacement: string; case_sensitive: boolean }
+
 export interface CompletionParams {
   mode: string;
   app_context?: string;
@@ -101,6 +103,7 @@ export interface FlowState {
   mode: string;
   appContext?: string;
   shortcutsTriggered: string[];
+  shortcutDefinitions?: ShortcutDefinition[];
   voiceInstruction?: string;
   /** Typed text that replaces transcription */
   text?: string;
@@ -109,6 +112,7 @@ export interface FlowState {
 
   // Intermediate
   transcription?: string;
+  messageText?: string;
   /** Utterance following the wake phrase, if there was one */
   detectedCommand?: string;
   /** Set when the utterance matched a command the worker can run itself */

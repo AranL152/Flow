@@ -31,7 +31,7 @@ export function dictationStream(env: Env, input: TranscriptionRequestInput, sign
           emit("done", { text: result.formattedText.trim() });
           return;
         }
-        const stream = await formatStream(env, { ...input, text: state.transcription }, signal, state.detectedCommand);
+        const stream = await formatStream(env, { ...input, text: state.messageText ?? state.transcription, shortcutsTriggered: state.shortcutsTriggered }, signal, state.detectedCommand);
         reader = stream.getReader();
         if (cancelled) { await reader.cancel(); return; }
         while (!cancelled) {

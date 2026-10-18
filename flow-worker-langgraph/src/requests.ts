@@ -7,7 +7,7 @@
  * returns either a fully typed value or the first field that is wrong.
  */
 
-import type { CorrectionPair, StyleProfileExample } from "./types.js";
+import type { CorrectionPair, StyleProfileExample, ShortcutDefinition } from "./types.js";
 
 export type ParseResult<T> =
   | { ok: true; value: T }
@@ -37,6 +37,7 @@ export interface TranscriptionRequestInput {
   mode: string;
   appContext?: string;
   shortcutsTriggered: string[];
+  shortcutDefinitions?: ShortcutDefinition[];
   voiceInstruction?: string;
   personalization?: string;
   autoRewritingEnabled?: boolean;
@@ -191,6 +192,13 @@ export function parseTranscriptionRequest(
     return shortcuts;
   }
 
+  const definitions = completion.shortcut_definitions ?? [];
+  if (!Array.isArray(definitions) || definitions.length > 100 || definitions.some(s =>
+    !asRecord(s) || typeof s.trigger !== "string" || !s.trigger.trim() || s.trigger.length > 1000 ||
+    typeof s.replacement !== "string" || s.replacement.length > 4000 || typeof s.case_sensitive !== "boolean")) {
+    return err("completion.shortcut_definitions must contain at most 100 valid snippets");
+  }
+
   const personalization = optionalString(
     completion.personalization,
     "completion.personalization",
@@ -212,6 +220,7 @@ export function parseTranscriptionRequest(
     mode,
     appContext: appContext.value,
     shortcutsTriggered: shortcuts.value,
+    ...(completion.shortcut_definitions === undefined ? {} : { shortcutDefinitions: definitions as ShortcutDefinition[] }),
     voiceInstruction: voiceInstruction.value,
     personalization: personalization.value,
     ...(completion.auto_rewriting_enabled === undefined ? {} : { autoRewritingEnabled: completion.auto_rewriting_enabled }),
