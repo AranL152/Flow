@@ -77,8 +77,9 @@ struct LiquidCommandText: View {
                                 }
                             }
                         }
-                        .shadow(color: FlowCommandBadge.ink.opacity(0.18 + (rippling ? 0.30 : 0) + 0.45 * settleGlow),
-                                radius: 2 + (rippling ? 3 : 0) + 4.5 * settleGlow)
+                        .shadow(color: FlowCommandBadge.ink.opacity(0.18 + (rippling ? 0.30 : 0) + 0.70 * settleGlow),
+                                radius: 2 + (rippling ? 3 : 0) + 7 * settleGlow)
+                        .shadow(color: FlowCommandBadge.ink.opacity(0.50 * settleGlow), radius: 3)
                     }
                     .allowsHitTesting(false).accessibilityHidden(true)
                 }

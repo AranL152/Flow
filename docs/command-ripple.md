@@ -12,7 +12,8 @@ During recording the command has a soft purple glow. When recording ends, a
 single 700 ms highlight and one smooth crest sweep from left to right,
 with up to 2 points of letter displacement. A Gaussian crest follows the highlight
 without oscillation or trailing ripples, with a gentle fade at either end.
-Once the crest has settled, a soft purple glow blooms once over 400 ms and
+Once the crest has settled, a brighter purple glow with a broad halo and a tighter inner glow blooms once
+over 400 ms and
 fades to the static highlight. The letters stay still during this finish.
 The full timing is shared by rendering and animation cleanup.
 There is no replay on each partial recognition update. The glyph alpha image is

@@ -265,3 +265,12 @@ finishing glow separately before the fully settled frame.
 The build and all eight native preview checks passed. The glow and settled
 frames were visually compared, and the refreshed Replay preview remains open.
 No model API calls, microphone recording or Messages writes were involved.
+
+## Stronger finishing glow (October 18)
+
+The user requested a stronger purple glow. The finishing pulse now has a brighter,
+broader halo plus a tighter inner glow around the letters. The single 700 ms
+ripple and 400 ms finish retain their timing; the extra glow is confined to the
+finish and remains disabled with Reduce Motion.
+The build and all eight native preview checks passed. The finishing frame was
+visually reviewed, and the updated Replay preview remains open.
