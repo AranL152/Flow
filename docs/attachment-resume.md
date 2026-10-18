@@ -287,3 +287,17 @@ The build and eight native preview checks passed. The flash and settled frames
 were visually reviewed. A pixel comparison found 8,710 changed command pixels,
 zero changed background pixels in the command region and zero changed recipient
 text pixels. The updated Replay preview remains open.
+
+## Synchronized inner and outer finish (October 18)
+
+The user asked to strengthen the inner glow and restore the outer glow, with
+both synchronized after the ripple settles. The fill now flashes brighter,
+with a broad purple halo and a tighter glow around the letters. One shared
+400 ms pulse drives fill brightness and both halo layers' opacity and radius,
+so they rise, peak and fade together. The 700 ms single ripple is unchanged.
+Reduce Motion disables the entire finish.
+The build and eight native preview checks passed. The finishing frame was
+visually reviewed, and pixel comparison confirmed both brighter glyphs and the
+restored halo. White recipient-glyph pixels stayed unchanged within a two-level
+RGB tolerance; the halo intentionally changes surrounding background pixels.
+The refreshed Replay preview remains open.

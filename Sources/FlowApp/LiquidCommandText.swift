@@ -45,10 +45,10 @@ struct LiquidCommandText: View {
                         let settling = (elapsed - Self.rippleDuration) / Self.settleDuration
                         let settleFlash = animating && !reduceMotion && settling > 0 && settling < 1
                             ? sin(settling * .pi) : 0
-                        // Brighten the glyph fill itself: the finish has no halo
-                        // outside the cached letters, and all words flash together.
-                        let flashInk = Color(red: 0.76 + 0.20 * settleFlash,
-                                             green: 0.61 + 0.23 * settleFlash, blue: 1)
+                        // One envelope drives both the luminous fill and outer halo,
+                        // so the whole command blooms and settles in sync.
+                        let flashInk = Color(red: 0.76 + 0.22 * settleFlash,
+                                             green: 0.61 + 0.29 * settleFlash, blue: 1)
                         Canvas { context, size in
                             var image = context.resolve(Image(decorative: raster, scale: displayScale))
                             let bounds = CGRect(origin: .zero, size: size)
@@ -80,6 +80,8 @@ struct LiquidCommandText: View {
                                 }
                             }
                         }
+                        .shadow(color: FlowCommandBadge.ink.opacity(0.85 * settleFlash), radius: 9 * settleFlash)
+                        .shadow(color: FlowCommandBadge.ink.opacity(0.60 * settleFlash), radius: 3 * settleFlash)
                     }
                     .allowsHitTesting(false).accessibilityHidden(true)
                 }

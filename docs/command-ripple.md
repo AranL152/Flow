@@ -12,9 +12,11 @@ During recording the command has a static purple fill. When recording ends, a
 single 700 ms highlight and one smooth crest sweep from left to right,
 with up to 2 points of letter displacement. A Gaussian crest follows the highlight
 without oscillation or trailing ripples, with a gentle fade at either end.
-Once the crest has settled, all command letters flash a bright luminous purple
-once over 400 ms, then fade back to their normal purple. This is a change in the
-glyph fill, using the cached glyph alpha mask, with no outer shadow or halo.
+Once the crest has settled, all command letters flash a brighter luminous purple
+with a strong outer halo once over 400 ms, then fade back to their normal purple.
+A single pulse envelope drives the glyph fill and both halo layers, so their
+brightness rises, peaks and fades together. The halos appear only during this
+finish; there is no lingering shadow.
 The recipient message stays white. The letters stay still during this finish.
 The full timing is shared by rendering and animation cleanup.
 There is no replay on each partial recognition update. The glyph alpha image is
@@ -51,13 +53,13 @@ existing signed app bundle and permissions are preserved; this is a separate
 review helper using the updated app components.
 
 The preview exports [a GIF](../review/command-ripple.gif), stills for listening,
-mid-ripple, finishing text flash, settled, ordinary mentions, reduced motion
+mid-ripple, synchronized finishing glow, settled, ordinary mentions, reduced motion
 and long commands, and
 [a scoped report](../review/command-ripple-verification.json). Its frame interval
 is a capture target, not a measured production frame-rate guarantee.
 
 33 Swift tests passed, including new cue-boundary, quotation, negation, Unicode
-and full-context guards. Eight native preview checks passed after the glyph-flash adjustment. The exported stills
+and full-context guards. Eight native preview checks passed after the synchronized-glow adjustment. The exported stills
 were visually reviewed: command motion/glow, unchanged recipient text, no
 microphone waveform during processing, readable long commands and static reduced
 motion. A pixel comparison between active/settled fixtures also found no changes
