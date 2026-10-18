@@ -11,6 +11,36 @@ const finished = (text: string) => new ReadableStream<Uint8Array>({ start(c) {
 } });
 
 describe("native streamed dictation", () => {
+  it("keeps attachment instructions out of every generated chunk", async () => {
+    const run = vi.fn().mockResolvedValue(finished("here's the deck"));
+    const output = await new Response(dictationStream({ AI: { run } } as unknown as Env,
+      { ...input, audioB64: "", text: "Here's the deck. Flow, attach the PDF I just downloaded.", attachmentCommandsEnabled: true })).text();
+    expect(run.mock.calls[0][1].messages[1].content).toBe("<TRANSCRIPTION>\nHere's the deck.\n</TRANSCRIPTION>");
+    expect(output).toContain('"source":"recent_download","kind":"pdf"');
+    expect(output).toContain('"attachment_protocol":1');
+    expect(output).toContain('event: delta\ndata: {"text":"here\'s the deck"}');
+  });
+
+  it("handles attachment-only and unsupported requests without inventing text", async () => {
+    for (const text of ["Flow attach my clipboard", "Flow attach yesterday's screenshot"]) {
+      const run = vi.fn();
+      const output = await new Response(dictationStream({ AI: { run } } as unknown as Env,
+        { ...input, audioB64: "", text, attachmentCommandsEnabled: true })).text();
+      expect(output).toContain('event: done\ndata: {"text":""}');
+      expect(output).not.toContain("event: delta");
+      expect(run).not.toHaveBeenCalled();
+    }
+  });
+
+  it("uses the same attachment boundary in buffered and raw modes", async () => {
+    const run = vi.fn();
+    const result = await runFlowGraph({ ...input, audioB64: "", text: "Here's the file. Flow attach the file on my clipboard",
+      attachmentCommandsEnabled: true, autoRewritingEnabled: false, env: { AI: { run } } as unknown as Env });
+    expect(result.formattedText).toBe("Here's the file.");
+    expect(result.attachment?.request?.source).toBe("clipboard");
+    expect(result.transcription).toContain("Flow attach");
+    expect(run).not.toHaveBeenCalled();
+  });
   it("emits the transcription and first real tokens before generation finishes", async () => {
     let model!: ReadableStreamDefaultController<Uint8Array>;
     const run = vi.fn().mockResolvedValueOnce({ text: "can you review the slides" })

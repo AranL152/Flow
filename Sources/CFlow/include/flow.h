@@ -483,6 +483,11 @@ int32_t flow_record_final_text_for_contact(struct FlowHandle *handle,
 /**
  * Drop the last dictation without learning from it (e.g. the sent text could not be read)
  */
+char *flow_get_attachment_plan(struct FlowHandle *handle);
+
+/**
+ * Discard pending message learning and its attachment request.
+ */
 void flow_discard_pending_dictation(struct FlowHandle *handle);
 
 /**

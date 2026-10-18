@@ -9,6 +9,8 @@ struct Decoder {
     raw: Option<String>,
     text: String,
     done: bool,
+    attachment: Option<crate::attachments::AttachmentPlan>,
+    require_attachment_protocol: bool,
 }
 
 fn failure(message: impl Into<String>) -> Error { Error::Transcription(message.into()) }
@@ -29,6 +31,15 @@ impl Decoder {
             let text = value["text"].as_str().ok_or_else(|| failure("Missing stream text"))?;
             match self.event.as_str() {
                 "transcription" if self.raw.is_none() && self.text.is_empty() && !text.trim().is_empty() => {
+                    if self.require_attachment_protocol && value["attachment_protocol"].as_u64() != Some(1) {
+                        return Err(failure("Update the Flow worker to support attachment commands"));
+                    }
+                    if !value["attachment"].is_null() {
+                        let plan: crate::attachments::AttachmentPlan = serde_json::from_value(value["attachment"].clone())
+                            .map_err(|_| failure("Invalid attachment plan"))?;
+                        if !plan.validate() { return Err(failure("Invalid attachment plan")); }
+                        self.attachment = Some(plan);
+                    }
                     self.raw = Some(text.into());
                 }
                 "delta" if self.raw.is_some() => {
@@ -36,7 +47,7 @@ impl Decoder {
                     if self.text.len() > 48000 { return Err(failure("Streaming output is too long")); }
                     if !on_delta(text) { return Err(failure("Dictation cancelled")); }
                 }
-                "done" if self.raw.is_some() && !text.trim().is_empty() && text == self.text.trim() => {
+                "done" if self.raw.is_some() && (!text.trim().is_empty() || self.attachment.is_some()) && text == self.text.trim() => {
                     self.text = text.into(); self.done = true;
                 }
                 _ => return Err(failure("Incomplete or invalid dictation stream")),
@@ -49,18 +60,22 @@ impl Decoder {
     fn finish(self, duration_ms: u64) -> Result<TranscriptionResponse> {
         if !self.done { return Err(failure("Dictation stream ended before completion")); }
         Ok(TranscriptionResponse { text: self.raw.ok_or_else(|| failure("Missing transcription"))?,
-            completed_text: Some(self.text), confidence: None, language: None, duration_ms, segments: None })
+            completed_text: Some(self.text), attachment: self.attachment, confidence: None, language: None, duration_ms, segments: None })
     }
 }
 
 pub async fn consume(response: reqwest::Response, duration_ms: u64, on_delta: DictationDelta) -> Result<TranscriptionResponse> {
+    consume_with_attachments(response, duration_ms, on_delta, false).await
+}
+
+pub async fn consume_with_attachments(response: reqwest::Response, duration_ms: u64, on_delta: DictationDelta, require_attachment_protocol: bool) -> Result<TranscriptionResponse> {
     if !response.status().is_success() { return Err(failure(format!("Streaming worker returned HTTP {}", response.status().as_u16()))); }
     if !response.headers().get("content-type").and_then(|s| s.to_str().ok()).is_some_and(|s| s.contains("text/event-stream")) {
         return Err(failure("The worker did not return an event stream"));
     }
     let mut stream = response.bytes_stream();
     let mut pending = Vec::new();
-    let mut decoder = Decoder::default();
+    let mut decoder = Decoder { require_attachment_protocol, ..Decoder::default() };
     loop {
         let chunk = tokio::select! {
             chunk = stream.next() => match chunk { Some(chunk) => chunk, None => break },
@@ -95,6 +110,21 @@ mod tests {
         let response = decoder.finish(1000)?;
         let chunks = received.lock().unwrap().clone();
         Ok((response, chunks))
+    }
+
+    #[test]
+    fn attachment_metadata_never_becomes_a_delta_and_allows_an_empty_message() {
+        let input = "event: transcription\ndata: {\"text\":\"Flow attach my clipboard\",\"attachment_protocol\":1,\"attachment\":{\"message\":\"\",\"command\":\"Flow attach my clipboard\",\"request\":{\"source\":\"clipboard\",\"kind\":\"image\"}}}\n\nevent: done\ndata: {\"text\":\"\"}\n\n";
+        let (response, chunks) = decode(input).unwrap();
+        assert!(response.attachment.unwrap().validate());
+        assert_eq!(response.completed_text.as_deref(), Some(""));
+        assert!(chunks.is_empty());
+        assert!(decode(&input.replace("\"source\":\"clipboard\"", "\"source\":\"/Users/private\"")).is_err());
+        let mut decoder = Decoder { require_attachment_protocol: true, ..Decoder::default() };
+        let callback: DictationDelta = Arc::new(|_| panic!("No delta may precede protocol validation"));
+        decoder.line("event: transcription", &callback).unwrap();
+        decoder.line("data: {\"text\":\"Flow attach my clipboard\"}", &callback).unwrap();
+        assert!(decoder.line("", &callback).is_err());
     }
 
     #[test]

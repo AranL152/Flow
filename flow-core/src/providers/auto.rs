@@ -227,6 +227,7 @@ struct WorkerCompletionParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     personalization: Option<String>,
     auto_rewriting_enabled: bool,
+    attachment_commands_enabled: bool,
 }
 
 impl From<CompletionParams> for WorkerCompletionParams {
@@ -239,6 +240,7 @@ impl From<CompletionParams> for WorkerCompletionParams {
             voice_instruction: params.voice_instruction,
             personalization: params.personalization,
             auto_rewriting_enabled: params.auto_rewriting_enabled,
+            attachment_commands_enabled: params.attachment_commands_enabled,
         }
     }
 }
@@ -247,6 +249,10 @@ impl From<CompletionParams> for WorkerCompletionParams {
 struct WorkerResponse {
     transcription: String,
     text: String,
+    #[serde(default)]
+    attachment: Option<crate::attachments::AttachmentPlan>,
+    #[serde(default)]
+    attachment_protocol: Option<u8>,
     #[serde(default)]
     language: Option<String>,
 }
@@ -300,6 +306,12 @@ impl TranscriptionProvider for AutoTranscriptionProvider {
         }
 
         let worker_response: WorkerResponse = response.json().await?;
+        if worker_request.completion.attachment_commands_enabled && worker_response.attachment_protocol != Some(1) {
+            return Err(Error::Transcription("Update the Flow worker to support attachment commands".into()));
+        }
+        if worker_response.attachment.as_ref().is_some_and(|p| !p.validate()) {
+            return Err(Error::Transcription("Invalid attachment plan".into()));
+        }
 
         let samples = request.audio.len() / 2;
         let duration_ms = (samples as u64 * 1000) / request.sample_rate as u64;
@@ -311,6 +323,7 @@ impl TranscriptionProvider for AutoTranscriptionProvider {
             duration_ms,
             segments: None,
             completed_text: Some(worker_response.text),
+            attachment: worker_response.attachment,
         })
     }
 
@@ -339,7 +352,7 @@ impl TranscriptionProvider for AutoTranscriptionProvider {
             }
         };
         let duration_ms = (request.audio.len() as u64 / 2 * 1000) / u64::from(request.sample_rate);
-        super::dictation_stream::consume(response, duration_ms, on_delta).await
+        super::dictation_stream::consume_with_attachments(response, duration_ms, on_delta, body.completion.attachment_commands_enabled).await
     }
 }
 

@@ -21,7 +21,11 @@ export function dictationStream(env: Env, input: TranscriptionRequestInput, sign
         state = { ...state, ...await transcribeNode(state, { configurable: { env } }) };
         if (state.error) throw new Error(state.error);
         if (cancelled) return;
-        emit("transcription", { text: state.transcription });
+        emit("transcription", { text: state.transcription, attachment: state.attachment, attachment_protocol: state.attachmentProtocol });
+        if (state.attachment && !state.messageText?.trim()) {
+          emit("done", { text: "" });
+          return;
+        }
         state = { ...state, ...detectWakePhraseNode(state) };
         if (state.resolvedCommand) {
           const result = executeNode(state);

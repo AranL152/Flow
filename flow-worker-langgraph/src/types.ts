@@ -62,6 +62,8 @@ export interface CompletionParams {
 // ============ Response Types ============
 
 export interface CombinedResponse {
+  attachment?: import("./attachments.js").AttachmentPlan;
+  attachment_protocol?: number;
   transcription: string;
   text: string;
   language?: string;
@@ -104,6 +106,7 @@ export interface FlowState {
   appContext?: string;
   shortcutsTriggered: string[];
   shortcutDefinitions?: ShortcutDefinition[];
+  attachmentCommandsEnabled?: boolean;
   voiceInstruction?: string;
   /** Typed text that replaces transcription */
   text?: string;
@@ -113,6 +116,8 @@ export interface FlowState {
   // Intermediate
   transcription?: string;
   messageText?: string;
+  attachment?: import("./attachments.js").AttachmentPlan;
+  attachmentProtocol?: number;
   /** Utterance following the wake phrase, if there was one */
   detectedCommand?: string;
   /** Set when the utterance matched a command the worker can run itself */

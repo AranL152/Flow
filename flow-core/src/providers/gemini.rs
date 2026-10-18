@@ -208,6 +208,7 @@ impl TranscriptionProvider for GeminiTranscriptionProvider {
             duration_ms,
             segments: None,
             completed_text: None,
+            attachment: None,
         })
     }
 

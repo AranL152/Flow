@@ -158,6 +158,7 @@ mod tests {
             duration_ms: 0,
             segments: None,
             completed_text: completed.map(|s| s.to_string()),
+            attachment: None,
         }
     }
 

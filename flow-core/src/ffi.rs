@@ -82,6 +82,7 @@ pub struct FlowHandle {
     pending_sample_rate: Mutex<Option<u32>>,
     /// Last dictation, waiting for the text the user finally sent
     pending_dictation: Mutex<Option<PendingDictation>>,
+    pending_attachment: Mutex<Option<crate::attachments::AttachmentPlan>>,
 }
 
 /// Demo conversation state, requests and explicit Send receipts. Caller serializes
@@ -390,6 +391,7 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
         pending_audio: Mutex::new(None),
         pending_sample_rate: Mutex::new(None),
         pending_dictation: Mutex::new(None),
+        pending_attachment: Mutex::new(None),
     };
 
     load_persisted_configuration(&mut handle);
@@ -663,6 +665,7 @@ fn transcribe_with_audio(
     app_name: Option<String>,
     on_delta: Option<crate::providers::DictationDelta>,
 ) -> crate::error::Result<String> {
+    *handle.pending_attachment.lock() = None;
     let captured = handle.captured_contact.lock().clone();
     let (mode, recipient) = resolve_recipient(handle, app_name.as_deref(), captured.as_deref());
     let category = style::category_key(recipient, Some(handle.app_tracker.current_category()));
@@ -696,6 +699,7 @@ fn transcribe_with_audio(
         mode: mode.worker_name().to_string(),
         app_context: format_context.clone(),
         shortcuts_triggered: Vec::new(),
+        attachment_commands_enabled: uses_worker(&handle.storage) && !use_local_transcription,
         shortcut_definitions: handle.shortcuts.get_all().into_iter().map(|s| crate::providers::ShortcutDefinition {
             trigger: s.trigger, replacement: s.replacement, case_sensitive: s.case_sensitive,
         }).collect(),
@@ -737,7 +741,7 @@ fn transcribe_with_audio(
             "📝 [RUST] Auto-rewriting disabled - returning text with shortcuts only: {} chars",
             text_with_shortcuts.len()
         );
-        text_with_shortcuts
+        if transcription.attachment.is_some() { transcription.completed_text.clone().unwrap_or(text_with_shortcuts) } else { text_with_shortcuts }
     } else if let Some(completed_text) = transcription.completed_text {
         // Worker completion available (cloud mode with auto-rewriting)
         log_with_time!(
@@ -817,12 +821,13 @@ fn transcribe_with_audio(
         error!("Failed to save transcription history: {}", e);
     }
 
-    *handle.pending_dictation.lock() = Some(PendingDictation {
+    *handle.pending_dictation.lock() = (!processed_text.trim().is_empty()).then(|| PendingDictation {
         category,
         contact_key: contact,
-        said: record.raw_text.clone(),
+        said: transcription.attachment.as_ref().map(|p| p.message.clone()).unwrap_or_else(|| record.raw_text.clone()),
         flow_output: processed_text.clone(),
     });
+    *handle.pending_attachment.lock() = transcription.attachment;
 
     Ok(processed_text)
 }
@@ -2630,6 +2635,7 @@ pub extern "C" fn flow_format_text(
             app_context: context,
             shortcuts_triggered: triggered.into_iter().map(|s| s.replacement).collect(),
             shortcut_definitions: Vec::new(),
+            attachment_commands_enabled: false,
             voice_instruction: None,
             personalization,
             auto_rewriting_enabled: true,
@@ -2722,7 +2728,18 @@ pub extern "C" fn flow_record_final_text_for_contact(
 
 /// Drop the last dictation without learning from it (e.g. the sent text could not be read)
 #[unsafe(no_mangle)]
+pub extern "C" fn flow_get_attachment_plan(handle: *mut FlowHandle) -> *mut c_char {
+    if handle.is_null() { return ptr::null_mut(); }
+    let handle = unsafe { &*handle };
+    handle.pending_attachment.lock().as_ref()
+        .and_then(|p| serde_json::to_string(p).ok())
+        .map_or(ptr::null_mut(), into_c_string)
+}
+
+/// Discard pending message learning and its attachment request.
+#[unsafe(no_mangle)]
 pub extern "C" fn flow_discard_pending_dictation(handle: *mut FlowHandle) {
+    if !handle.is_null() { unsafe { &*handle }.pending_attachment.lock().take(); }
     let handle = unsafe { &*handle };
     *handle.pending_dictation.lock() = None;
 }
@@ -3291,7 +3308,7 @@ mod dictation_stream_tests {
             for token in ["got a sec", " to review the slides?"] {
                 if !callback(token) { return Err(crate::error::Error::Transcription("cancelled".into())); }
             }
-            Ok(TranscriptionResponse { text: "can you review the slides".into(), completed_text: Some("got a sec to review the slides?".into()),
+            Ok(TranscriptionResponse { attachment: None, text: "can you review the slides".into(), completed_text: Some("got a sec to review the slides?".into()),
                 confidence: None, language: None, duration_ms: 1000, segments: None })
         }
     }

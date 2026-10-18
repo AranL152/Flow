@@ -43,6 +43,7 @@ pub struct CompletionParams {
     pub shortcuts_triggered: Vec<String>,
     /// Enabled static snippets expanded immediately after cloud ASR.
     pub shortcut_definitions: Vec<ShortcutDefinition>,
+    pub attachment_commands_enabled: bool,
     /// Voice instruction (e.g., "reject him politely", "translate to Spanish")
     /// When present, worker uses instruction mode instead of normal formatting
     pub voice_instruction: Option<String>,
@@ -95,6 +96,8 @@ pub struct TranscriptionResponse {
     /// Completed/formatted text if worker performed completion
     #[serde(default)]
     pub completed_text: Option<String>,
+    #[serde(default)]
+    pub attachment: Option<crate::attachments::AttachmentPlan>,
 }
 
 /// A segment of transcribed text with timing

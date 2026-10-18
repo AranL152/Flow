@@ -118,6 +118,8 @@ app.post("/", async (c) => {
 
   const response: CombinedResponse = {
     transcription: result.transcription ?? "",
+    attachment: result.attachment,
+    attachment_protocol: result.attachmentProtocol,
     text: result.formattedText ?? "",
     command: result.command,
     action: result.action,

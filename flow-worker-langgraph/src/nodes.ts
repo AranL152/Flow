@@ -13,13 +13,17 @@ import { transcribeAudio } from "./whisper.js";
 import { completeChat } from "./llm.js";
 import { buildFormattingPrompt, buildInstructionPrompt } from "./prompts.js";
 
+import { parseAttachmentCommand } from "./attachments.js";
 import { expandSnippets } from "./snippets.js";
 
 const WAKE_PHRASE = "hey flow";
 
 function prepareTranscription(state: FlowState, transcription: string): Partial<FlowState> {
-  const expanded = expandSnippets(transcription, state.shortcutDefinitions ?? []);
-  return { transcription, messageText: expanded.text, shortcutsTriggered: [...state.shortcutsTriggered, ...expanded.replacements] };
+  const attachment = state.attachmentCommandsEnabled ? parseAttachmentCommand(transcription) : undefined;
+  const expanded = expandSnippets(attachment?.message ?? transcription, state.shortcutDefinitions ?? []);
+  return { transcription, messageText: expanded.text, attachment,
+    attachmentProtocol: state.attachmentCommandsEnabled ? 1 : undefined,
+    shortcutsTriggered: [...state.shortcutsTriggered, ...expanded.replacements] };
 }
 
 const COMPLETION_OPTIONS = { maxTokens: 1000, temperature: 0.3 };
@@ -150,6 +154,7 @@ export async function formatNode(
   state: FlowState,
   config?: RunnableConfig
 ): Promise<Partial<FlowState>> {
+  if (state.attachment && !state.messageText?.trim()) return { formattedText: "" };
   if (state.autoRewritingEnabled === false) {
     return { formattedText: state.messageText ?? state.transcription };
   }

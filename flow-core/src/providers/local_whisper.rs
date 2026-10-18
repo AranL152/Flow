@@ -709,6 +709,7 @@ impl TranscriptionProvider for LocalWhisperTranscriptionProvider {
             duration_ms: request.audio.len() as u64 * 1000 / request.sample_rate as u64,
             segments: None,
             completed_text: None,
+            attachment: None,
         })
     }
 

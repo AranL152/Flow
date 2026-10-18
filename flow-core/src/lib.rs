@@ -4,6 +4,7 @@
 //! self-learning typo correction, voice shortcuts, and writing mode customization.
 
 pub mod alignment;
+pub mod attachments;
 pub mod apps;
 pub mod audio;
 pub mod contacts;

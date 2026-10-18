@@ -129,6 +129,7 @@ impl TranscriptionProvider for OpenAITranscriptionProvider {
             duration_ms,
             segments: None,
             completed_text: None,
+            attachment: None,
         })
     }
 
