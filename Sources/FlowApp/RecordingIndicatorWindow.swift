@@ -128,7 +128,7 @@ struct RecordingIndicatorView: View {
                     Circle().fill(FW.recording).frame(width: 7, height: 7)
                 }
                 CompactWaveformView(isRecording: appState.isRecording, audioLevel: appState.smoothedAudioLevel)
-                Text(appState.isInitializingModel ? "Loading model…" : (appState.isProcessing ? "Formatting…" : "Listening"))
+                Text(appState.isInitializingModel ? "Loading model…" : (appState.isProcessing ? (appState.isStreamingOutput ? "Writing…" : "Transcribing…") : "Listening"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.85))
                 if appState.isRecording {

@@ -80,7 +80,11 @@ struct RecordView: View {
                     .padding(.top, FW.spacing16)
                     .accessibilityIdentifier("live-transcript")
                 }
-                if let text = appState.lastTranscription {
+                if appState.isStreamingOutput {
+                    outputSection(appState.streamedOutput, streaming: true)
+                        .padding(.horizontal, FW.spacing32)
+                        .padding(.top, FW.spacing16)
+                } else if let text = appState.lastTranscription {
                     outputSection(text)
                         .padding(.horizontal, FW.spacing32)
                         .padding(.top, FW.spacing16)
@@ -303,10 +307,10 @@ struct RecordView: View {
 
     // MARK: - Output Section
 
-    private func outputSection(_ text: String) -> some View {
+    private func outputSection(_ text: String, streaming: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: FW.spacing8) {
             HStack {
-                Text("Output")
+                Text(streaming ? "Writing draft…" : "Output")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(FW.textMuted)
 
@@ -323,6 +327,7 @@ struct RecordView: View {
                     .font(.caption)
                 }
                 .buttonStyle(FWSecondaryButtonStyle())
+                .disabled(streaming)
             }
 
             Text(text)

@@ -429,6 +429,7 @@ private struct GeneralSection: View {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("audioFeedbackEnabled") private var audioFeedbackEnabled = false
     @AppStorage("liveCaptionsEnabled") private var liveCaptionsEnabled = true
+    @AppStorage("streamOutputEnabled") private var streamOutputEnabled = true
     @State private var autoRewritingEnabled = true
 
     var body: some View {
@@ -444,6 +445,10 @@ private struct GeneralSection: View {
                         appState.updateLiveCaptions(enabled: enabled)
                     }
                 Text("Show your words as you speak, using on-device recognition. Early words may revise as you continue.")
+                    .font(.caption)
+                    .foregroundStyle(FW.textMuted)
+                FWToggle(isOn: $streamOutputEnabled, label: "Stream formatted output")
+                Text("Show the model’s words as they arrive. Supported text fields update in place; typing or changing focus stops insertion.")
                     .font(.caption)
                     .foregroundStyle(FW.textMuted)
                 FWToggle(isOn: $autoRewritingEnabled, label: "Auto-rewrite output")
