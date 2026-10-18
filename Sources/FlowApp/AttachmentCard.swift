@@ -7,6 +7,7 @@ import QuickLookThumbnailing
 struct AttachmentCard: View {
     @ObservedObject var session: AttachmentSession
     let engine: Flow
+    var onLayoutChange: () -> Void = {}
     @State private var previewID: UUID?
     @State private var showSearch = false
 
@@ -88,6 +89,7 @@ struct AttachmentCard: View {
             }
             .padding(14).background(FW.background).foregroundStyle(FW.textPrimary)
             .accessibilityIdentifier("attachment-preview")
+            .onChange(of: showSearch) { _, _ in onLayoutChange() }
             .onExitCommand { if !session.busy { session.dismiss() } }
         }
     }

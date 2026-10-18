@@ -1,34 +1,30 @@
 import AppKit
+import Combine
 import SwiftUI
 import Flow
 
 @MainActor
 final class AttachmentPreviewWindow {
     private let panel: NSPanel
-    private let measuredSize = AttachmentPanelMeasurement()
+    private var host: NSHostingController<AnyView>!
+    private var sessionChanges: AnyCancellable?
+    private var resizeScheduled = false
+
     init(session: AttachmentSession, engine: Flow) {
         panel = AttachmentPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        let measuredSize = self.measuredSize
-        let host = NSHostingView(rootView: AttachmentCard(session: session, engine: engine)
-            .frame(width: 360).fixedSize(horizontal: false, vertical: true)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .background(GeometryReader { proxy in Color.clear.preference(key: AttachmentPanelSize.self, value: proxy.size) })
-            .onPreferenceChange(AttachmentPanelSize.self) { [weak panel] size in
-                guard size.height > 0 else { return }
-                measuredSize.height = size.height
-                // Resize outside SwiftUI's constraint pass to avoid recursive
-                // AppKit/hosting-view layout on changing candidate counts.
-                DispatchQueue.main.async { [weak panel] in
-                    guard let panel else { return }
-                    let height = min(500, max(120, measuredSize.height ?? size.height))
-                    if abs((panel.contentView?.frame.height ?? 0) - height) > 0.5 {
-                        panel.setContentSize(NSSize(width: 360, height: height))
-                    }
-                }
-            })
+        host = NSHostingController(rootView: AnyView(
+            AttachmentCard(session: session, engine: engine, onLayoutChange: { [weak self] in self?.scheduleResize() })
+                .frame(width: 360).fixedSize(horizontal: false, vertical: true)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+        ))
+        // Measure explicitly: automatic hosting constraints can recurse when a
+        // borderless panel resizes during SwiftUI's own layout pass.
         host.sizingOptions = []
-        panel.contentView = host
+        panel.contentView = host.view
+        sessionChanges = session.objectWillChange.sink { [weak self] _ in
+            self?.scheduleResize()
+        }
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
@@ -49,22 +45,34 @@ final class AttachmentPreviewWindow {
     }
     func show(candidateCount: Int, isSearch: Bool = false) {
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1000, height: 800)
-        let height = measuredSize.height ?? CGFloat(130 + min(3, candidateCount) * 58)
-        panel.setContentSize(NSSize(width: 360, height: min(screen.height - 60, height)))
+        resizeToFit()
         panel.setFrameOrigin(NSPoint(x: screen.maxX - 380, y: screen.minY + 30))
         panel.orderFrontRegardless()
     }
+    private func scheduleResize() {
+        guard !resizeScheduled else { return }
+        resizeScheduled = true
+        // Published values and SwiftUI state must settle before measuring.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.resizeScheduled = false
+            self.resizeToFit()
+        }
+    }
+
+    private func resizeToFit() {
+        let availableHeight = (panel.screen ?? NSScreen.main)?.visibleFrame.height ?? 800
+        let fitted = host.sizeThatFits(in: CGSize(width: 360, height: 10_000))
+        let height = min(500, availableHeight - 60, max(120, ceil(fitted.height)))
+        guard abs(contentSize.height - height) > 0.5 else { return }
+        // Keep the popup's lower edge still as hints or search controls appear.
+        let bottom = panel.frame.minY
+        panel.setContentSize(NSSize(width: 360, height: height))
+        panel.setFrameOrigin(NSPoint(x: panel.frame.minX, y: bottom))
+    }
+
     var contentSize: NSSize { panel.contentView?.frame.size ?? .zero }
     func hide() { panel.orderOut(nil) }
-}
-
-private struct AttachmentPanelSize: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
-}
-
-private final class AttachmentPanelMeasurement {
-    var height: CGFloat?
 }
 
 private final class AttachmentPanel: NSPanel {

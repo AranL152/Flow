@@ -7,16 +7,23 @@
     "native_preview_rendered" : true,
     "native_session_resolves_search" : true,
     "no_target_means_no_auto_paste" : true,
+    "panel_refits_when_hint_disappears" : true,
     "real_home_scope_finds_indexed_fixtures" : true,
     "requested_type_is_respected" : true,
     "selection_exposes_preview" : true,
     "selection_is_required" : true,
-    "single_match_still_requires_selection" : true
+    "single_match_still_requires_selection" : true,
+    "unselected_native_preview_rendered" : true,
+    "unselected_panel_includes_status_hint" : true
   },
   "filenames" : [
-    "flowsearchb058190401-notes.pdf",
-    "flowsearchb058190401-sketch.pdf"
+    "flowsearcha5da1c5332-notes.pdf",
+    "flowsearcha5da1c5332-sketch.pdf"
   ],
+  "panel_heights" : {
+    "selected" : 238,
+    "unselected" : 264
+  },
   "passed" : true,
   "scope" : "Real local Spotlight index and native attachment selection; synthetic files only. No Messages paste or Send. No permission requests."
 }

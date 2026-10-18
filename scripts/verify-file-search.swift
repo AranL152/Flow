@@ -31,31 +31,36 @@ struct SearchCheck {
                 for _ in 0..<80 where session.searching { try await Task.sleep(for: .milliseconds(100)) }
                 checks["native_session_resolves_search"] = session.candidates.count == 2 && !session.searching
                 checks["selection_is_required"] = session.needsChoice && session.selected == nil && !session.pasteRequested
+                let engine = Flow(dbPath: ":memory:")
+                let picker = AttachmentPreviewWindow(session: session, engine: engine)
+                picker.show(candidateCount: session.candidates.count, isSearch: true)
+                try await Task.sleep(for: .milliseconds(300))
+                let unselectedHeight = picker.contentSize.height
+                checks["unselected_panel_includes_status_hint"] = picker.contentSize.width == 360 && unselectedHeight >= 260
+                func snapshot(_ name: String) throws -> Bool {
+                    guard let view = app.windows.first(where: { $0.title == "Flow · Attachment" })?.contentView else { return false }
+                    view.layoutSubtreeIfNeeded()
+                    guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return false }
+                    view.cacheDisplay(in: view.bounds, to: bitmap)
+                    guard let png = bitmap.representation(using: .png, properties: [:]) else { return false }
+                    let target = URL(fileURLWithPath: value("--snapshot")).deletingLastPathComponent().appendingPathComponent(name)
+                    try png.write(to: target)
+                    return true
+                }
+                checks["unselected_native_preview_rendered"] = try snapshot("file-search-unselected.png")
                 if let candidate = session.candidates.first {
                     session.choose(candidate.id)
                     checks["selection_exposes_preview"] = session.selected?.filename == candidate.filename
-                    let engine = Flow(dbPath: ":memory:")
                     await session.automaticallyStage(engine: engine, insertionUnchanged: true)
                     checks["no_target_means_no_auto_paste"] = !session.pasteRequested
-                    let picker = AttachmentPreviewWindow(session: session, engine: engine)
-                    picker.show(candidateCount: session.candidates.count, isSearch: true)
                     try await Task.sleep(for: .milliseconds(300))
-                    checks["compact_native_panel"] = picker.contentSize.width == 360 && (180...330).contains(picker.contentSize.height)
-                    picker.hide()
-                    let view = NSHostingView(rootView: AttachmentCard(session: session, engine: engine).frame(width: 360).fixedSize(horizontal: false, vertical: true).background(FW.background))
-                    view.frame = NSRect(origin: .zero, size: view.fittingSize)
-                    let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-                    window.contentView = view
-                    view.layoutSubtreeIfNeeded()
-                    try await Task.sleep(for: .milliseconds(500))
-                    if let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
-                        view.cacheDisplay(in: view.bounds, to: bitmap)
-                        if let png = bitmap.representation(using: .png, properties: [:]) {
-                            try png.write(to: URL(fileURLWithPath: value("--snapshot")))
-                            checks["native_preview_rendered"] = true
-                        }
-                    }
+                    let selectedHeight = picker.contentSize.height
+                    checks["compact_native_panel"] = picker.contentSize.width == 360 && (180...330).contains(selectedHeight)
+                    checks["panel_refits_when_hint_disappears"] = unselectedHeight >= selectedHeight + 20
+                    result["panel_heights"] = ["unselected": unselectedHeight, "selected": selectedHeight]
+                    checks["native_preview_rendered"] = try snapshot("file-search-preview.png")
                 }
+                picker.hide()
                 session.searchText = text + " sketch"
                 session.searchFiles()
                 for _ in 0..<80 where session.searching { try await Task.sleep(for: .milliseconds(100)) }
@@ -71,7 +76,7 @@ struct SearchCheck {
                 catch { checks["cancel_stops_pending_search"] = false }
             } catch { result["error"] = error.localizedDescription }
             result["checks"] = checks
-            result["passed"] = checks.count == 12 && checks.values.allSatisfy { $0 }
+            result["passed"] = checks.count == 15 && checks.values.allSatisfy { $0 }
             try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]).write(to: report)
             exit(result["passed"] as? Bool == true ? 0 : 1)
         }
