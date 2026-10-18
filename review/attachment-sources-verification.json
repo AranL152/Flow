@@ -1,0 +1,20 @@
+{
+  "added_to_directory_date_available_on_fixture_volume" : true,
+  "checks" : {
+    "captured_image_survives_text_paste" : true,
+    "clipboard_change_detected" : true,
+    "clipboard_file_url_readable" : true,
+    "clipboard_image_readable" : true,
+    "latest_matching_pdf_selected" : true,
+    "modification_time_is_not_download_recency" : true,
+    "partial_download_and_wrong_type_excluded" : true
+  },
+  "file_candidates" : 4,
+  "kind" : "native private-pasteboard and temporary-file fixtures",
+  "limitations" : [
+    "Download ordering uses a synthetic observation log; no browser download history or actual Downloads access was tested",
+    "No general clipboard changes or real message attachment insertion"
+  ],
+  "passed" : true,
+  "selected_pdf" : "recent-deck.pdf"
+}
