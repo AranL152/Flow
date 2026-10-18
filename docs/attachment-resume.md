@@ -181,3 +181,19 @@ writes over about 0.86/1.04 seconds. The eye-button preview was also opened thro
 native Accessibility and visually checked. See the updated review JSONs and
 file-search-preview.png. The final compact screenshot picker/helper remains open;
 nothing was sent. The normal authorized app bundle was not re-signed or replaced.
+
+## Recording bar phase correction (October 18)
+
+The user asked to hide the voice waveform during transcription and to propose a
+visual effect distinguishing a Flow command from recipient text. The waveform,
+recording dot and timer now appear only during active recording. Processing shows
+Transcribing… with its progress indicator, including while output is streaming.
+The separate You said caption remains visible. Loading retains its own status.
+
+`swift build` passed. Native view snapshots were visually reviewed for recording
+and processing (including isStreamingOutput=true and a stale nonzero meter value).
+See review/recording-listening.png and review/recording-transcribing.png. This was
+a local UI preview, without microphone recording, API calls or Messages changes.
+Command effects are proposals only: purple command highlighting/chip, a subtle
+recognition pulse, and a visual handoff into the attachment picker. They have not
+been implemented or chosen yet.

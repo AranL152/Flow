@@ -124,14 +124,16 @@ struct RecordingIndicatorView: View {
                         .progressViewStyle(.circular)
                         .controlSize(.small)
                         .tint(.white)
-                } else {
+                } else if appState.isRecording {
                     Circle().fill(FW.recording).frame(width: 7, height: 7)
                 }
-                CompactWaveformView(isRecording: appState.isRecording, audioLevel: appState.smoothedAudioLevel)
-                Text(appState.isInitializingModel ? "Loading model…" : (appState.isProcessing ? (appState.isStreamingOutput ? "Writing…" : "Transcribing…") : "Listening"))
+                if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {
+                    CompactWaveformView(isRecording: true, audioLevel: appState.smoothedAudioLevel)
+                }
+                Text(appState.isInitializingModel ? "Loading model…" : (appState.isProcessing ? "Transcribing…" : "Listening"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.85))
-                if appState.isRecording {
+                if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {
                     Text(String(format: "%d:%02d", appState.recordingDuration / 60000, appState.recordingDuration / 1000 % 60))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.45))
