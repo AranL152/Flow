@@ -3215,3 +3215,67 @@ mod recording_sample_tests {
         flow_destroy(handle);
     }
 }
+
+#[cfg(test)]
+mod dictation_stream_tests {
+    use super::*;
+    use crate::providers::{DictationDelta, TranscriptionResponse};
+
+    struct StreamFixture;
+    #[async_trait::async_trait]
+    impl TranscriptionProvider for StreamFixture {
+        fn name(&self) -> &'static str { "controlled stream fixture" }
+        fn is_configured(&self) -> bool { true }
+        async fn transcribe(&self, _: TranscriptionRequest) -> crate::error::Result<TranscriptionResponse> {
+            panic!("The streaming FFI used the buffered provider");
+        }
+        async fn transcribe_stream(&self, _: TranscriptionRequest, callback: DictationDelta) -> crate::error::Result<TranscriptionResponse> {
+            for token in ["got a sec", " to review the slides?"] {
+                if !callback(token) { return Err(crate::error::Error::Transcription("cancelled".into())); }
+            }
+            Ok(TranscriptionResponse { text: "can you review the slides".into(), completed_text: Some("got a sec to review the slides?".into()),
+                confidence: None, language: None, duration_ms: 1000, segments: None })
+        }
+    }
+
+    struct CallbackState { chunks: Vec<String>, cancel: bool }
+    extern "C" fn receive(delta: *const c_char, context: *mut c_void) -> bool {
+        let state = unsafe { &mut *(context as *mut CallbackState) };
+        let text = unsafe { CStr::from_ptr(delta) }.to_str().unwrap();
+        if !text.is_empty() { state.chunks.push(text.into()); }
+        !state.cancel
+    }
+
+    fn run(cancel: bool) {
+        let db = CString::new(":memory:").unwrap();
+        let handle = flow_init(db.as_ptr());
+        let engine = unsafe { &mut *handle };
+        engine.transcription = Arc::new(StreamFixture);
+        *engine.pending_audio.lock() = Some(vec![0; 32000]);
+        *engine.pending_sample_rate.lock() = Some(16000);
+        let mut state = CallbackState { chunks: vec![], cancel };
+        let app = CString::new("Messages").unwrap();
+        let result = flow_transcribe_stream(handle, app.as_ptr(), receive, &mut state as *mut _ as *mut c_void);
+        if cancel {
+            assert!(result.is_null());
+            assert_eq!(state.chunks, ["got a sec"]);
+            assert!(engine.pending_dictation.lock().is_none(), "cancelled tokens became learnable");
+            assert!(engine.last_audio.lock().is_some(), "failed audio should remain retryable");
+        } else {
+            assert!(!result.is_null());
+            assert_eq!(state.chunks, ["got a sec", " to review the slides?"]);
+            let pending = engine.pending_dictation.lock();
+            let pending = pending.as_ref().unwrap();
+            assert_eq!(pending.said, "can you review the slides");
+            assert_eq!(pending.flow_output, "got a sec to review the slides?");
+            assert!(engine.last_audio.lock().is_none());
+            flow_free_string(result);
+        }
+        flow_destroy(handle);
+    }
+
+    #[test]
+    fn ffi_delivers_tokens_and_preserves_raw_speech_for_send_learning() { run(false); }
+    #[test]
+    fn ffi_cancellation_cannot_create_a_learnable_partial_draft() { run(true); }
+}
