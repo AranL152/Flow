@@ -75,6 +75,19 @@ struct FlowHandle *flow_init(const char *db_path);
 void flow_destroy(struct FlowHandle *handle);
 
 /**
+ * Copy mono Float32 microphone samples for live, unformatted captions.
+ * Does not drain or change audio used for final transcription. `offset` is a
+ * sample index from recording start; advance it by the returned sample count.
+ * Output capacity is capped at 65536 frames. Returns 0 when caught up.
+ * After Stop, the remaining cached PCM is readable until transcription starts.
+ */
+size_t flow_read_recording_samples(struct FlowHandle *handle,
+                                   uint64_t offset,
+                                   float *output,
+                                   size_t capacity,
+                                   uint32_t *sample_rate);
+
+/**
  * Start audio recording
  * Returns true on success
  */

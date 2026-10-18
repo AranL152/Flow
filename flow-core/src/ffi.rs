@@ -458,6 +458,45 @@ pub extern "C" fn flow_destroy(handle: *mut FlowHandle) {
 
 // ============ Audio ============
 
+/// Copy mono Float32 microphone samples for live, unformatted captions.
+/// Does not drain or change audio used for final transcription. `offset` is a
+/// sample index from recording start; advance it by the returned sample count.
+/// Output capacity is capped at 65536 frames. Returns 0 when caught up.
+/// After Stop, the remaining cached PCM is readable until transcription starts.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_read_recording_samples(
+    handle: *mut FlowHandle,
+    offset: u64,
+    output: *mut f32,
+    capacity: usize,
+    sample_rate: *mut u32,
+) -> usize {
+    if handle.is_null() || output.is_null() || sample_rate.is_null() || capacity == 0 {
+        return 0;
+    }
+    let Ok(offset) = usize::try_from(offset) else { return 0; };
+    let handle = unsafe { &*handle };
+    let output = unsafe { std::slice::from_raw_parts_mut(output, capacity.min(65536)) };
+    unsafe { *sample_rate = 0; }
+    let audio = handle.audio.lock();
+    if let Some(capture) = audio.as_ref() {
+        unsafe { *sample_rate = capture.sample_rate(); }
+        return capture.read_samples(offset, output);
+    }
+    // Stop has released the microphone. Drain the final caption tail from the
+    // existing cached audio before the final transcription consumes it.
+    if let (Some(pcm), Some(rate)) = (handle.pending_audio.lock().as_ref(), *handle.pending_sample_rate.lock()) {
+        unsafe { *sample_rate = rate; }
+        let Some(start) = offset.checked_mul(2).filter(|start| *start <= pcm.len()) else { return 0; };
+        let count = ((pcm.len() - start) / 2).min(output.len());
+        for (sample, bytes) in output[..count].iter_mut().zip(pcm[start..].chunks_exact(2)) {
+            *sample = f32::from(i16::from_le_bytes([bytes[0], bytes[1]])) / 32767.0;
+        }
+        return count;
+    }
+    0
+}
+
 /// Start audio recording
 /// Returns true on success
 #[unsafe(no_mangle)]
@@ -3111,5 +3150,31 @@ pub extern "C" fn flow_get_openai_base_url(handle: *mut FlowHandle) -> *mut c_ch
             Err(_) => ptr::null_mut(),
         },
         _ => ptr::null_mut(),
+    }
+}
+
+#[cfg(test)]
+mod recording_sample_tests {
+    use super::*;
+
+    #[test]
+    fn stopped_audio_can_finish_captions_without_consuming_transcription() {
+        let db = CString::new(":memory:").unwrap();
+        let handle = flow_init(db.as_ptr());
+        assert!(!handle.is_null());
+        let engine = unsafe { &*handle };
+        let bytes: Vec<u8> = [0i16, 16384, -16384, 32767].into_iter().flat_map(i16::to_le_bytes).collect();
+        *engine.pending_audio.lock() = Some(bytes.clone());
+        *engine.pending_sample_rate.lock() = Some(16000);
+        let mut output = [0.0; 2];
+        let mut rate = 0;
+        assert_eq!(flow_read_recording_samples(handle, 1, output.as_mut_ptr(), 2, &mut rate), 2);
+        assert_eq!(rate, 16000);
+        assert!((output[0] - 0.5).abs() < 0.001);
+        assert!((output[1] + 0.5).abs() < 0.001);
+        assert_eq!(flow_read_recording_samples(handle, 4, output.as_mut_ptr(), 2, &mut rate), 0);
+        assert_eq!(flow_read_recording_samples(handle, u64::MAX, output.as_mut_ptr(), 2, &mut rate), 0);
+        assert_eq!(*engine.pending_audio.lock(), Some(bytes));
+        flow_destroy(handle);
     }
 }

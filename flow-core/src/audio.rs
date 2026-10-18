@@ -207,6 +207,11 @@ impl AudioCapture {
         self.config.sample_rate
     }
 
+    /// Read a bounded mono sample range without draining the recording.
+    pub fn read_samples(&self, offset: usize, output: &mut [f32]) -> usize {
+        copy_samples(&self.buffer.lock(), offset, output)
+    }
+
     /// Get current audio level (RMS amplitude) from the last 50ms of audio
     /// Returns a value between 0.0 and 1.0
     pub fn current_audio_level(&self) -> f32 {
@@ -282,6 +287,13 @@ impl AudioCapture {
             })
             .collect()
     }
+}
+
+fn copy_samples(samples: &[f32], offset: usize, output: &mut [f32]) -> usize {
+    let Some(remaining) = samples.get(offset..) else { return 0; };
+    let count = remaining.len().min(output.len());
+    output[..count].copy_from_slice(&remaining[..count]);
+    count
 }
 
 impl Drop for AudioCapture {
@@ -372,6 +384,18 @@ fn choose_sample_rate(range: cpal::SupportedStreamConfigRange, preferred_rate: u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn incremental_read_is_bounded_non_destructive_and_handles_end() {
+        let samples = [0.0, 0.25, -0.5, 1.0, 0.0];
+        let mut chunk = [0.0; 2];
+        assert_eq!(copy_samples(&samples, 1, &mut chunk), 2);
+        assert_eq!(chunk, [0.25, -0.5]);
+        assert_eq!(copy_samples(&samples, 4, &mut chunk), 1);
+        assert_eq!(copy_samples(&samples, 5, &mut chunk), 0);
+        assert_eq!(copy_samples(&samples, usize::MAX, &mut chunk), 0);
+        assert_eq!(samples.len(), 5);
+    }
 
     #[test]
     fn test_default_config() {

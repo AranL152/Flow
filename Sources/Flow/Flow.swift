@@ -158,6 +158,22 @@ public struct CorrectionValidation: Sendable {
 
 /// Main interface to the Flow engine
 public final class Flow: @unchecked Sendable {
+    /// Mono Float32 frames from the existing Rust microphone capture.
+    public struct RecordingSamples {
+        public let frames: [Float]
+        public let sampleRate: UInt32
+        public let nextOffset: UInt64
+    }
+
+    public func recordingSamples(after offset: UInt64, capacity: Int = 8192) -> RecordingSamples {
+        guard let handle else { return RecordingSamples(frames: [], sampleRate: 0, nextOffset: offset) }
+        var frames = [Float](repeating: 0, count: min(65536, max(1, capacity)))
+        var sampleRate: UInt32 = 0
+        let count = frames.withUnsafeMutableBufferPointer {
+            flow_read_recording_samples(handle, offset, $0.baseAddress, $0.count, &sampleRate)
+        }
+        return RecordingSamples(frames: Array(frames.prefix(count)), sampleRate: sampleRate, nextOffset: offset + UInt64(count))
+    }
     private let handle: OpaquePointer?
 
     /// Demo-only persistent conversations. Serialize calls on the main actor.
