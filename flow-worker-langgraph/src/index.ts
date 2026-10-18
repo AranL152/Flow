@@ -10,6 +10,7 @@
 
 import { Hono } from "hono";
 import { formatStream } from "./streaming.js";
+import { dictationStream } from "./dictation-stream.js";
 import type {
   Env,
   CombinedResponse,
@@ -37,6 +38,19 @@ function statusForGraphError(message: string): 500 | 502 {
 }
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+app.post("/transcribe-stream", async (c) => {
+  let body: unknown;
+  try { body = await c.req.json(); }
+  catch { return c.json({ error: "invalid JSON" }, 400); }
+  const parsed = parseTranscriptionRequest(body);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  return new Response(dictationStream(c.env, parsed.value, c.req.raw.signal), { headers: {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "X-Content-Type-Options": "nosniff",
+  } });
+});
 
 // Native demo: partial speech arrives as text; completion tokens stream back.
 app.post("/format-stream", async (c) => {

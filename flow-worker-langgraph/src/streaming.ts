@@ -1,6 +1,6 @@
 import type { Env } from "./types.js";
 import type { TranscriptionRequestInput } from "./requests.js";
-import { buildFormattingPrompt } from "./prompts.js";
+import { buildFormattingPrompt, buildInstructionPrompt } from "./prompts.js";
 
 /** Normalize real provider tokens to a small, version-independent SSE contract. */
 export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: AbortSignal): ReadableStream<Uint8Array> {
@@ -77,7 +77,7 @@ export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: A
   });
 }
 
-export async function formatStream(env: Env, input: TranscriptionRequestInput, signal?: AbortSignal) {
+export async function formatStream(env: Env, input: TranscriptionRequestInput, signal?: AbortSignal, instruction?: string) {
   if (input.autoRewritingEnabled === false) {
     const text = input.text ?? "";
     return new ReadableStream<Uint8Array>({ start(controller) {
@@ -89,8 +89,8 @@ export async function formatStream(env: Env, input: TranscriptionRequestInput, s
   const model = (env.CHAT_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast") as "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
   const result = await env.AI.run(model, {
     messages: [
-      { role: "system", content: buildFormattingPrompt(input.mode, input.appContext, input.shortcutsTriggered, input.personalization) },
-      { role: "user", content: `<TRANSCRIPTION>\n${input.text}\n</TRANSCRIPTION>` },
+      { role: "system", content: instruction ? buildInstructionPrompt() : buildFormattingPrompt(input.mode, input.appContext, input.shortcutsTriggered, input.personalization) },
+      { role: "user", content: instruction ?? `<TRANSCRIPTION>\n${input.text}\n</TRANSCRIPTION>` },
     ],
     stream: true,
     max_tokens: 700,
