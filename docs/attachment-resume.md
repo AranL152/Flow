@@ -4,6 +4,21 @@ The user asked to implement “Flow, attach…” and then needed to restart the
 Continue the same conversation; implementation is committed on the fork's main.
 Push only to `AranL152/Flow`, never upstream. No coauthor trailers or new branches.
 
+## Latest scope clarification — October 18
+
+The target is the website demo, not normal-app installation. The user clarified:
+“isnt this just for the demo?” Use the existing full Messages runner with generated
+speech and the latest production UI/cloud pipeline. It builds its own helper;
+normal app installation and hotkey permission setup are not prerequisites.
+
+Real-time Cloudflare Nova is deployed, with finalized-ASR handoff through Rust,
+personalization, attachment parsing and normal send learning. See cloud-speech.md
+for costs, fallback and scoped timing checks. The normal bundle was updated and
+launched during an unnecessary install investigation; code commit 28e2d38 is in
+its plist and the old bundle is backed up under .build/native-app-backups. Its
+UI reported Accessibility disabled; do not require enabling it to make the video.
+The synthetic preview was closed; the Messages draft was not changed by install.
+
 ## Current state: screenshot OCR and compact picker (October 18)
 
 The user approved local screenshot-text search, then asked which LLM/API key the

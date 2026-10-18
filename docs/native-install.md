@@ -1,5 +1,11 @@
 # Update and launch the native Mac app
 
+This is optional for everyday hotkey use, not a prerequisite for the website
+video. The user clarified on October 18: “isnt this just for the demo?” Keep
+demo work on `python3 scripts/simulate-imessage-full.py --kind screenshot`, which
+builds its own native production-component runner and uses generated speech.
+Do not require a normal app install or its permission setup to record that demo.
+
 From this checkout:
 
 ```sh
@@ -46,3 +52,9 @@ The latest synthetic checks measured about 0.44–0.47 seconds from Stop to firs
 LLM delta on two successful real-time streams. One of three used fallback and
 took about four seconds. These measurements exclude deliberate smooth reveal
 pacing and are not a guarantee of consistently sub-second latency.
+
+The normal bundle was nevertheless updated and launched during installation
+investigation, at code commit 28e2d38. Signature verification and packaged-resource
+resolution passed, and a live process/window was observed. Its UI reported that
+Accessibility still needed enabling. No microphone or Messages write was tested;
+see [the scoped install report](../review/native-install-verification.json).

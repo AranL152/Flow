@@ -1,0 +1,14 @@
+{
+  "build" : "28e2d38a29d3e249b40ef31964040e0af2d42787",
+  "bundle" : "\/Users\/lumaran\/Desktop\/Flow\/.build\/Flow Attachments.app",
+  "packaged_resources_found" : true,
+  "processes" : [
+    {
+      "finished_launching" : true,
+      "pid" : 43636,
+      "visible_windows" : 1
+    }
+  ],
+  "scope" : "Native bundle signature verified separately; packaged resource resolution and live process\/window checked. Accessibility must be enabled for the new local build. No microphone recording, hotkey event, permission-button click or Messages write was tested.",
+  "status" : "launched"
+}

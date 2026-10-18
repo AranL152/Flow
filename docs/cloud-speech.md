@@ -27,8 +27,9 @@ No new microphone or Speech permission is requested by the cloud client, and no
 new packages are added. The worker limits each socket to five minutes of mono
 PCM16 at 8–48 kHz, closes idle sessions, and accepts only audio and CloseStream
 from clients. The app starts a socket only when audio is captured. This task
-updates the existing worker and builds the app components; it does not replace
-or re-sign the installed permissioned app bundle.
+updates the existing worker and builds the app components. The website demo uses
+its own runner and does not require installing the normal app. A later native
+installation investigation did update that bundle; see native-install.md.
 
 ## Cost, checked October 18, 2026
 
@@ -83,6 +84,7 @@ tests ignored), 99 worker tests, worker typechecking and a typecheck of the
 updated full Messages runner. The Rust fixture verifies the finalized-ASR handoff,
 recipient identity, no learning before Send and saved edited text after Send.
 
-The native indicator, ripple and attachment layout have not changed. The installed
-app's microphone/hotkey path requires the updated app to be launched separately;
-the scoped tests above do not claim it was exercised.
+The native indicator, ripple and attachment layout have not changed. The normal
+app was subsequently packaged and launched, with its signature/resources checked;
+its actual microphone/hotkey path was not exercised. This install is optional
+and is not a requirement for the Messages demo or website recording.
