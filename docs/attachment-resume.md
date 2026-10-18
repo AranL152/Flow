@@ -301,3 +301,13 @@ visually reviewed, and pixel comparison confirmed both brighter glyphs and the
 restored halo. White recipient-glyph pixels stayed unchanged within a two-level
 RGB tolerance; the halo intentionally changes surrounding background pixels.
 The refreshed Replay preview remains open.
+
+## Centered processing pill (October 18)
+
+The user approved the effect and requested it in the full demo, plus a centered
+Transcribing label. The production recording pill now balances the leading
+14-point spinner with an equal trailing slot, centering the label itself. The
+spinner uses a dark appearance so it is visible against the pill in light-mode
+previews too. The build and eight local native preview checks passed, and the
+updated processing pill was visually reviewed. The same native recording view
+already drives the Messages demo and production recording indicator.

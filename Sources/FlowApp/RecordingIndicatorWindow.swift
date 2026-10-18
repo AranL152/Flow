@@ -19,6 +19,7 @@ final class RecordingIndicatorWindow {
         let hosting = NSHostingController(rootView: view)
 
         let panel = NSPanel(contentViewController: hosting)
+        panel.title = "Flow · Recording"
         panel.styleMask = [.borderless, .nonactivatingPanel]
         panel.isFloatingPanel = true
         panel.level = .statusBar
@@ -104,6 +105,8 @@ struct RecordingIndicatorView: View {
                         .progressViewStyle(.circular)
                         .controlSize(.small)
                         .tint(.white)
+                        .environment(\.colorScheme, .dark)
+                        .frame(width: 14, height: 14)
                 } else if appState.isRecording {
                     Circle().fill(FW.recording).frame(width: 7, height: 7)
                 }
@@ -117,6 +120,9 @@ struct RecordingIndicatorView: View {
                     Text(String(format: "%d:%02d", appState.recordingDuration / 60000, appState.recordingDuration / 1000 % 60))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.45))
+                } else if appState.isProcessing || appState.isInitializingModel {
+                    // Balance the spinner's width so the label itself is centered.
+                    Color.clear.frame(width: 14, height: 14).accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 14)
