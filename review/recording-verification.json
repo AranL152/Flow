@@ -1,0 +1,81 @@
+{
+  "kind": "isolated native rendering and generated-audio integration test",
+  "expected_phrase": "Can you check the slides tomorrow",
+  "checks": {
+    "ui_caption_reached_full_input": true,
+    "ui_stopped_cleanly": true,
+    "ui_clock_advanced_through_silence": true,
+    "speech_has_multiple_real_partial_results": true,
+    "speech_final_matches_generated_audio": true,
+    "speech_partial_precedes_final": true,
+    "speech_partial_arrived_while_audio_was_feeding": true,
+    "speech_audio_meter_responded": true,
+    "speech_stopped_cleanly": true,
+    "views_rendered": true
+  },
+  "ui": {
+    "audio_finished_seconds": null,
+    "audio_started_seconds": null,
+    "events": [],
+    "final_text": "Can you check the slides tomorrow",
+    "frame_updates": 150,
+    "peak_level": 0.20497901737689972,
+    "processing": false,
+    "recording": false,
+    "source": "simulated UI input",
+    "status": "Simulated captions and measured-level sequence \u00b7 UI verification only"
+  },
+  "speech": {
+    "audio_finished_seconds": 22.12728202342987,
+    "audio_started_seconds": 18.910526037216187,
+    "events": [
+      {
+        "final": false,
+        "seconds": 19.917932987213135,
+        "text": "Can"
+      },
+      {
+        "final": false,
+        "seconds": 20.2601820230484,
+        "text": "Can you"
+      },
+      {
+        "final": false,
+        "seconds": 20.701731085777283,
+        "text": "Can you check"
+      },
+      {
+        "final": false,
+        "seconds": 21.1370290517807,
+        "text": "Can you check the"
+      },
+      {
+        "final": false,
+        "seconds": 21.679808020591736,
+        "text": "Can you check the slide"
+      },
+      {
+        "final": false,
+        "seconds": 22.140483021736145,
+        "text": "Can you check the slides"
+      },
+      {
+        "final": false,
+        "seconds": 22.145451068878174,
+        "text": "Can you check the slides tomorrow"
+      },
+      {
+        "final": true,
+        "seconds": 22.161526083946228,
+        "text": "Can you check the slides tomorrow"
+      }
+    ],
+    "final_text": "Can you check the slides tomorrow",
+    "frame_updates": 35,
+    "peak_level": 0.8317736387252808,
+    "processing": false,
+    "recording": false,
+    "source": "generated audio through on-device recognition",
+    "status": "Audio fixture completed \u00b7 8 recognition updates"
+  }
+}
