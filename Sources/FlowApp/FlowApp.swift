@@ -26,7 +26,9 @@ struct FlowApp: App {
     var body: some Scene {
         // main window
         WindowGroup {
-            if ProcessInfo.processInfo.arguments.contains("--demo") {
+            if ProcessInfo.processInfo.arguments.contains("--recording-preview") {
+                EmptyView()
+            } else if ProcessInfo.processInfo.arguments.contains("--demo") {
                 DemoView().frame(minWidth: 1000, minHeight: 760)
             } else {
                 ContentView().environmentObject(appState)
