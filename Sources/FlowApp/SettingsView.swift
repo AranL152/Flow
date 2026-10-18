@@ -431,6 +431,7 @@ private struct GeneralSection: View {
     @AppStorage("liveCaptionsEnabled") private var liveCaptionsEnabled = true
     @AppStorage("streamOutputEnabled") private var streamOutputEnabled = true
     @State private var autoRewritingEnabled = true
+    @State private var captionsAuthorized = LiveSpeechCaptions.isAuthorized
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing12) {
@@ -444,6 +445,11 @@ private struct GeneralSection: View {
                     .onChange(of: liveCaptionsEnabled) { _, enabled in
                         appState.updateLiveCaptions(enabled: enabled)
                     }
+                if liveCaptionsEnabled && !captionsAuthorized {
+                    Button("Enable speech recognition for captions") {
+                        Task { captionsAuthorized = await LiveSpeechCaptions.requestPermission() }
+                    }
+                }
                 Text("Show your words as you speak, using on-device recognition. Early words may revise as you continue.")
                     .font(.caption)
                     .foregroundStyle(FW.textMuted)

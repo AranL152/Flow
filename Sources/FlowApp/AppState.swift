@@ -137,7 +137,6 @@ final class AppState: ObservableObject {
 
         // Configure the edit learning service
         EditLearningService.shared.configure(engine: engine)
-        attachments.startObservingDownloads()
     }
 
     func cleanup() {

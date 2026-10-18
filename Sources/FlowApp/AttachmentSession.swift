@@ -50,9 +50,14 @@ final class AttachmentSession: ObservableObject {
 
     func startObservingDownloads() {
         guard timer == nil else { return }
-        try? downloads.observe()
+        do { try downloads.observe() }
+        catch { status = error.localizedDescription; return }
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            Task { @MainActor in try? self?.downloads.observe() }
+            Task { @MainActor in
+                guard let self else { return }
+                do { try self.downloads.observe() }
+                catch { self.stopObservingDownloads() }
+            }
         }
     }
 
@@ -66,13 +71,23 @@ final class AttachmentSession: ObservableObject {
         dismiss()
         clipboard = AttachmentClipboardSnapshot(board: board)
         target = AttachmentPasteTarget(app: app, contact: contact)
-        startObservingDownloads()
     }
 
     func receive(_ plan: AttachmentPlan, board: NSPasteboard = .general) {
         self.plan = plan
         clipboardChanged = clipboard.map { $0.changeCount != board.changeCount } ?? false
-        resolve()
+        if plan.request?.source == .recentDownload && timer == nil {
+            // Access Downloads only after an explicit voice command. Never
+            // trigger file-access dialogs during app launch or ordinary speech.
+            startObservingDownloads()
+            let session = sessionID
+            status = "Checking the newest matching download…"
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(1100))
+                guard let self, self.sessionID == session, !Task.isCancelled else { return }
+                self.resolve()
+            }
+        } else { resolve() }
     }
 
     func refresh() {

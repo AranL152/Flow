@@ -26,12 +26,12 @@ public final class LiveSpeechCaptions {
             return
         }
         onStatus?("Preparing live captions…")
-        let authorization = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
-        }
+        // Recording/replay must never initiate another permission dialog.
+        // Access is requested only from the explicit Settings action below.
+        let authorization = SFSpeechRecognizer.authorizationStatus()
         guard session == generation, !Task.isCancelled else { return }
         guard authorization == .authorized else {
-            onStatus?("Allow Speech Recognition in System Settings for live captions.")
+            onStatus?("Live captions are unavailable; voice dictation still works.")
             return
         }
         guard let recognizer = SFSpeechRecognizer(locale: Locale.current),
@@ -62,6 +62,18 @@ public final class LiveSpeechCaptions {
                     self.onStatus?("Live captions stopped: \(error.localizedDescription)")
                 }
             }
+        }
+    }
+
+    public static var isAuthorized: Bool { SFSpeechRecognizer.authorizationStatus() == .authorized }
+
+    /// Call only in direct response to the user's Enable action.
+    public static func requestPermission() async -> Bool {
+        let status = SFSpeechRecognizer.authorizationStatus()
+        if status == .authorized { return true }
+        guard status == .notDetermined else { return false }
+        return await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0 == .authorized) }
         }
     }
 
