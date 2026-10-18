@@ -36,6 +36,14 @@ final class AppState: ObservableObject {
         return UserDefaults.standard.object(forKey: "liveCaptionsEnabled") as? Bool ?? true
     }
 
+    @Published var streamedOutput = ""
+    @Published var isStreamingOutput = false
+    private var streamTask: Task<Void, Never>?
+    private var streamInputMonitor: Any?
+    private var streamTargetUnchanged = true
+    private var streamedInsertion: StreamedTextInsertion?
+    var streamOutputEnabled: Bool { UserDefaults.standard.object(forKey: "streamOutputEnabled") as? Bool ?? true }
+
     /// Last transcribed text
     @Published var lastTranscription: String?
 
@@ -125,6 +133,10 @@ final class AppState: ObservableObject {
     }
 
     func cleanup() {
+        streamTask?.cancel()
+        stopStreamInputMonitor()
+        streamedInsertion?.cancel(restoringOriginal: true)
+        streamedInsertion = nil
         captionTask?.cancel()
         speechCaptions.cancel()
         if let observer = workspaceObserver {
@@ -490,7 +502,27 @@ final class AppState: ObservableObject {
             return
         }
 
+        EditLearningService.shared.cancelMonitoring()
         targetApplication = NSWorkspace.shared.frontmostApplication
+        stopStreamInputMonitor()
+        streamTargetUnchanged = true
+        streamedOutput = ""; isStreamingOutput = false
+        streamedInsertion?.cancel(restoringOriginal: true)
+        streamedInsertion = nil
+        if streamOutputEnabled {
+            let ignoredKeyCode: UInt16?
+            if case let .custom(keyCode, _, _) = hotkey.kind { ignoredKeyCode = UInt16(keyCode) }
+            else { ignoredKeyCode = nil }
+            streamInputMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
+                if event.type == .keyDown, event.keyCode == ignoredKeyCode { return }
+                Task { @MainActor in
+                    self?.streamTargetUnchanged = false
+                    self?.streamTask?.cancel()
+                }
+            }
+            streamedInsertion = StreamedTextInsertion.capture(app: targetApplication, ignoredKeyCode: ignoredKeyCode)
+            streamedInsertion?.onInterrupted = { [weak self] in self?.streamTask?.cancel() }
+        }
         liveTranscript = ""
         liveCaptionStatus = liveCaptionsEnabled ? "Listening…" : "Live captions are off"
 
@@ -553,6 +585,9 @@ final class AppState: ObservableObject {
                 // Revert UI state
                 self.isRecording = false
                 self.updateRecordingIndicatorVisibility()
+                self.streamedInsertion?.cancel(restoringOriginal: true)
+                self.streamedInsertion = nil
+                self.stopStreamInputMonitor()
                 self.errorMessage = self.engine.lastError ?? "Failed to start recording"
                 AudioFeedback.shared.playError()
                 self.volumeManager.restoreAfterRecording()
@@ -587,13 +622,17 @@ final class AppState: ObservableObject {
             setProcessing(true)
             transcribe()
         } else {
+            streamedInsertion?.cancel(restoringOriginal: true)
+            streamedInsertion = nil
+            stopStreamInputMonitor()
             log("⚠️ [RECORDING] Recording cancelled (too short)")
             updateRecordingIndicatorVisibility()
         }
     }
 
     private func transcribe() {
-        let appName = currentApp
+        if streamOutputEnabled { transcribeStreaming(); return }
+        let appName = targetApplication?.localizedName ?? currentApp
         let mode = currentMode
 
         log("🔄 [TRANSCRIBE] Starting transcription - App: \(appName), Mode: \(mode.displayName)")
@@ -634,6 +673,84 @@ final class AppState: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Only validated completion starts edit learning. Partial drafts never count
+    /// as sent, and the composer is never given a Return key event.
+    private func transcribeStreaming() {
+        let appName = targetApplication?.localizedName ?? currentApp
+        let insertion = streamedInsertion
+        streamTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                self.streamedInsertion = nil
+                self.stopStreamInputMonitor()
+                self.streamTask = nil
+                self.isStreamingOutput = false
+                self.refreshHistory()
+                self.finishProcessing()
+            }
+            do {
+                if !self.streamTargetUnchanged || insertion?.interrupted == true { throw CancellationError() }
+                var lastWrite = Date.distantPast
+                var completed = false
+                for try await event in self.engine.transcribeStream(appName: appName) {
+                    try Task.checkCancellation()
+                    switch event {
+                    case .delta(let delta):
+                        self.streamedOutput += delta
+                        self.isStreamingOutput = true
+                        if let insertion, Date().timeIntervalSince(lastWrite) >= 0.04 {
+                            guard insertion.apply(output: self.streamedOutput) else { throw CancellationError() }
+                            lastWrite = Date()
+                        }
+                    case .completed(let text):
+                        guard !text.isEmpty else { throw NSError(domain: "Flow.Stream", code: 3,
+                            userInfo: [NSLocalizedDescriptionKey: "The model returned an empty draft"]) }
+                        self.stopStreamInputMonitor()
+                        if let insertion {
+                            guard insertion.finish(output: text) else { throw CancellationError() }
+                            EditLearningService.shared.startMonitoring(originalText: text, targetApp: self.targetApplication)
+                        } else {
+                            // Apps without writable AX ranges still show genuine tokens
+                            // in Flow, then receive one final paste if focus stayed put.
+                            guard self.streamTargetUnchanged, let target = self.targetApplication,
+                                  target.bundleIdentifier != Bundle.main.bundleIdentifier,
+                                  NSWorkspace.shared.frontmostApplication?.processIdentifier == target.processIdentifier else {
+                                self.lastTranscription = text
+                                self.engine.discardPendingDictation()
+                                self.errorMessage = "Draft ready in Flow. Focus changed, so it was not inserted."
+                                return
+                            }
+                            self.lastTranscription = text
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(text, forType: .string)
+                            self.pasteText()
+                        }
+                        self.lastTranscription = text
+                        self.streamedOutput = text
+                        self.errorMessage = nil
+                        completed = true
+                    }
+                }
+                if !completed { throw NSError(domain: "Flow.Stream", code: 4,
+                    userInfo: [NSLocalizedDescriptionKey: "The stream ended before the draft was complete"]) }
+            } catch {
+                let restored = insertion?.cancel(restoringOriginal: true) ?? false
+                self.engine.discardPendingDictation()
+                EditLearningService.shared.cancelMonitoring()
+                if error is CancellationError || Task.isCancelled {
+                    self.errorMessage = "Insertion stopped because the draft or focus changed. Your edits were kept."
+                } else {
+                    self.errorMessage = restored ? "Streaming failed; the original draft was restored. \(error.localizedDescription)" : error.localizedDescription
+                    AudioFeedback.shared.playError()
+                }
+            }
+        }
+    }
+
+    private func stopStreamInputMonitor() {
+        if let streamInputMonitor { NSEvent.removeMonitor(streamInputMonitor); self.streamInputMonitor = nil }
     }
 
     func updateLiveCaptions(enabled: Bool) {
