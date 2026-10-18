@@ -1,0 +1,6 @@
+# Local research server only; do not deploy this probe.
+name = "flow-attachment-intent-probe"
+main = "worker.ts"
+compatibility_date = "2024-06-01"
+[ai]
+binding = "AI"

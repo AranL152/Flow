@@ -1,0 +1,22 @@
+[
+ {"id":"literal_request_to_recipient","mode":"dictation","text":"Please attach the latest invoice when you reply.","sources":[],"exact_message":true},
+ {"id":"literal_email_question","mode":"dictation","text":"Can you email me the screenshot?","sources":[],"exact_message":true},
+ {"id":"literal_negation","mode":"dictation","text":"Don't send the deck until Friday.","sources":[],"exact_message":true},
+ {"id":"literal_object_description","mode":"dictation","text":"The screenshot with 42 percent is wrong.","sources":[],"exact_message":true},
+ {"id":"clipboard_only","mode":"assist","text":"Flow, attach the image on my clipboard.","sources":["clipboard"],"kind":"image","message_empty":true},
+ {"id":"clipboard_message","mode":"assist","text":"Tell Alex here's the chart. Flow, attach the image from my clipboard.","sources":["clipboard"],"contains":["chart"],"excludes":["clipboard","attach"]},
+ {"id":"latest_download_only","mode":"assist","text":"Flow, attach the last file I downloaded.","sources":["recent_download"],"message_empty":true},
+ {"id":"latest_pdf_message","mode":"assist","text":"Tell Alex here's the updated deck. Flow, attach the most recent PDF I downloaded.","sources":["recent_download"],"kind":"pdf","contains":["updated","deck"],"excludes":["downloaded","PDF","attach"]},
+ {"id":"latest_download_asr_no_punctuation","mode":"assist","text":"tell alex here is the invoice flow attach the last pdf i downloaded","sources":["recent_download"],"kind":"pdf","contains":["invoice"],"excludes":["downloaded","attach"]},
+ {"id":"description_belongs_to_search","mode":"assist","text":"Tell Alex here's the chart. Flow, find and attach the retention screenshot with 42 percent from yesterday.","sources":["file_search"],"contains":["chart"],"excludes":["42","yesterday","find","attach"],"query_contains":["retention","42"]},
+ {"id":"filename_search","mode":"assist","text":"Flow, find and attach the file named Q3 board review.","sources":["file_search"],"query_contains":["Q3","board","review"],"message_empty":true},
+ {"id":"recipient_request_in_assist_mode","mode":"assist","text":"Tell Alex please attach the invoice when you reply.","sources":[],"contains":["attach","invoice","reply"]},
+ {"id":"quoted_command_is_message","mode":"assist","text":"Tell Alex the tutorial literally says attach the latest download, but that is not what I want.","sources":[],"contains":["tutorial","not"]},
+ {"id":"negated_action","mode":"assist","text":"Tell Alex here's the chart, but do not attach anything.","sources":[],"contains":["chart"]},
+ {"id":"ambiguous_imperative","mode":"assist","text":"Please attach the invoice.","sources":[],"clarify":true},
+ {"id":"preserve_current_date_and_negation","mode":"assist","text":"Tell Alex do not review this until Friday. Flow, attach the image from my clipboard.","sources":["clipboard"],"contains":["not","Friday"],"excludes":["clipboard"]},
+ {"id":"two_explicit_sources","mode":"assist","text":"Tell Alex here are both. Flow, attach my clipboard image and the last PDF I downloaded.","sources":["clipboard","recent_download"],"contains":["both"]},
+ {"id":"missing_context","mode":"assist","text":"Flow, attach the one I meant earlier.","sources":[],"clarify":true},
+ {"id":"future_intention_is_message","mode":"assist","text":"Tell Alex I will send the deck tomorrow.","sources":[],"contains":["tomorrow","deck"]},
+ {"id":"mention_email_no_address_invention","mode":"assist","text":"Tell Alex my email address changed yesterday.","sources":[],"contains":["email","changed","yesterday"],"excludes":["@"]}
+]

@@ -1,0 +1,487 @@
+{
+  "kind": "synthetic text intent feasibility test, existing Workers AI model through local-only prototype; no ASR or real file insertion",
+  "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "limitations": [
+    "Hand-authored development cases, one run per case, not a held-out accuracy benchmark",
+    "Dictation-mode cases pass through a deterministic guard and do not measure model classification",
+    "No actual clipboard, Downloads, private file contents, message recipients or sending used"
+  ],
+  "summary": {
+    "cases": 20,
+    "passed": 17,
+    "guarded_dictation_cases": 4,
+    "model_median_ms": 896,
+    "model_max_ms": 3023,
+    "assist_requests": 16,
+    "valid_model_plans": 15
+  },
+  "results": [
+    {
+      "id": "literal_request_to_recipient",
+      "input": "Please attach the latest invoice when you reply.",
+      "mode": "dictation",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "literal_message_preserved": true
+      },
+      "plan": {
+        "message": "Please attach the latest invoice when you reply.",
+        "requests": [],
+        "needs_clarification": false
+      },
+      "model_called": false,
+      "milliseconds": 0,
+      "wall_seconds": 0.006
+    },
+    {
+      "id": "literal_email_question",
+      "input": "Can you email me the screenshot?",
+      "mode": "dictation",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "literal_message_preserved": true
+      },
+      "plan": {
+        "message": "Can you email me the screenshot?",
+        "requests": [],
+        "needs_clarification": false
+      },
+      "model_called": false,
+      "milliseconds": 0,
+      "wall_seconds": 0.006
+    },
+    {
+      "id": "literal_negation",
+      "input": "Don't send the deck until Friday.",
+      "mode": "dictation",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "literal_message_preserved": true
+      },
+      "plan": {
+        "message": "Don't send the deck until Friday.",
+        "requests": [],
+        "needs_clarification": false
+      },
+      "model_called": false,
+      "milliseconds": 0,
+      "wall_seconds": 0.006
+    },
+    {
+      "id": "literal_object_description",
+      "input": "The screenshot with 42 percent is wrong.",
+      "mode": "dictation",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "literal_message_preserved": true
+      },
+      "plan": {
+        "message": "The screenshot with 42 percent is wrong.",
+        "requests": [],
+        "needs_clarification": false
+      },
+      "model_called": false,
+      "milliseconds": 0,
+      "wall_seconds": 0.001
+    },
+    {
+      "id": "clipboard_only",
+      "input": "Flow, attach the image on my clipboard.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "no_invented_message": true,
+        "correct_type": true
+      },
+      "plan": {
+        "message": "",
+        "requests": [
+          {
+            "source": "clipboard",
+            "query": "",
+            "kind": "image"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 850,
+      "wall_seconds": 0.853
+    },
+    {
+      "id": "clipboard_message",
+      "input": "Tell Alex here's the chart. Flow, attach the image from my clipboard.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "message_has_chart": true,
+        "message_excludes_clipboard": true,
+        "message_excludes_attach": true
+      },
+      "plan": {
+        "message": "Tell Alex here's the chart.",
+        "requests": [
+          {
+            "source": "clipboard",
+            "query": "",
+            "kind": "image"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 3023,
+      "wall_seconds": 3.026
+    },
+    {
+      "id": "latest_download_only",
+      "input": "Flow, attach the last file I downloaded.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "no_invented_message": true
+      },
+      "plan": {
+        "message": "",
+        "requests": [
+          {
+            "source": "recent_download",
+            "query": "",
+            "kind": "any"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 766,
+      "wall_seconds": 0.767
+    },
+    {
+      "id": "latest_pdf_message",
+      "input": "Tell Alex here's the updated deck. Flow, attach the most recent PDF I downloaded.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "correct_type": true,
+        "message_has_updated": true,
+        "message_has_deck": true,
+        "message_excludes_downloaded": true,
+        "message_excludes_PDF": true,
+        "message_excludes_attach": true
+      },
+      "plan": {
+        "message": "Tell Alex here's the updated deck.",
+        "requests": [
+          {
+            "source": "recent_download",
+            "query": "PDF",
+            "kind": "pdf"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 1126,
+      "wall_seconds": 1.129
+    },
+    {
+      "id": "latest_download_asr_no_punctuation",
+      "input": "tell alex here is the invoice flow attach the last pdf i downloaded",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "correct_type": true,
+        "message_has_invoice": true,
+        "message_excludes_downloaded": true,
+        "message_excludes_attach": true
+      },
+      "plan": {
+        "message": "here is the invoice",
+        "requests": [
+          {
+            "source": "recent_download",
+            "query": "pdf",
+            "kind": "pdf"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 838,
+      "wall_seconds": 0.843
+    },
+    {
+      "id": "description_belongs_to_search",
+      "input": "Tell Alex here's the chart. Flow, find and attach the retention screenshot with 42 percent from yesterday.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "message_has_chart": true,
+        "message_excludes_42": true,
+        "message_excludes_yesterday": true,
+        "message_excludes_find": true,
+        "message_excludes_attach": true,
+        "query_has_retention": true,
+        "query_has_42": true
+      },
+      "plan": {
+        "message": "Tell Alex here's the chart.",
+        "requests": [
+          {
+            "source": "file_search",
+            "query": "retention screenshot with 42 percent from yesterday",
+            "kind": "image"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 2145,
+      "wall_seconds": 2.149
+    },
+    {
+      "id": "filename_search",
+      "input": "Flow, find and attach the file named Q3 board review.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "no_invented_message": true,
+        "query_has_Q3": true,
+        "query_has_board": true,
+        "query_has_review": true
+      },
+      "plan": {
+        "message": "",
+        "requests": [
+          {
+            "source": "file_search",
+            "query": "Q3 board review",
+            "kind": "any"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 1216,
+      "wall_seconds": 1.22
+    },
+    {
+      "id": "recipient_request_in_assist_mode",
+      "input": "Tell Alex please attach the invoice when you reply.",
+      "mode": "assist",
+      "passed": false,
+      "checks": {
+        "correct_sources": false,
+        "clarification": true,
+        "message_has_attach": true,
+        "message_has_invoice": true,
+        "message_has_reply": true
+      },
+      "plan": {
+        "message": "Tell Alex please attach the invoice when you reply.",
+        "requests": [
+          {
+            "source": "clipboard",
+            "query": "invoice",
+            "kind": "any"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 1028,
+      "wall_seconds": 1.031
+    },
+    {
+      "id": "quoted_command_is_message",
+      "input": "Tell Alex the tutorial literally says attach the latest download, but that is not what I want.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "message_has_tutorial": true,
+        "message_has_not": true
+      },
+      "plan": {
+        "message": "The tutorial literally says attach the latest download, but that is not what I want.",
+        "requests": [],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 926,
+      "wall_seconds": 0.932
+    },
+    {
+      "id": "negated_action",
+      "input": "Tell Alex here's the chart, but do not attach anything.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "message_has_chart": true
+      },
+      "plan": {
+        "message": "here's the chart, but do not attach anything",
+        "requests": [],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 735,
+      "wall_seconds": 0.738
+    },
+    {
+      "id": "ambiguous_imperative",
+      "input": "Please attach the invoice.",
+      "mode": "assist",
+      "passed": false,
+      "checks": {
+        "correct_sources": false,
+        "clarification": false
+      },
+      "plan": {
+        "message": "Please send me the invoice",
+        "requests": [
+          {
+            "source": "file_search",
+            "query": "invoice",
+            "kind": "any"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 1631,
+      "wall_seconds": 1.635
+    },
+    {
+      "id": "preserve_current_date_and_negation",
+      "input": "Tell Alex do not review this until Friday. Flow, attach the image from my clipboard.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "message_has_not": true,
+        "message_has_Friday": true,
+        "message_excludes_clipboard": true
+      },
+      "plan": {
+        "message": "Tell Alex do not review this until Friday.",
+        "requests": [
+          {
+            "source": "clipboard",
+            "query": "",
+            "kind": "image"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 724,
+      "wall_seconds": 0.728
+    },
+    {
+      "id": "two_explicit_sources",
+      "input": "Tell Alex here are both. Flow, attach my clipboard image and the last PDF I downloaded.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "message_has_both": true
+      },
+      "plan": {
+        "message": "Tell Alex here are both",
+        "requests": [
+          {
+            "source": "clipboard",
+            "query": "",
+            "kind": "image"
+          },
+          {
+            "source": "recent_download",
+            "query": "",
+            "kind": "pdf"
+          }
+        ],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 896,
+      "wall_seconds": 0.9
+    },
+    {
+      "id": "missing_context",
+      "input": "Flow, attach the one I meant earlier.",
+      "mode": "assist",
+      "passed": false,
+      "error": "HTTP Error 502: Bad Gateway"
+    },
+    {
+      "id": "future_intention_is_message",
+      "input": "Tell Alex I will send the deck tomorrow.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "message_has_tomorrow": true,
+        "message_has_deck": true
+      },
+      "plan": {
+        "message": "I will send the deck tomorrow",
+        "requests": [],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 816,
+      "wall_seconds": 0.821
+    },
+    {
+      "id": "mention_email_no_address_invention",
+      "input": "Tell Alex my email address changed yesterday.",
+      "mode": "assist",
+      "passed": true,
+      "checks": {
+        "correct_sources": true,
+        "clarification": true,
+        "message_has_email": true,
+        "message_has_changed": true,
+        "message_has_yesterday": true,
+        "message_excludes_@": true
+      },
+      "plan": {
+        "message": "my email address changed yesterday",
+        "requests": [],
+        "needs_clarification": false
+      },
+      "model_called": true,
+      "milliseconds": 615,
+      "wall_seconds": 0.619
+    }
+  ]
+}
