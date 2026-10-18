@@ -31,8 +31,9 @@ final class AppState: ObservableObject {
     @Published var liveCaptionStatus = "Listening…"
     private let speechCaptions = LiveSpeechCaptions()
     private var captionTask: Task<Void, Never>?
+    var isVoiceSimulation: Bool { ProcessInfo.processInfo.arguments.contains("--voice-simulation") }
     var liveCaptionsEnabled: Bool {
-        if ProcessInfo.processInfo.arguments.contains("--recording-preview") { return true }
+        if ProcessInfo.processInfo.arguments.contains("--recording-preview") || isVoiceSimulation { return true }
         return UserDefaults.standard.object(forKey: "liveCaptionsEnabled") as? Bool ?? true
     }
 
@@ -109,6 +110,7 @@ final class AppState: ObservableObject {
         let demoOnly = ProcessInfo.processInfo.arguments.contains("--demo")
             || ProcessInfo.processInfo.arguments.contains("--recording-preview")
             || ProcessInfo.processInfo.arguments.contains("--stream-insertion-preview")
+            || ProcessInfo.processInfo.arguments.contains("--voice-simulation")
         self.engine = Flow(dbPath: demoOnly ? ":memory:" : nil)
         self.isConfigured = engine.isConfigured
         self.hotkey = Hotkey.load()

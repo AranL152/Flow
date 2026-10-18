@@ -39,7 +39,7 @@ struct RecordView: View {
                     .padding(.bottom, FW.spacing16)
                 }
 
-                if !appState.isAccessibilityEnabled {
+                if !appState.isAccessibilityEnabled && !appState.isVoiceSimulation {
                     banner(text: "Enable Accessibility to use the hotkey.", actionTitle: "Enable") {
                         appState.requestAccessibilityPermission()
                     }
@@ -211,7 +211,7 @@ struct RecordView: View {
                             .font(FW.fontMonoLarge)
                     }
                 } else {
-                    Text("Record")
+                    Text(appState.isVoiceSimulation ? "Voice simulation" : "Record")
                         .font(.system(size: 18, weight: .semibold))
                 }
             }
@@ -226,11 +226,15 @@ struct RecordView: View {
                     .strokeBorder(appState.isRecording ? FW.danger : FW.accent, lineWidth: 2)
             }
             .onTapGesture {
-                appState.toggleRecording()
+                if !appState.isVoiceSimulation { appState.toggleRecording() }
             }
 
             // Shortcut hint
-            if case .globe = appState.hotkey.kind {
+            if appState.isVoiceSimulation {
+                Text("Generated audio · no microphone capture")
+                    .font(FW.fontMonoSmall)
+                    .foregroundStyle(FW.textMuted)
+            } else if case .globe = appState.hotkey.kind {
                 Text("Hold \(appState.hotkey.displayName) to record")
                     .font(FW.fontMonoSmall)
                     .foregroundStyle(FW.textMuted)

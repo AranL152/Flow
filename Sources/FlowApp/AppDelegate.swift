@@ -14,6 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
         DispatchQueue.main.async { @MainActor in
             NSApp.setActivationPolicy(.regular)
+            if ProcessInfo.processInfo.arguments.contains("--voice-simulation") {
+                let model = VoiceSimulationModel(state: AppState())
+                let host = NSHostingController(rootView: VoiceSimulationView(model: model))
+                let window = NSWindow(contentViewController: host)
+                window.title = "Flow · Live Voice Simulation"
+                window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+                window.setContentSize(NSSize(width: 1020, height: min(820, (NSScreen.main?.visibleFrame.height ?? 900) - 70)))
+                window.center(); window.makeKeyAndOrderFront(nil)
+                self.verificationWindow = window
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
             if ProcessInfo.processInfo.arguments.contains("--stream-insertion-preview") {
                 let verification = StreamInsertionVerification()
                 self.streamVerification = verification
