@@ -39,6 +39,7 @@ export interface TranscriptionRequestInput {
   shortcutsTriggered: string[];
   shortcutDefinitions?: ShortcutDefinition[];
   attachmentCommandsEnabled?: boolean;
+  attachmentSearchEnabled?: boolean;
   voiceInstruction?: string;
   personalization?: string;
   autoRewritingEnabled?: boolean;
@@ -196,6 +197,9 @@ export function parseTranscriptionRequest(
   if (completion.attachment_commands_enabled !== undefined && typeof completion.attachment_commands_enabled !== "boolean") {
     return err("completion.attachment_commands_enabled must be a boolean");
   }
+  if (completion.attachment_search_enabled !== undefined && typeof completion.attachment_search_enabled !== "boolean") {
+    return err("completion.attachment_search_enabled must be a boolean");
+  }
   const definitions = completion.shortcut_definitions ?? [];
   if (!Array.isArray(definitions) || definitions.length > 100 || definitions.some(s =>
     !asRecord(s) || typeof s.trigger !== "string" || !s.trigger.trim() || s.trigger.length > 1000 ||
@@ -219,6 +223,7 @@ export function parseTranscriptionRequest(
   return ok({
     audioB64,
     ...(completion.attachment_commands_enabled === undefined ? {} : { attachmentCommandsEnabled: completion.attachment_commands_enabled as boolean }),
+    ...(completion.attachment_search_enabled === undefined ? {} : { attachmentSearchEnabled: completion.attachment_search_enabled as boolean }),
     text: text.value,
     audioLanguage,
     promptHint: promptHint.value,

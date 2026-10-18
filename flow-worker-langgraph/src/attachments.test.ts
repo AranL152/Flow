@@ -3,6 +3,19 @@ import { parseAttachmentCommand as parse } from "./attachments.js";
 
 describe("explicit attachment boundary", () => {
   it.each([
+    ["Hey Alex, here's the slideshow. Flow, find my robotics presentation.", "Hey Alex, here's the slideshow.", "robotics", "presentation"],
+    ["Flow attach the beach trip photo", "", "beach trip", "image"],
+    ["Flow search my files for invoice", "", "invoice", "any"],
+    ["Flow find the PDF called Final Report", "", "Final Report", "pdf"],
+  ])("offers filename search for %s only to capable clients", (text, message, query, kind) => {
+    expect(parse(text, true)).toMatchObject({ message, request: { source: "file_search", query, kind } });
+    expect(parse(text)?.request).toBeUndefined();
+  });
+  it.each(["Flow find my image", "Flow find /etc/passwd", "Flow find invoice and send it", "Don't Flow find invoice", 'The tutorial says "Flow find invoice"'])
+    ("doesn't turn ambiguous, path or reported content into a search: %s", text => {
+      expect(parse(text, true)?.request).toBeUndefined();
+    });
+  it.each([
     ["Here's the deck. Flow, attach the PDF I just downloaded.", "Here's the deck.", "recent_download", "pdf"],
     ["Here's the deck. Flow. Attach the PDF I just downloaded.", "Here's the deck.", "recent_download", "pdf"],
     ["Here's the deck Flow attach the pdf I just downloaded", "Here's the deck", "recent_download", "pdf"],

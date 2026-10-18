@@ -17,6 +17,13 @@ function validBody(): Record<string, unknown> {
 }
 
 describe("parseTranscriptionRequest", () => {
+  it("requires a boolean search capability and carries it through", () => {
+    const body = validBody();
+    body.completion = { mode: "casual", attachment_search_enabled: "yes" };
+    expect(parseTranscriptionRequest(body).ok).toBe(false);
+    body.completion = { mode: "casual", attachment_search_enabled: true };
+    expect(parseTranscriptionRequest(body)).toMatchObject({ ok: true, value: { attachmentSearchEnabled: true } });
+  });
   it("accepts a minimal request and defaults the shortcut list", () => {
     const result = parseTranscriptionRequest(validBody());
 

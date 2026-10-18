@@ -1,7 +1,8 @@
 /** No model chooses files. This parser returns a local source request only. */
 export interface AttachmentRequest {
-  source: "clipboard" | "recent_download";
+  source: "clipboard" | "recent_download" | "file_search";
   kind: "any" | "image" | "pdf" | "presentation";
+  query?: string;
 }
 export interface AttachmentPlan {
   message: string;
@@ -11,8 +12,8 @@ export interface AttachmentPlan {
 }
 
 /** V1 contract: one terminal "Flow, attach …" instruction, after the message. */
-export function parseAttachmentCommand(text: string): AttachmentPlan | undefined {
-  const cue = /\b(?:hey\s+)?flow\s*[,;:.!?]*\s+attach\b/iu.exec(text);
+export function parseAttachmentCommand(text: string, fileSearchEnabled = false): AttachmentPlan | undefined {
+  const cue = /\b(?:hey\s+)?flow\s*[,;:.!?]*\s+(attach|find|search(?:\s+for)?)\b/iu.exec(text);
   if (!cue) return;
   const prefix = text.slice(0, cue.index);
   // Reported/quoted speech is recipient content. Apostrophes in "here's" aren't quotes.
@@ -30,7 +31,7 @@ export function parseAttachmentCommand(text: string): AttachmentPlan | undefined
   }
   const kind: AttachmentRequest["kind"] = /\bpdf\b/iu.test(object) ? "pdf" :
     /\b(?:image|photo|picture|screenshot)\b/iu.test(object) ? "image" :
-    /\b(?:presentation|slides|deck|powerpoint)\b/iu.test(object) ? "presentation" : "any";
+    /\b(?:presentation|slides|slideshow|deck|powerpoint)\b/iu.test(object) ? "presentation" : "any";
   if (/^(?:(?:the|my|a)\s+)?(?:(?:image|photo|picture|screenshot|file|pdf|presentation)\s+(?:on|from|in)\s+)?(?:(?:my|the)\s+)?clipboard(?:\s+(?:image|photo|picture|file))?$/iu.test(object) ||
       /^(?:what|the\s+file|the\s+image)\s+i\s+just\s+copied$/iu.test(object)) {
     return { message, command, request: { source: "clipboard", kind } };
@@ -42,6 +43,17 @@ export function parseAttachmentCommand(text: string): AttachmentPlan | undefined
     // A ZIP request needs exact filtering, which isn't a supported kind yet.
     if (/\bzip\b/iu.test(object)) return choose("ZIP selection isn't available yet. Choose a file manually.");
     return { message, command, request: { source: "recent_download", kind } };
+  }
+  if (fileSearchEnabled) {
+    // Filename terms only. No model-generated paths, semantic file reads or sends.
+    const query = object.replace(/^(?:(?:my|the)\s+)?files?\s+for\s+/iu, "")
+      .replace(/\b(?:the|my|a|an|file|document|image|photo|picture|screenshot|pdf|presentation|slides|slideshow|deck|powerpoint|named|called|containing|of|for)\b/giu, " ")
+      .replace(/^[“”"'‘’]+|[“”"'‘’]+$/gu, "").replace(/\s+/gu, " ").trim();
+    if (query && query.length <= 160 && /[\p{L}\p{N}]/u.test(query) &&
+        !/[\/\\\u0000-\u001f]/u.test(query) && query.split(/\s+/u).length <= 12) {
+      return { message, command, request: { source: "file_search", kind, query } };
+    }
+    return choose("Name part of the filename, for example ‘Flow, find my robotics presentation.’");
   }
   return choose("I couldn't identify a clipboard or recent-download request. Choose the file, or name one of those sources.");
 }

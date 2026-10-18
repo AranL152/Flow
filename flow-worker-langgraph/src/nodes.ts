@@ -19,7 +19,7 @@ import { expandSnippets } from "./snippets.js";
 const WAKE_PHRASE = "hey flow";
 
 function prepareTranscription(state: FlowState, transcription: string): Partial<FlowState> {
-  const attachment = state.attachmentCommandsEnabled ? parseAttachmentCommand(transcription) : undefined;
+  const attachment = state.attachmentCommandsEnabled ? parseAttachmentCommand(transcription, state.attachmentSearchEnabled) : undefined;
   const expanded = expandSnippets(attachment?.message ?? transcription, state.shortcutDefinitions ?? []);
   return { transcription, messageText: expanded.text, attachment,
     attachmentProtocol: state.attachmentCommandsEnabled ? 1 : undefined,

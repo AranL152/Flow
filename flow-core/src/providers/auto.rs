@@ -228,6 +228,7 @@ struct WorkerCompletionParams {
     personalization: Option<String>,
     auto_rewriting_enabled: bool,
     attachment_commands_enabled: bool,
+    attachment_search_enabled: bool,
 }
 
 impl From<CompletionParams> for WorkerCompletionParams {
@@ -241,6 +242,7 @@ impl From<CompletionParams> for WorkerCompletionParams {
             personalization: params.personalization,
             auto_rewriting_enabled: params.auto_rewriting_enabled,
             attachment_commands_enabled: params.attachment_commands_enabled,
+            attachment_search_enabled: params.attachment_commands_enabled,
         }
     }
 }

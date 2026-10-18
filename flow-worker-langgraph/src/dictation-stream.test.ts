@@ -11,6 +11,14 @@ const finished = (text: string) => new ReadableStream<Uint8Array>({ start(c) {
 } });
 
 describe("native streamed dictation", () => {
+  it("streams just the message and preserves search terms outside the model prompt", async () => {
+    const run = vi.fn().mockResolvedValue(finished("here's the file"));
+    const output = await new Response(dictationStream({ AI: { run } } as unknown as Env,
+      { ...input, audioB64: "", text: "Here's the file. Flow find my robotics presentation", attachmentCommandsEnabled: true, attachmentSearchEnabled: true })).text();
+    expect(run.mock.calls[0][1].messages[1].content).toBe("<TRANSCRIPTION>\nHere's the file.\n</TRANSCRIPTION>");
+    expect(output).toContain('"source":"file_search","kind":"presentation","query":"robotics"');
+    expect(output).toContain('event: delta');
+  });
   it("keeps attachment instructions out of every generated chunk", async () => {
     const run = vi.fn().mockResolvedValue(finished("here's the deck"));
     const output = await new Response(dictationStream({ AI: { run } } as unknown as Env,

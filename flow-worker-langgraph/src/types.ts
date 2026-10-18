@@ -107,6 +107,7 @@ export interface FlowState {
   shortcutsTriggered: string[];
   shortcutDefinitions?: ShortcutDefinition[];
   attachmentCommandsEnabled?: boolean;
+  attachmentSearchEnabled?: boolean;
   voiceInstruction?: string;
   /** Typed text that replaces transcription */
   text?: string;
