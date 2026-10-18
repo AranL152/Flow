@@ -150,7 +150,7 @@ final class FullMessagesDemo {
         started = Date()
         func save(_ status: String, error: String? = nil) {
             var result: [String: Any] = ["status": status, "cases": results,
-                "scope": "Generated speech; actual on-device captions and waveform; real cloud LLM chunks typed into actual Messages; production ranking and automatic attachment append followed by candidate popup. No Send event. Screenshot selection uses filenames, not OCR.",
+                "scope": "Generated speech; actual on-device/cloud captions and waveform; real streamed cloud rewriting typed into Messages; production attachment ranking and append followed by candidate popup. Real-time ASR can fall back to recorded audio; the case reports which path ran. No Send event.",
                 "seconds": Date().timeIntervalSince(started)]
             if let error { result["error"] = error }
             if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: report, options: .atomic) }

@@ -104,6 +104,11 @@ public final class CloudSpeechStream {
         if let engine { feed(from: engine) }
         guard active else { return nil }
         guard socket != nil, !terminal, !finishing else { return transcript.finalText }
+        // A stalled stream must not add a second wait before batch fallback.
+        // Brief recordings may legitimately get their first result after Stop.
+        if sentFrames >= Int(rate) * 2 && transcript.text.isEmpty {
+            fail(); return nil
+        }
         finishing = true; outgoing?.finish()
         let epoch = generation
         timeout = Task { [weak self] in

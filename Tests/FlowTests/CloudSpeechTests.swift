@@ -67,4 +67,16 @@ final class CloudSpeechTests: XCTestCase {
         XCTAssertNil(cancelled)
         XCTAssertEqual(speech.sentFrames, 0)
     }
+
+    @MainActor
+    func testStalledStreamDoesNotAddAFinalizationWait() async {
+        let speech = CloudSpeechStream(endpoint: URL(string: "ws://127.0.0.1:1"))
+        speech.start()
+        speech.append(samples: [Float](repeating: 0, count: 32000), sampleRate: 16000)
+        let start = ContinuousClock.now
+        let result = await speech.finish()
+        XCTAssertNil(result)
+        XCTAssertLessThan(start.duration(to: .now), .milliseconds(200))
+        XCTAssertNotNil(speech.failureDescription)
+    }
 }
