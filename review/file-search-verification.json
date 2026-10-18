@@ -3,11 +3,13 @@
     "cancel_stops_pending_search" : true,
     "compact_native_panel" : true,
     "dismiss_clears_search_and_selection" : true,
+    "draft_clear_dismisses_native_popup_without_sending" : true,
     "multiple_filename_words_refine_results" : true,
     "native_preview_rendered" : true,
     "native_session_resolves_search" : true,
     "no_target_means_no_auto_paste" : true,
     "panel_refits_when_hint_disappears" : true,
+    "popup_stays_open_while_draft_has_content" : true,
     "real_home_scope_finds_indexed_fixtures" : true,
     "requested_type_is_respected" : true,
     "selection_exposes_preview" : true,
@@ -17,8 +19,8 @@
     "unselected_panel_includes_status_hint" : true
   },
   "filenames" : [
-    "flowsearch5e0fa2a92c-notes.pdf",
-    "flowsearch5e0fa2a92c-sketch.pdf"
+    "flowsearcha257fc78b9-notes.pdf",
+    "flowsearcha257fc78b9-sketch.pdf"
   ],
   "panel_heights" : {
     "selected" : 238,

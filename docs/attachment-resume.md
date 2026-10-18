@@ -454,3 +454,26 @@ recording access and visually reviewed: Other matches, one alternative, Select
 one to replace and Done, with the already-attached file absent. See
 review/imessage-other-matches.png and the updated full-demo report. The latest
 Messages draft and picker remain open. No Send event was generated.
+
+## Complete speech before recognition; dismiss suggestions after Send (October 18)
+
+Late final ASR words now reveal in white before the purple command effect. The
+complete white command holds 220 ms, then changes color in place with the approved
+ripple and synchronized finishing glow. The HUD waits for that presentation even
+when cloud rewriting finishes sooner. This does not insert raw speech into Messages.
+
+The attachment popup now reads the pinned Messages draft every 150 ms while
+visible. After observing content, two readable empty observations dismiss the
+session and popup (normally within 300 ms after Send clears the composer).
+Initially empty attachment-only drafts, unreadable accessibility state, another
+conversation and active attachment replacement do not count as Send. Manual
+clearing also dismisses obsolete suggestions. This is popup lifetime only and
+does not manufacture a Send or a learning signal. Hiding stops the timer.
+
+All 46 Swift tests, 14 caption preview checks and 17 native Spotlight/picker checks
+passed. The native popup test simulated draft content clearing through an injected
+read-only observation, without sending a real message. The white, ripple and
+finishing frames were visually reviewed. The full generated-speech Messages demo
+passed 14 checks in 9.88 seconds, with real cloud ASR/LLM streaming, screenshot
+append and alternatives. Existing draft content was retained; nothing was sent.
+The updated demo helper remains open; the installed app bundle was not replaced.

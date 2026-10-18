@@ -61,6 +61,17 @@ struct SearchCheck {
                     checks["native_preview_rendered"] = try snapshot("file-search-preview.png")
                 }
                 picker.hide()
+                var draftContent: Bool? = true
+                let sendPicker = AttachmentPreviewWindow(session: session, engine: engine, draftHasContent: { draftContent })
+                sendPicker.show(candidateCount: session.candidates.count, isSearch: true)
+                try await Task.sleep(for: .milliseconds(180))
+                checks["popup_stays_open_while_draft_has_content"] = sendPicker.isVisible
+                draftContent = false
+                try await Task.sleep(for: .milliseconds(450))
+                checks["draft_clear_dismisses_native_popup_without_sending"] = !sendPicker.isVisible && session.plan == nil
+                // Restore the inert search plan for the remaining search checks.
+                session.receive(plan)
+                for _ in 0..<80 where session.searching { try await Task.sleep(for: .milliseconds(50)) }
                 session.searchText = text + " sketch"
                 session.searchFiles()
                 for _ in 0..<80 where session.searching { try await Task.sleep(for: .milliseconds(100)) }
@@ -76,7 +87,7 @@ struct SearchCheck {
                 catch { checks["cancel_stops_pending_search"] = false }
             } catch { result["error"] = error.localizedDescription }
             result["checks"] = checks
-            result["passed"] = checks.count == 15 && checks.values.allSatisfy { $0 }
+            result["passed"] = checks.count == 17 && checks.values.allSatisfy { $0 }
             try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]).write(to: report)
             exit(result["passed"] as? Bool == true ? 0 : 1)
         }

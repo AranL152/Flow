@@ -9,8 +9,14 @@ final class AttachmentPreviewWindow {
     private var host: NSHostingController<AnyView>!
     private var sessionChanges: AnyCancellable?
     private var resizeScheduled = false
+    private var draftTimer: Timer?
+    private var draftLifetime = AttachmentDraftLifetime()
+    private let draftHasContent: () -> Bool?
+    private let session: AttachmentSession
 
-    init(session: AttachmentSession, engine: Flow) {
+    init(session: AttachmentSession, engine: Flow, draftHasContent: (() -> Bool?)? = nil) {
+        self.session = session
+        self.draftHasContent = draftHasContent ?? { session.draftHasContent(engine: engine) }
         panel = AttachmentPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         host = NSHostingController(rootView: AnyView(
@@ -48,6 +54,19 @@ final class AttachmentPreviewWindow {
         resizeToFit()
         panel.setFrameOrigin(NSPoint(x: screen.maxX - 380, y: screen.minY + 30))
         panel.orderFrontRegardless()
+        if draftTimer == nil {
+            draftLifetime = AttachmentDraftLifetime()
+            _ = draftLifetime.observe(hasContent: self.draftHasContent())
+            draftTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.panel.isVisible else { return }
+                    if self.draftLifetime.observe(hasContent: self.session.busy ? nil : self.draftHasContent()) {
+                        self.session.dismiss()
+                        self.hide()
+                    }
+                }
+            }
+        }
     }
     private func scheduleResize() {
         guard !resizeScheduled else { return }
@@ -72,7 +91,11 @@ final class AttachmentPreviewWindow {
     }
 
     var contentSize: NSSize { panel.contentView?.frame.size ?? .zero }
-    func hide() { panel.orderOut(nil) }
+    var isVisible: Bool { panel.isVisible }
+    func hide() {
+        draftTimer?.invalidate(); draftTimer = nil
+        panel.orderOut(nil)
+    }
 }
 
 private final class AttachmentPanel: NSPanel {

@@ -80,6 +80,24 @@ final class AttachmentSession: ObservableObject {
 
     func targetMatches(engine: Flow) -> Bool { target?.matches(engine: engine) == true }
 
+    /// Read only the pinned conversation/composer. A send-button click can move
+    /// focus away from the text field, so dismissal does not require text focus.
+    func draftHasContent(engine: Flow) -> Bool? {
+        guard !busy, let target, !target.app.isTerminated,
+              let contact = engine.activeMessagesContact,
+              contact.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                == target.contact.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else { return nil }
+        // Messages may replace its AX composer after Send. Reacquire only a
+        // genuine composer in the same conversation if the pinned one is stale.
+        let snapshot: MessagesAttachmentSnapshot
+        if let pinned = MessagesAttachmentSnapshot.read(target.element) { snapshot = pinned }
+        else if let current = AXEditMonitorService.getFocusedTextElement(pid: target.app.processIdentifier),
+                AXEditMonitorService.isMessagesComposer(current),
+                let refreshed = MessagesAttachmentSnapshot.read(current) { snapshot = refreshed }
+        else { return nil }
+        return !snapshot.items.isEmpty || !snapshot.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     func revealTarget() { target?.app.activate(options: [.activateAllWindows]) }
 
     func begin(app: NSRunningApplication?, contact: String?, board: NSPasteboard = .general) {
