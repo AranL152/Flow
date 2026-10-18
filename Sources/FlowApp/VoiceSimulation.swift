@@ -223,7 +223,8 @@ final class VoiceSimulationModel: ObservableObject {
             } catch { queue.continuation.finish(throwing: error) }
         }
         defer { producer.cancel() }
-        for try await event in queue.stream {
+        let presentation = readableStreaming ? DictationPresentation.smooth(queue.stream) : queue.stream
+        for try await event in presentation {
             try Task.checkCancellation()
             switch event {
             case .attachment(let plan): state.attachments.receive(plan)
@@ -233,7 +234,6 @@ final class VoiceSimulationModel: ObservableObject {
                 draftPhase = readableStreaming ? "LLM draft · readable playback" : "LLM draft · live stream"
                 note("model_delta_presented", text: delta)
                 note("model_draft_presented", text: draft)
-                if readableStreaming { try await Task.sleep(for: .milliseconds(180)) }
             case .completed(let text):
                 state.lastTranscription = text; state.streamedOutput = text; draft = text
                 gotCompletion = true; canSend = true; draftPhase = "LLM draft · ready to send"
@@ -260,7 +260,7 @@ final class VoiceSimulationModel: ObservableObject {
             "saved_examples_available": savedEdits.count,
             "requested_after_latest_edit": requestedAfterLatestEdit,
             "used_learned_word": draft.localizedCaseInsensitiveContains("deck"),
-            "readable_playback": readableStreaming, "presentation_delay_per_chunk_ms": readableStreaming ? 180 : 0,
+            "readable_playback": readableStreaming, "presentation_frame_interval_ms": readableStreaming ? 45 : 0,
             "scope": "isolated native simulation; generated speech; scripted edit and local send; actual Rust/cloud pipeline; no Messages AX insertion"]
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: URL(fileURLWithPath: args[index + 1]), options: .atomic)
@@ -349,7 +349,7 @@ struct VoiceSimulationView: View {
                     if let error = model.error { Text(error).foregroundStyle(FW.danger).font(.caption) }
                     Toggle("Readable playback", isOn: $model.readableStreaming).disabled(model.running)
                         .font(.caption)
-                    Text("Received model chunks are displayed 180 ms apart. Turn off for their actual arrival speed.")
+                    Text("Model text is revealed in small, paced frames. Turn off for its actual arrival speed.")
                         .font(.caption2).foregroundStyle(FW.textMuted)
                     HStack {
                         Text(model.draftPhase)

@@ -721,7 +721,7 @@ final class AppState: ObservableObject {
                 if !self.streamTargetUnchanged || insertion?.interrupted == true { throw CancellationError() }
                 var lastWrite = Date.distantPast
                 var completed = false
-                for try await event in self.engine.transcribeStream(appName: appName) {
+                for try await event in DictationPresentation.smooth(self.engine.transcribeStream(appName: appName)) {
                     try Task.checkCancellation()
                     switch event {
                     case .delta(let delta):
