@@ -31,7 +31,7 @@ public final class LiveSpeechCaptions {
         let authorization = SFSpeechRecognizer.authorizationStatus()
         guard session == generation, !Task.isCancelled else { return }
         guard authorization == .authorized else {
-            onStatus?("Live captions are unavailable; voice dictation still works.")
+            onStatus?(Self.permissionMessage)
             return
         }
         guard let recognizer = SFSpeechRecognizer(locale: Locale.current),
@@ -66,6 +66,18 @@ public final class LiveSpeechCaptions {
     }
 
     public static var isAuthorized: Bool { SFSpeechRecognizer.authorizationStatus() == .authorized }
+
+    public static var canRequestPermission: Bool { SFSpeechRecognizer.authorizationStatus() == .notDetermined }
+
+    public static var permissionMessage: String {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized: return "Speech recognition is enabled."
+        case .notDetermined: return "Enable speech recognition in Flow → Settings → General for live captions."
+        case .denied: return "Allow Flow in System Settings → Privacy & Security → Speech Recognition."
+        case .restricted: return "Speech recognition is restricted by this Mac’s settings."
+        @unknown default: return "Check Speech Recognition access in System Settings."
+        }
+    }
 
     /// Call only in direct response to the user's Enable action.
     public static func requestPermission() async -> Bool {

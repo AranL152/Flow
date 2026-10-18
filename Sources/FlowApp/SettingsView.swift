@@ -432,6 +432,7 @@ private struct GeneralSection: View {
     @AppStorage("streamOutputEnabled") private var streamOutputEnabled = true
     @State private var autoRewritingEnabled = true
     @State private var captionsAuthorized = LiveSpeechCaptions.isAuthorized
+    @State private var captionsCanRequest = LiveSpeechCaptions.canRequestPermission
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing12) {
@@ -446,8 +447,18 @@ private struct GeneralSection: View {
                         appState.updateLiveCaptions(enabled: enabled)
                     }
                 if liveCaptionsEnabled && !captionsAuthorized {
-                    Button("Enable speech recognition for captions") {
-                        Task { captionsAuthorized = await LiveSpeechCaptions.requestPermission() }
+                    Text(LiveSpeechCaptions.permissionMessage)
+                        .font(.caption).foregroundStyle(FW.textMuted)
+                    Button(captionsCanRequest ? "Enable speech recognition for captions" : "Open Speech Recognition settings") {
+                        if captionsCanRequest {
+                            Task {
+                                captionsAuthorized = await LiveSpeechCaptions.requestPermission()
+                                captionsCanRequest = LiveSpeechCaptions.canRequestPermission
+                                appState.updateLiveCaptions(enabled: liveCaptionsEnabled)
+                            }
+                        } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
+                            NSWorkspace.shared.open(url)
+                        }
                     }
                 }
                 Text("Show your words as you speak, using on-device recognition. Early words may revise as you continue.")
@@ -471,6 +482,12 @@ private struct GeneralSection: View {
         }
         .onAppear {
             autoRewritingEnabled = appState.engine.isAutoRewritingEnabled
+            captionsAuthorized = LiveSpeechCaptions.isAuthorized
+            captionsCanRequest = LiveSpeechCaptions.canRequestPermission
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            captionsAuthorized = LiveSpeechCaptions.isAuthorized
+            captionsCanRequest = LiveSpeechCaptions.canRequestPermission
         }
     }
 }
