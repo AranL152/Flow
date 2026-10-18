@@ -19,6 +19,21 @@ its plist and the old bundle is backed up under .build/native-app-backups. Its
 UI reported Accessibility disabled; do not require enabling it to make the video.
 The synthetic preview was closed; the Messages draft was not changed by install.
 
+The user reported granting access, then requested the Flow-command demo again.
+The normal app's menu still reported Accessibility disabled after activation;
+do not send them through that optional setup to make the website video. The
+controlled Messages runner succeeded using its existing host access.
+
+`simulate-imessage-full.py --kind screenshot` then passed all 12 scoped checks
+with actual Cloudflare real-time ASR. It played generated speech, delivered 12
+caption updates, ran the existing purple command effect, and inserted five real
+LLM chunks as 38 display frames/19 native writes over 1.55 seconds. First display
+was 637 ms after Stop; finalizing ASR took 181 ms. Orion-dashboard.png was appended
+and the Other matches popup left open. Total demo runtime was 9.84 seconds.
+Existing draft text/files were preserved; no Send or replacement test was run.
+See review/imessage-full-demo-verification.json. This does not verify physical
+microphone or hotkey operation in the normal app.
+
 ## Current state: screenshot OCR and compact picker (October 18)
 
 The user approved local screenshot-text search, then asked which LLM/API key the
