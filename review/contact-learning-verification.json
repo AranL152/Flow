@@ -1,0 +1,17 @@
+{
+  "kind": "actual Rust final-send memory and deployed agentic LLM; isolated synthetic users and contacts",
+  "checks": {
+    "sent_edit_recorded": true,
+    "agentic_output_uses_contact_edit": true,
+    "another_contact_does_not_inherit_edit": true,
+    "another_user_does_not_inherit_edit": true,
+    "explicit_current_request_overrides_memory": true
+  },
+  "initial_model_output": "Could you please check the slides tomorrow?",
+  "sent_edit": "yo can u check the deck tomorrow?",
+  "agentic_request": "Hey Flow ask for a slides review on Friday",
+  "alex_after_edit": "yo can u review the deck on friday?",
+  "sam_without_alex_edit": "Hi, I was wondering if you'd be available to review the slides this Friday? I'd really appreciate your feedback. Let me know if that works for you.",
+  "other_user_alex": "Hi, I was wondering if you'd be available to review the slides this Friday? I'd really appreciate your feedback. Let me know if that works for you.",
+  "explicit_override": "yo can u check the slides on friday?"
+}

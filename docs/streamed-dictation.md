@@ -57,8 +57,8 @@ not a benchmark or a sub-10 ms pipeline claim.
 Unit/integration checks cover real callback delivery, raw speech retained for
 send learning, cancelled streams not creating learnable partials, stalled-network
 cancellation, terminal mismatch/errors, UTF-16 emoji offsets, surrounding text,
-selection movement and external edits. The Rust suite has 343 passing tests (two Messages tests ignored), the
-worker has 52 passing tests and the Swift package has 11.
+selection movement and external edits. The Rust suite has 348 passing tests (two Messages tests ignored), the
+worker has 54 passing tests and the Swift package has 12.
 
 The native insertion verifier creates its own NSTextView and uses the production
 AX writer to check progressive writes, rollback and preserving user edits. On
@@ -72,3 +72,27 @@ live take; compilation and range-model tests do not prove that integration.
 
 Build the normal app with `python3 scripts/build-demo.py --native`. Build-only
 verification does not install it or replace an existing `/Applications` copy.
+
+## Prompt-based learning and recipient boundaries
+
+The chosen approach uses the existing LLM with personalization in its prompt;
+there is no model training or automatic weight update. Final sent edits live in
+this local user's database. A correction for a known contact is retrieved only
+for that contact, alongside unscoped user examples where appropriate. Another
+contact’s examples and measured habits are excluded. Contact-specific corrections
+are also excluded from automatic global-profile summaries.
+
+Messages send monitoring pins the conversation and discards learning if it
+changes. The Rust send API independently checks the contact against the completed
+baseline. These recipient edits are not also saved as global word replacements.
+They become available to the next generation immediately, without a profile
+rebuild. Both normal formatting and agentic voice-command generation receive the
+personalization; the current explicit instruction takes priority over old edits.
+
+The agentic prompt fix is deployed as worker version
+`ffc6c219-4a74-4666-bbf3-3ed50a354129`. Run
+`python3 scripts/verify-contact-learning.py` after building Rust to exercise the
+real send → saved memory → agentic generation path with synthetic text. The
+[recorded live result](../review/contact-learning-verification.json) verifies
+Alex uses “deck”, another contact and another user keep “slides”, and an explicit
+current request for “slides” overrides Alex’s historical wording.

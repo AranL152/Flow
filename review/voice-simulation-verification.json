@@ -3,313 +3,268 @@
   "error": "",
   "events": [
     {
-      "event": "speech_preview_presented",
-      "seconds": 2.873840093612671,
+      "event": "caption_partial",
+      "seconds": 4.145798921585083,
       "text": "Can"
     },
     {
       "event": "caption_partial",
-      "seconds": 2.873853087425232,
-      "text": "Can"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 3.1027719974517822,
+      "seconds": 4.37929892539978,
       "text": "Can you"
     },
     {
       "event": "caption_partial",
-      "seconds": 3.102776050567627,
-      "text": "Can you"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 3.343704104423523,
+      "seconds": 4.608464956283569,
       "text": "Can you check"
     },
     {
       "event": "caption_partial",
-      "seconds": 3.3437070846557617,
-      "text": "Can you check"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 3.5676831007003784,
+      "seconds": 4.8401830196380615,
       "text": "Can you check the"
     },
     {
       "event": "caption_partial",
-      "seconds": 3.5676850080490112,
-      "text": "Can you check the"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 3.8056060075759888,
-      "text": "Can you check the slide"
-    },
-    {
-      "event": "caption_partial",
-      "seconds": 3.805609107017517,
+      "seconds": 5.075366973876953,
       "text": "Can you check the slide"
     },
     {
       "event": "audio_finished",
-      "seconds": 4.022199034690857,
+      "seconds": 5.296235918998718,
       "text": "first"
     },
     {
+      "event": "composer_before_model",
+      "seconds": 5.296249985694885,
+      "text": ""
+    },
+    {
       "event": "caption_partial",
-      "seconds": 4.0542590618133545,
+      "seconds": 5.310612916946411,
       "text": "Can you check the slides"
     },
     {
       "event": "caption_partial",
-      "seconds": 4.058808088302612,
+      "seconds": 5.314831972122192,
       "text": "Can you check the slides tomorrow"
     },
     {
       "event": "caption_final",
-      "seconds": 4.063952088356018,
+      "seconds": 5.318249940872192,
       "text": "Can you check the slides tomorrow"
     },
     {
       "event": "model_delta_received",
-      "seconds": 7.465630054473877,
+      "seconds": 12.286957025527954,
       "text": "Could"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 7.465975046157837,
+      "seconds": 12.28731095790863,
       "text": "Could"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 7.465978026390076,
+      "seconds": 12.287317991256714,
       "text": "Could"
     },
     {
       "event": "model_delta_received",
-      "seconds": 7.505332112312317,
+      "seconds": 12.328596949577332,
       "text": " you please check"
     },
     {
       "event": "model_delta_received",
-      "seconds": 7.548396110534668,
+      "seconds": 12.328686952590942,
       "text": " the slides tomorrow"
     },
     {
       "event": "model_delta_received",
-      "seconds": 7.590848088264465,
+      "seconds": 12.342375993728638,
       "text": "?"
     },
     {
       "event": "model_complete_received",
-      "seconds": 7.5918591022491455,
+      "seconds": 12.342973947525024,
       "text": "Could you please check the slides tomorrow?"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 7.664939999580383,
+      "seconds": 12.541931986808777,
       "text": " you please check"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 7.664952039718628,
+      "seconds": 12.541949987411499,
       "text": "Could you please check"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 7.873329997062683,
+      "seconds": 12.796634912490845,
       "text": " the slides tomorrow"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 7.873351097106934,
+      "seconds": 12.796656966209412,
       "text": "Could you please check the slides tomorrow"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 8.127031087875366,
+      "seconds": 13.031345009803772,
       "text": "?"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 8.127050042152405,
+      "seconds": 13.03136396408081,
       "text": "Could you please check the slides tomorrow?"
     },
     {
       "event": "model_complete_presented",
-      "seconds": 8.337018013000488,
+      "seconds": 13.268383026123047,
       "text": "Could you please check the slides tomorrow?"
     },
     {
       "event": "simulated_edit",
-      "seconds": 9.864857077598572,
+      "seconds": 14.826597929000854,
       "text": "yo can u check the deck tomorrow?"
     },
     {
       "event": "learning_saved",
-      "seconds": 11.406360030174255,
+      "seconds": 16.33650493621826,
       "text": "yo can u check the deck tomorrow?"
     },
     {
-      "event": "speech_preview_presented",
-      "seconds": 13.62440299987793,
+      "event": "caption_partial",
+      "seconds": 18.537537932395935,
       "text": "Can"
     },
     {
       "event": "caption_partial",
-      "seconds": 13.624405026435852,
-      "text": "Can"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 13.873969078063965,
+      "seconds": 18.79343891143799,
       "text": "Can you"
     },
     {
       "event": "caption_partial",
-      "seconds": 13.873970031738281,
-      "text": "Can you"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 14.07600200176239,
+      "seconds": 19.037498950958252,
       "text": "Can you check"
     },
     {
       "event": "caption_partial",
-      "seconds": 14.076003074645996,
-      "text": "Can you check"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 14.31512999534607,
+      "seconds": 19.237152934074402,
       "text": "Can you check the"
     },
     {
       "event": "caption_partial",
-      "seconds": 14.315132021903992,
-      "text": "Can you check the"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 14.574043035507202,
+      "seconds": 19.48977494239807,
       "text": "Can you check the slide"
     },
     {
       "event": "caption_partial",
-      "seconds": 14.574045062065125,
-      "text": "Can you check the slide"
-    },
-    {
-      "event": "speech_preview_presented",
-      "seconds": 14.80849301815033,
-      "text": "Can you check the slides on"
-    },
-    {
-      "event": "caption_partial",
-      "seconds": 14.808497071266174,
+      "seconds": 19.75909996032715,
       "text": "Can you check the slides on"
     },
     {
       "event": "audio_finished",
-      "seconds": 14.931310057640076,
+      "seconds": 19.884665966033936,
       "text": "second"
     },
     {
+      "event": "composer_before_model",
+      "seconds": 19.884701013565063,
+      "text": ""
+    },
+    {
       "event": "caption_partial",
-      "seconds": 14.949112057685852,
+      "seconds": 19.91096293926239,
       "text": "Can you check the slides on Friday"
     },
     {
       "event": "caption_final",
-      "seconds": 14.959225058555603,
+      "seconds": 19.92181897163391,
       "text": "Can you check the slides on Friday"
     },
     {
       "event": "model_delta_received",
-      "seconds": 18.220713019371033,
+      "seconds": 24.734441995620728,
       "text": "yo"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 18.22101402282715,
+      "seconds": 24.73481297492981,
       "text": "yo"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 18.221021056175232,
+      "seconds": 24.734820008277893,
       "text": "yo"
     },
     {
       "event": "model_delta_received",
-      "seconds": 18.257374048233032,
+      "seconds": 24.772694945335388,
       "text": " can"
     },
     {
       "event": "model_delta_received",
-      "seconds": 18.290763020515442,
+      "seconds": 24.80112397670746,
       "text": " u check the"
     },
     {
       "event": "model_delta_received",
-      "seconds": 18.32171607017517,
+      "seconds": 24.836403965950012,
       "text": " deck on Friday"
     },
     {
       "event": "model_delta_received",
-      "seconds": 18.35787606239319,
+      "seconds": 24.868225932121277,
       "text": "?"
     },
     {
       "event": "model_complete_received",
-      "seconds": 18.35864007472992,
+      "seconds": 24.86878991127014,
       "text": "yo can u check the deck on Friday?"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 18.475357055664062,
+      "seconds": 24.934732913970947,
       "text": " can"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 18.475373029708862,
+      "seconds": 24.93475091457367,
       "text": "yo can"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 18.73306107521057,
+      "seconds": 25.12014102935791,
       "text": " u check the"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 18.73307704925537,
+      "seconds": 25.120160937309265,
       "text": "yo can u check the"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 18.984082102775574,
+      "seconds": 25.371451020240784,
       "text": " deck on Friday"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 18.984098076820374,
+      "seconds": 25.371474981307983,
       "text": "yo can u check the deck on Friday"
     },
     {
       "event": "model_delta_presented",
-      "seconds": 19.21513605117798,
+      "seconds": 25.593333959579468,
       "text": "?"
     },
     {
       "event": "model_draft_presented",
-      "seconds": 19.215158104896545,
+      "seconds": 25.593352913856506,
       "text": "yo can u check the deck on Friday?"
     },
     {
       "event": "model_complete_presented",
-      "seconds": 19.435906052589417,
+      "seconds": 25.80906391143799,
       "text": "yo can u check the deck on Friday?"
     }
   ],
@@ -321,13 +276,14 @@
   "used_learned_word": true,
   "checks": {
     "simulation_completed": true,
-    "real_speech_preview_precedes_model": true,
+    "captions_were_recognized_separately": true,
+    "composer_stayed_empty_before_model": true,
+    "no_speech_preview_in_composer": true,
     "both_takes_completed": true,
     "every_received_chunk_was_presented": true,
-    "drafts_accumulate_model_chunks_without_raw_prefix": true,
-    "first_model_chunk_visible_before_network_completion": true,
+    "drafts_only_accumulate_llm_chunks": true,
+    "first_chunk_visible_before_network_completion": true,
     "one_edited_example_saved": true,
-    "new_input_used_learned_word": true,
-    "presentation_delay_is_explicit": true
+    "new_input_used_learned_word": true
   }
 }
