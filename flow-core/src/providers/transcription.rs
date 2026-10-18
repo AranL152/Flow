@@ -35,6 +35,8 @@ pub struct CompletionParams {
     pub voice_instruction: Option<String>,
     /// User style profile and examples, see `style::build_personalization`
     pub personalization: Option<String>,
+    /// Skip formatting and voice commands when returning raw dictation.
+    pub auto_rewriting_enabled: bool,
 }
 
 impl TranscriptionRequest {

@@ -23,6 +23,7 @@ The production worker has **not** been deployed by this change.
 From the repository root, build and open the separate demo bundle:
 
 ```sh
+cargo install cbindgen --locked # one-time prerequisite after the upstream sync
 python3 scripts/build-demo.py --open
 ```
 
@@ -95,13 +96,18 @@ hidden by rerunning until it passes.
 The automated tests do not verify live microphone permissions or the user's
 spoken voice. Those need a brief microphone check on the recording Mac.
 
-Verification on 2026-10-17: all 44 worker tests, TypeScript checking, three Swift
+Before the upstream sync on 2026-10-17: all 44 worker tests, TypeScript checking, three Swift
 tests and six new Rust demo tests passed. The full Rust suite returned 86 passed,
 three failed and two ignored. The failures are Slack-mode expectations in
 `apps::tests::test_app_tracker`, `apps::tests::test_suggested_modes` and
 `modes::tests::test_mode_suggestions`, in modules unchanged by this work.
 All seven live integration checks passed; observed results are saved in
 `review/demo-learning.json`.
+
+After syncing upstream on the same date, all 335 Rust tests (two additional
+ignored), 47 worker tests, TypeScript checking and three Swift tests passed.
+The main Swift app and FlowHelper built successfully. See
+[upstream integration notes](upstream-sync.md) for the merge decisions.
 
 ## Recording direction: 15 seconds
 

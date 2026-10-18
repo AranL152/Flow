@@ -54,6 +54,7 @@ const FlowStateAnnotation = Annotation.Root({
   voiceInstruction: Annotation<string | undefined>(),
   text: Annotation<string | undefined>(),
   personalization: Annotation<string | undefined>(),
+  autoRewritingEnabled: Annotation<boolean | undefined>(),
 
   // Intermediate
   transcription: Annotation<string | undefined>(),
@@ -104,6 +105,7 @@ export interface FlowGraphInput {
   voiceInstruction?: string;
   text?: string;
   personalization?: string;
+  autoRewritingEnabled?: boolean;
   env: Env;
 }
 

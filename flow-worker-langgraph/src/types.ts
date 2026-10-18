@@ -54,6 +54,7 @@ export interface CompletionParams {
   app_context?: string;
   shortcuts_triggered?: string[];
   voice_instruction?: string;
+  auto_rewriting_enabled?: boolean;
 }
 
 // ============ Response Types ============
@@ -104,6 +105,7 @@ export interface FlowState {
   /** Typed text that replaces transcription */
   text?: string;
   personalization?: string;
+  autoRewritingEnabled?: boolean;
 
   // Intermediate
   transcription?: string;

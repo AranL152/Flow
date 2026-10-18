@@ -39,6 +39,7 @@ export interface TranscriptionRequestInput {
   shortcutsTriggered: string[];
   voiceInstruction?: string;
   personalization?: string;
+  autoRewritingEnabled?: boolean;
 }
 
 export interface StyleProfileRequestInput {
@@ -199,6 +200,10 @@ export function parseTranscriptionRequest(
     return personalization;
   }
 
+  if (completion.auto_rewriting_enabled !== undefined && typeof completion.auto_rewriting_enabled !== "boolean") {
+    return err("completion.auto_rewriting_enabled must be a boolean");
+  }
+
   return ok({
     audioB64,
     text: text.value,
@@ -209,6 +214,7 @@ export function parseTranscriptionRequest(
     shortcutsTriggered: shortcuts.value,
     voiceInstruction: voiceInstruction.value,
     personalization: personalization.value,
+    ...(completion.auto_rewriting_enabled === undefined ? {} : { autoRewritingEnabled: completion.auto_rewriting_enabled }),
   });
 }
 

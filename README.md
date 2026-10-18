@@ -1,52 +1,58 @@
-# Flow
+<div align="center">
+  <img src="https://raw.githubusercontent.com/JasonLovesDoggo/Flow/main/Sources/FlowApp/Resources/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png" width="96" />
+  <h1>Flow</h1>
+  <p>Voice dictation that actually learns. Free and open source.</p>
+  <a href="https://github.com/JasonLovesDoggo/Flow/releases/latest/download/Flow-macOS-universal.dmg"><b>Download for Mac →</b></a>
+</div>
 
-Flow is a voice dictation app that captures audio, transcribes speech, and formats it into clean text. It supports shortcuts, learning, and tone that adapts per app. 
+---
 
+Hold `Fn`. Talk. Let go. Text appears wherever your cursor is.
 
-## Product
+No subscription. Choose local Whisper or cloud transcription.
 
-- Dictation with app-aware formatting
-- Voice shortcuts and learned corrections
-- Usage stats and configurable providers
+## What makes it different
 
-## Installation
+Most dictation tools transcribe. Flow gets smarter the longer you use it.
 
-### Download from Releases (Recommended)
+- **Learns your corrections** - fix a word once, it remembers forever
+- **Local Whisper** - fully offline, no API needed (Metal-accelerated)
+- **App-aware tone** - formal in Mail, casual in iMessage, code-friendly in VS Code
+- **Contact-aware tone** - knows you text your dad differently than your friends; add a contact and it adjusts automatically
+- **Voice shortcuts** - say "my email", get `flow@jasoncameron.dev`
 
-1. Download the latest macOS build: https://github.com/JasonLovesDoggo/Flow/releases/latest/download/Flow-macOS-universal.dmg
-2. Open the downloaded .dmg file and drag Flow to Applications
-3. Flow will be installed to your Applications folder
+## Fork additions
 
-The universal binary works on both Apple Silicon (M1/M2/M3) and Intel Macs running macOS 14+.
-
-To verify the download integrity, you can check the SHA256 checksum:
-```sh
-shasum -a 256 Flow-macOS-universal.dmg
-# Compare with the .sha256 file from the release
-```
-
-### Build from Source
-
-See the [Setup](#setup) section below for instructions on building from source.
-
-## Tech stack
-
-- Rust core engine in `flow-core/`
-- FFI bridge for native app integration (C ABI in `flow-core/src/ffi.rs`)
-- Provider abstraction for transcription and completion
-- SQLite-backed storage for user data and stats
-- Cloudflare Worker backend in `flow-worker-langgraph/` (TypeScript, Hono, LangGraph)
-  that transcribes audio and then either formats it or executes a voice command
-
-The rest of the app lives here in the repo root.
+This fork adds recipient-specific style examples, editable style profiles, cloud
+fallback and an isolated streamed demo. See [demo instructions](docs/demo.md).
+The TypeScript worker in `flow-worker-langgraph/` remains the backend for these
+features; the upstream Rust worker is also retained in `flow-worker/`.
 
 ## Setup
 
+Grab the [upstream DMG](https://github.com/JasonLovesDoggo/Flow/releases/latest/download/Flow-macOS-universal.dmg) or build this fork from source:
+
 ```sh
-git clone https://github.com/JasonLovesDoggo/flow.git
-cd flow
-cd flow-core
-cargo build
-cd ..
-swift run
+git clone https://github.com/AranL152/Flow
+cd Flow
+cargo install cbindgen --locked
+cd flow-core && cargo build --release && cd ..
+cd FlowHelper && swift build && cd ..
+swift run Flow
 ```
+
+Needs: macOS 14+, Rust toolchain and cbindgen. Local Whisper and Auto cloud
+transcription do not require a client API key. Other providers require your key.
+
+## Stack
+
+Rust core ([`flow-core/`](flow-core/)) handles audio, transcription, learning, shortcuts, and storage. Swift wraps it for the native Mac experience. C FFI bridges the two.
+
+## Contributing
+
+```sh
+cd flow-core && cargo fmt && cargo clippy --all --tests --all-features
+cargo test
+```
+
+MIT licensed.

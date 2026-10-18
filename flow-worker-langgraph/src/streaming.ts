@@ -78,6 +78,14 @@ export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: A
 }
 
 export async function formatStream(env: Env, input: TranscriptionRequestInput, signal?: AbortSignal) {
+  if (input.autoRewritingEnabled === false) {
+    const text = input.text ?? "";
+    return new ReadableStream<Uint8Array>({ start(controller) {
+      const encoder = new TextEncoder();
+      controller.enqueue(encoder.encode(`event: delta\ndata: ${JSON.stringify({ text })}\n\nevent: done\ndata: ${JSON.stringify({ text: text.trim() })}\n\n`));
+      controller.close();
+    } });
+  }
   const model = (env.CHAT_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast") as "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
   const result = await env.AI.run(model, {
     messages: [

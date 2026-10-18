@@ -71,6 +71,9 @@ export async function transcribeNode(
  * consulted once per request.
  */
 export function detectWakePhraseNode(state: FlowState): Partial<FlowState> {
+  if (state.autoRewritingEnabled === false) {
+    return { detectedCommand: undefined, resolvedCommand: undefined };
+  }
   const { transcription, voiceInstruction } = state;
 
   // An explicit instruction from the client wins over phrase detection.
@@ -140,6 +143,9 @@ export async function formatNode(
   state: FlowState,
   config?: RunnableConfig
 ): Promise<Partial<FlowState>> {
+  if (state.autoRewritingEnabled === false) {
+    return { formattedText: state.transcription };
+  }
   const { transcription, mode, appContext, shortcutsTriggered, personalization } = state;
 
   if (!transcription) {

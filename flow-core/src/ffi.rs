@@ -25,7 +25,7 @@ use crate::learning::LearningEngine;
 use crate::macos_messages::MessagesDetector;
 use crate::modes::{StyleLearner, WritingMode, WritingModeEngine};
 use crate::providers::{
-    Base10TranscriptionProvider, CompletionProvider, CompletionRequest,
+    AutoTranscriptionProvider, CompletionProvider, CompletionRequest,
     FallbackTranscriptionProvider, GeminiCompletionProvider, GeminiTranscriptionProvider,
     LocalWhisperTranscriptionProvider, OpenAICompletionProvider, OpenAITranscriptionProvider,
     OpenRouterCompletionProvider, TranscriptionCompletionParams, TranscriptionProvider,
@@ -33,10 +33,12 @@ use crate::providers::{
 };
 use crate::shortcuts::ShortcutsEngine;
 use crate::storage::{
-    SETTING_CLOUD_TRANSCRIPTION_PROVIDER, SETTING_COMPLETION_PROVIDER, SETTING_GEMINI_API_KEY,
-    SETTING_LOCAL_WHISPER_MODEL, SETTING_OPENAI_API_KEY, SETTING_OPENROUTER_API_KEY,
-    SETTING_IMESSAGE_IMPORTED_THROUGH, SETTING_REWRITE_STRENGTH, SETTING_STYLE_PROFILE, SETTING_STYLE_PROFILE_EXAMPLE_COUNT,
-    SETTING_TRANSCRIPTION_FALLBACK, SETTING_USE_LOCAL_TRANSCRIPTION, Storage,
+    SETTING_AUTO_REWRITING_ENABLED, SETTING_CLOUD_TRANSCRIPTION_PROVIDER,
+    SETTING_COMPLETION_PROVIDER, SETTING_GEMINI_API_KEY, SETTING_IMESSAGE_IMPORTED_THROUGH,
+    SETTING_LOCAL_WHISPER_MODEL, SETTING_OPENAI_API_KEY, SETTING_OPENAI_BASE_URL,
+    SETTING_OPENROUTER_API_KEY, SETTING_REWRITE_STRENGTH, SETTING_STYLE_PROFILE,
+    SETTING_STYLE_PROFILE_EXAMPLE_COUNT, SETTING_TRANSCRIPTION_FALLBACK,
+    SETTING_USE_LOCAL_TRANSCRIPTION, Storage,
 };
 use crate::style::{self, PendingDictation, RewriteStrength, StyleExample};
 use crate::types::{
@@ -85,10 +87,16 @@ pub struct FlowHandle {
 /// Demo conversation state, requests and explicit Send receipts. Caller serializes
 /// calls; returned JSON is owned by the caller and freed with flow_free_string.
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_demo_dispatch(handle: *mut FlowHandle, request: *const c_char) -> *mut c_char {
-    if handle.is_null() { return ptr::null_mut(); }
+pub extern "C" fn flow_demo_dispatch(
+    handle: *mut FlowHandle,
+    request: *const c_char,
+) -> *mut c_char {
+    if handle.is_null() {
+        return ptr::null_mut();
+    }
     let handle = unsafe { &*handle };
-    let result = c_str(request).ok_or_else(|| "Missing request".to_string())
+    let result = c_str(request)
+        .ok_or_else(|| "Missing request".to_string())
         .and_then(|s| serde_json::from_str(s).map_err(|e| format!("Invalid JSON: {e}")))
         .and_then(|request| crate::demo::dispatch(&handle.storage, request));
     match result {
@@ -155,12 +163,17 @@ fn build_cloud_fallback(storage: &Storage) -> Arc<dyn TranscriptionProvider> {
     if cloud_provider.as_deref() == Some("openai") {
         if let Ok(Some(key)) = storage.get_setting(SETTING_OPENAI_API_KEY) {
             if !key.is_empty() {
-                return Arc::new(OpenAITranscriptionProvider::new(Some(key)));
+                let base_url = storage
+                    .get_setting(SETTING_OPENAI_BASE_URL)
+                    .ok()
+                    .flatten()
+                    .filter(|url| !url.is_empty());
+                return Arc::new(OpenAITranscriptionProvider::new(Some(key), base_url));
             }
         }
     }
 
-    Arc::new(Base10TranscriptionProvider::new(None))
+    Arc::new(AutoTranscriptionProvider::new(None))
 }
 
 /// Wrap a local primary provider with a cloud fallback when fallback is enabled.
@@ -188,6 +201,12 @@ fn load_persisted_configuration(handle: &mut FlowHandle) {
         .get_setting(SETTING_OPENAI_API_KEY)
         .ok()
         .flatten();
+    let openai_base_url = handle
+        .storage
+        .get_setting(SETTING_OPENAI_BASE_URL)
+        .ok()
+        .flatten()
+        .filter(|s| !s.is_empty());
     let gemini_key = handle
         .storage
         .get_setting(SETTING_GEMINI_API_KEY)
@@ -260,7 +279,10 @@ fn load_persisted_configuration(handle: &mut FlowHandle) {
         }
         _ => {
             debug!("Restoring OpenAI completion provider from database");
-            handle.completion = Arc::new(OpenAICompletionProvider::new(openai_key.clone()));
+            handle.completion = Arc::new(OpenAICompletionProvider::new(
+                openai_key.clone(),
+                openai_base_url.clone(),
+            ));
         }
     }
 
@@ -269,18 +291,21 @@ fn load_persisted_configuration(handle: &mut FlowHandle) {
         // Local whisper will be initialized by flow_set_transcription_mode
         // For now, set a placeholder that will be replaced
         debug!("Local transcription enabled, will be initialized separately");
-        handle.transcription = Arc::new(Base10TranscriptionProvider::new(None));
+        handle.transcription = Arc::new(AutoTranscriptionProvider::new(None));
     } else {
         // Cloud transcription - check which provider
         match saved_cloud_transcription.as_deref() {
             Some("openai") => {
                 debug!("Restoring OpenAI transcription provider from database");
-                handle.transcription = Arc::new(OpenAITranscriptionProvider::new(openai_key));
+                handle.transcription = Arc::new(OpenAITranscriptionProvider::new(
+                    openai_key,
+                    openai_base_url,
+                ));
             }
             _ => {
                 // Default to Auto (worker handles transcription + completion)
                 debug!("Using Auto transcription provider (default)");
-                handle.transcription = Arc::new(Base10TranscriptionProvider::new(None));
+                handle.transcription = Arc::new(AutoTranscriptionProvider::new(None));
             }
         }
     }
@@ -289,8 +314,14 @@ fn load_persisted_configuration(handle: &mut FlowHandle) {
 // ============ Lifecycle ============
 
 /// Initialize the Flow engine
-/// Returns an opaque handle that must be passed to all other functions
-/// Returns null on failure
+///
+/// Returns an opaque handle that must be passed to all other functions.
+///
+/// # Arguments
+/// - `db_path` - Path to the SQLite database file, or NULL for default location
+///
+/// # Returns
+/// Opaque handle to the engine, or NULL on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
     let db_path = if db_path.is_null() {
@@ -346,8 +377,8 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
         last_audio: Mutex::new(None),
         last_audio_sample_rate: Mutex::new(None),
         last_error: Mutex::new(None),
-        transcription: Arc::new(OpenAITranscriptionProvider::new(None)),
-        completion: Arc::new(OpenAICompletionProvider::new(None)),
+        transcription: Arc::new(OpenAITranscriptionProvider::new(None, None)),
+        completion: Arc::new(OpenAICompletionProvider::new(None, None)),
         shortcuts,
         learning,
         modes: Mutex::new(modes),
@@ -504,8 +535,14 @@ pub extern "C" fn flow_start_recording(handle: *mut FlowHandle) -> bool {
 }
 
 /// Stop audio recording and get the duration
-/// Returns duration in milliseconds, or 0 on failure
-/// This function extracts audio data and fully releases the microphone device
+///
+/// This function extracts audio data and fully releases the microphone device.
+///
+/// # Arguments
+/// - `handle` - Engine handle
+///
+/// # Returns
+/// Duration in milliseconds, or 0 on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_stop_recording(handle: *mut FlowHandle) -> u64 {
     let handle = unsafe { &*handle };
@@ -604,27 +641,28 @@ fn transcribe_with_audio(
         .unwrap_or(false);
 
     let format_context = format_context(app_name.as_deref(), recipient);
-
-    // The transcript is unknown until the worker returns, so examples are picked by recipient only
     let personalization = personalization_for(handle, "", &category, &contact);
+    let auto_rewriting_enabled = handle
+        .storage
+        .get_setting(SETTING_AUTO_REWRITING_ENABLED)
+        .ok()
+        .flatten()
+        .map(|s| s == "true")
+        .unwrap_or(true);
 
-    let mode_str = mode.worker_name();
-
-    // Always attach completion params. In cloud (auto) mode the worker uses
-    // them to transcribe and format in one request. In local mode the Whisper
-    // provider ignores them, but they are required if a cloud fallback fires so
-    // the recovered transcription is still formatted.
-    if use_local_transcription {
-        log_with_time!("🖥️ [RUST] Using local mode (cloud fallback on failure)");
-    } else {
-        log_with_time!("🚀 [RUST] Using auto mode (worker handles transcription+completion)");
-    }
+    // Local Whisper ignores these params, but cloud fallback still needs them.
+    // The worker receives an explicit switch so raw dictation works in Auto mode.
     let completion_params = Some(TranscriptionCompletionParams {
-        mode: mode_str.to_string(),
+        mode: mode.worker_name().to_string(),
         app_context: format_context.clone(),
         shortcuts_triggered: Vec::new(),
-        voice_instruction: None, // Worker auto-detects from transcription
-        personalization: personalization.clone(),
+        voice_instruction: None,
+        personalization: if auto_rewriting_enabled {
+            personalization
+        } else {
+            None
+        },
+        auto_rewriting_enabled,
     });
 
     // Perform transcription
@@ -636,12 +674,25 @@ fn transcribe_with_audio(
         transcription_provider.transcribe(request).await
     })?;
 
-    // Process shortcuts and corrections on raw transcription
+    // Process shortcuts (always applied) and corrections (only if auto-rewriting enabled)
     let (text_with_shortcuts, triggered) = handle.shortcuts.process(&transcription.text);
-    let (text_with_corrections, _applied) = handle.learning.apply_corrections(&text_with_shortcuts);
 
-    // Use worker completion if available, otherwise use corrected transcription
-    let processed_text = if let Some(completed_text) = transcription.completed_text {
+    let (text_with_corrections, _) = if auto_rewriting_enabled {
+        handle.learning.apply_corrections(&text_with_shortcuts)
+    } else {
+        (text_with_shortcuts.clone(), Vec::new())
+    };
+
+    // Determine final processed text based on auto-rewriting setting
+    let processed_text = if !auto_rewriting_enabled {
+        // Auto-rewriting disabled: return transcription with shortcuts only (no corrections, no AI)
+        log_with_time!(
+            "📝 [RUST] Auto-rewriting disabled - returning text with shortcuts only: {} chars",
+            text_with_shortcuts.len()
+        );
+        text_with_shortcuts
+    } else if let Some(completed_text) = transcription.completed_text {
+        // Worker completion available (cloud mode with auto-rewriting)
         log_with_time!(
             "✅ [RUST/AI] Worker completion received - Output: {} chars",
             completed_text.len()
@@ -678,12 +729,14 @@ fn transcribe_with_audio(
             }
         }
     } else {
-        // Local transcription mode - use corrected text directly (no separate completion)
+        // Local transcription mode or cloud without completion - apply corrections
+        let (text_with_corrections, _applied) =
+            handle.learning.apply_corrections(&text_with_shortcuts);
         log_with_time!(
             "📝 [RUST] Local transcription mode - using corrected text: {} chars",
             text_with_corrections.len()
         );
-        text_with_corrections.clone()
+        text_with_corrections
     };
 
     // Suppress unused warning for triggered shortcuts (used by worker)
@@ -838,8 +891,13 @@ fn personalization_for(
 }
 
 /// Transcribe the recorded audio and process it
-/// Returns the processed text (caller must free with flow_free_string)
-/// Returns null on failure
+///
+/// # Arguments
+/// - `handle` - Engine handle
+/// - `app_name` - Name of the current app (for mode selection), or NULL
+///
+/// # Returns
+/// Processed text (caller must free with flow_free_string), or NULL on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_transcribe(handle: *mut FlowHandle, app_name: *const c_char) -> *mut c_char {
     let handle = unsafe { &*handle };
@@ -968,7 +1026,14 @@ pub extern "C" fn flow_retry_last_transcription(
 // ============ Shortcuts ============
 
 /// Add a voice shortcut
-/// Returns true on success
+///
+/// # Arguments
+/// - `handle` - Engine handle
+/// - `trigger` - Trigger phrase
+/// - `replacement` - Replacement text
+///
+/// # Returns
+/// true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_add_shortcut(
     handle: *mut FlowHandle,
@@ -1031,8 +1096,14 @@ pub extern "C" fn flow_shortcut_count(handle: *mut FlowHandle) -> usize {
 // ============ Writing Modes ============
 
 /// Set the writing mode for an app
-/// mode: 0 = Formal, 1 = Casual, 2 = VeryCasual, 3 = Excited
-/// Returns true on success
+///
+/// # Arguments
+/// - `handle` - Engine handle
+/// - `app_name` - Name of the app
+/// - `mode` - Writing mode (0=Formal, 1=Casual, 2=VeryCasual, 3=Excited)
+///
+/// # Returns
+/// true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_set_app_mode(
     handle: *mut FlowHandle,
@@ -1096,7 +1167,14 @@ pub extern "C" fn flow_get_app_mode(handle: *mut FlowHandle, app_name: *const c_
 // ============ Learning ============
 
 /// Report a user edit to learn from
-/// Returns true on success
+///
+/// # Arguments
+/// - `handle` - Engine handle
+/// - `original` - Original transcribed text
+/// - `edited` - Text after user edits
+///
+/// # Returns
+/// true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_learn_from_edit(
     handle: *mut FlowHandle,
@@ -1340,7 +1418,7 @@ pub extern "C" fn flow_free_string(s: *mut c_char) {
 pub extern "C" fn flow_is_configured(handle: *mut FlowHandle) -> bool {
     let handle = unsafe { &*handle };
 
-    // Base10 ("Auto (Cloud)") handles both transcription and completion internally,
+    // Auto provider handles both transcription and completion internally via the worker,
     // so we don't need a separate completion provider configured
     if handle.transcription.name() == "Auto (Cloud)" {
         return handle.transcription.is_configured();
@@ -1611,9 +1689,17 @@ pub extern "C" fn flow_switch_completion_provider(handle: *mut FlowHandle, provi
     // Initialize the provider
     match provider {
         0 => {
-            handle.transcription =
-                Arc::new(OpenAITranscriptionProvider::new(Some(api_key.clone())));
-            handle.completion = Arc::new(OpenAICompletionProvider::new(Some(api_key)));
+            let base_url = handle
+                .storage
+                .get_setting(SETTING_OPENAI_BASE_URL)
+                .ok()
+                .flatten()
+                .filter(|s| !s.is_empty());
+            handle.transcription = Arc::new(OpenAITranscriptionProvider::new(
+                Some(api_key.clone()),
+                base_url.clone(),
+            ));
+            handle.completion = Arc::new(OpenAICompletionProvider::new(Some(api_key), base_url));
             debug!("Switched completion provider to OpenAI");
         }
         1 => {
@@ -1671,8 +1757,17 @@ pub extern "C" fn flow_set_completion_provider(
                 set_last_error(handle, message);
                 return false;
             }
-            handle.transcription = Arc::new(OpenAITranscriptionProvider::new(Some(key.clone())));
-            handle.completion = Arc::new(OpenAICompletionProvider::new(Some(key)));
+            let base_url = handle
+                .storage
+                .get_setting(SETTING_OPENAI_BASE_URL)
+                .ok()
+                .flatten()
+                .filter(|s| !s.is_empty());
+            handle.transcription = Arc::new(OpenAITranscriptionProvider::new(
+                Some(key.clone()),
+                base_url.clone(),
+            ));
+            handle.completion = Arc::new(OpenAICompletionProvider::new(Some(key), base_url));
             debug!("Set completion provider to OpenAI");
         }
         1 => {
@@ -1744,11 +1839,11 @@ fn mask_api_key(key: &str) -> String {
 
     // For OpenAI keys (sk-...)
     if key.starts_with("sk-") {
-        return format!("sk-••••••••");
+        return "sk-••••••••".to_string();
     }
     // For Gemini keys (AI...)
     if key.starts_with("AI") {
-        return format!("AI••••••••");
+        return "AI••••••••".to_string();
     }
     // For other keys, just show dots
     "••••••••".to_string()
@@ -1891,7 +1986,14 @@ pub extern "C" fn flow_set_transcription_mode(
         match cloud_provider.as_str() {
             "openai" => {
                 if let Ok(Some(key)) = handle.storage.get_setting(SETTING_OPENAI_API_KEY) {
-                    handle.transcription = Arc::new(OpenAITranscriptionProvider::new(Some(key)));
+                    let base_url = handle
+                        .storage
+                        .get_setting(SETTING_OPENAI_BASE_URL)
+                        .ok()
+                        .flatten()
+                        .filter(|s| !s.is_empty());
+                    handle.transcription =
+                        Arc::new(OpenAITranscriptionProvider::new(Some(key), base_url));
                     debug!("Enabled OpenAI remote transcription");
                 } else {
                     set_last_error(handle, "OpenAI API key not configured");
@@ -1900,7 +2002,7 @@ pub extern "C" fn flow_set_transcription_mode(
             }
             _ => {
                 // Default to Auto (worker handles transcription + completion)
-                handle.transcription = Arc::new(Base10TranscriptionProvider::new(None));
+                handle.transcription = Arc::new(AutoTranscriptionProvider::new(None));
                 debug!("Enabled Auto transcription (worker handles everything)");
             }
         }
@@ -2307,10 +2409,7 @@ pub extern "C" fn flow_get_cloud_transcription_provider(handle: *mut FlowHandle)
 /// against the cloud. Takes effect on the next transcription mode change.
 /// Returns true on success.
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_set_transcription_fallback(
-    handle: *mut FlowHandle,
-    enabled: bool,
-) -> bool {
+pub extern "C" fn flow_set_transcription_fallback(handle: *mut FlowHandle, enabled: bool) -> bool {
     let handle = unsafe { &mut *handle };
 
     if let Err(e) = handle.storage.set_setting(
@@ -2422,6 +2521,7 @@ pub extern "C" fn flow_format_text(
             shortcuts_triggered: Vec::new(),
             voice_instruction: None,
             personalization,
+            auto_rewriting_enabled: true,
         };
         handle
             .runtime
@@ -2461,7 +2561,10 @@ pub extern "C" fn flow_format_text(
 /// Record what the user finally sent for the last dictation.
 /// Returns 1 when the style profile is due for a rebuild, 0 when recorded, -1 when nothing was pending.
 #[unsafe(no_mangle)]
-pub extern "C" fn flow_record_final_text(handle: *mut FlowHandle, final_text: *const c_char) -> i32 {
+pub extern "C" fn flow_record_final_text(
+    handle: *mut FlowHandle,
+    final_text: *const c_char,
+) -> i32 {
     let handle = unsafe { &*handle };
 
     let Some(pending) = handle.pending_dictation.lock().take() else {
@@ -2523,15 +2626,23 @@ pub extern "C" fn flow_rebuild_style_profile(handle: *mut FlowHandle) -> bool {
         .ok()
         .flatten();
 
-    match handle.runtime.block_on(crate::providers::build_style_profile(
-        &sample,
-        current.as_deref(),
-    )) {
+    match handle
+        .runtime
+        .block_on(crate::providers::build_style_profile(
+            &sample,
+            current.as_deref(),
+        )) {
         Ok(profile) => {
-            let saved = handle.storage.set_setting(SETTING_STYLE_PROFILE, &profile).is_ok()
+            let saved = handle
+                .storage
+                .set_setting(SETTING_STYLE_PROFILE, &profile)
+                .is_ok()
                 && handle
                     .storage
-                    .set_setting(SETTING_STYLE_PROFILE_EXAMPLE_COUNT, &examples.len().to_string())
+                    .set_setting(
+                        SETTING_STYLE_PROFILE_EXAMPLE_COUNT,
+                        &examples.len().to_string(),
+                    )
                     .is_ok();
             log_with_time!(
                 "🎨 [RUST] Rebuilt style profile from {} examples",
@@ -2688,7 +2799,10 @@ pub extern "C" fn flow_reset_style_learning(handle: *mut FlowHandle) -> bool {
     let handle = unsafe { &*handle };
     *handle.pending_dictation.lock() = None;
     handle.storage.delete_all_style_examples().is_ok()
-        && handle.storage.set_setting(SETTING_STYLE_PROFILE, "").is_ok()
+        && handle
+            .storage
+            .set_setting(SETTING_STYLE_PROFILE, "")
+            .is_ok()
         && handle
             .storage
             .set_setting(SETTING_IMESSAGE_IMPORTED_THROUGH, "0")
@@ -2697,4 +2811,305 @@ pub extern "C" fn flow_reset_style_learning(handle: *mut FlowHandle) -> bool {
             .storage
             .set_setting(SETTING_STYLE_PROFILE_EXAMPLE_COUNT, "0")
             .is_ok()
+}
+
+// ============ Auto-Rewriting Setting ============
+
+/// Set whether auto-rewriting is enabled
+/// When disabled, transcriptions are returned as-is (with shortcuts only, no corrections or AI)
+///
+/// # Arguments
+/// - `handle` - Engine handle
+/// - `enabled` - Whether auto-rewriting should be enabled
+///
+/// # Returns
+/// true on success
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_set_auto_rewriting_enabled(handle: *mut FlowHandle, enabled: bool) -> bool {
+    let handle = unsafe { &mut *handle };
+
+    let value = if enabled { "true" } else { "false" };
+
+    if let Err(e) = handle
+        .storage
+        .set_setting(SETTING_AUTO_REWRITING_ENABLED, value)
+    {
+        set_last_error(
+            handle,
+            format!("Failed to save auto-rewriting setting: {}", e),
+        );
+        return false;
+    }
+
+    debug!("Auto-rewriting set to: {}", enabled);
+    true
+}
+
+/// Get whether auto-rewriting is enabled
+///
+/// # Arguments
+/// - `handle` - Engine handle
+///
+/// # Returns
+/// true if auto-rewriting is enabled, false otherwise (default: true)
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_get_auto_rewriting_enabled(handle: *mut FlowHandle) -> bool {
+    let handle = unsafe { &*handle };
+
+    handle
+        .storage
+        .get_setting(SETTING_AUTO_REWRITING_ENABLED)
+        .ok()
+        .flatten()
+        .map(|s| s == "true")
+        .unwrap_or(true) // default to enabled
+}
+
+// ============ Alignment and Edit Detection ============
+
+/// Align original and edited text, extract correction candidates
+/// Returns JSON with alignment result (caller must free with flow_free_string)
+/// JSON format:
+/// {
+///   "steps": [...],
+///   "word_edit_vector": "MMSMM",
+///   "punct_edit_vector": "ZZZZ",
+///   "corrections": [["original", "corrected"], ...]
+/// }
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_align_and_extract_corrections(
+    original: *const c_char,
+    edited: *const c_char,
+) -> *mut c_char {
+    if original.is_null() || edited.is_null() {
+        return ptr::null_mut();
+    }
+
+    let original_str = match unsafe { CStr::from_ptr(original) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+
+    let edited_str = match unsafe { CStr::from_ptr(edited) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+
+    let json = crate::alignment::align_and_extract_corrections_json(original_str, edited_str);
+
+    match CString::new(json) {
+        Ok(cstr) => cstr.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Get dictionary context for ASR prompting
+/// Returns JSON array of high-confidence learned words (caller must free with flow_free_string)
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_get_dictionary_context(handle: *mut FlowHandle, limit: u32) -> *mut c_char {
+    let handle = unsafe { &*handle };
+
+    let words = handle
+        .storage
+        .get_dictionary_context(limit as usize)
+        .unwrap_or_default();
+
+    let json = serde_json::to_string(&words).unwrap_or_else(|_| "[]".to_string());
+
+    match CString::new(json) {
+        Ok(cstr) => cstr.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Save edit analytics for tracking alignment patterns
+/// Returns true on success
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_save_edit_analytics(
+    handle: *mut FlowHandle,
+    word_edit_vector: *const c_char,
+    punct_edit_vector: *const c_char,
+    original_text: *const c_char,
+    edited_text: *const c_char,
+) -> bool {
+    let handle = unsafe { &*handle };
+
+    if word_edit_vector.is_null() {
+        return false;
+    }
+
+    let word_vec = match unsafe { CStr::from_ptr(word_edit_vector) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    let punct_vec = if punct_edit_vector.is_null() {
+        None
+    } else {
+        unsafe { CStr::from_ptr(punct_edit_vector) }.to_str().ok()
+    };
+
+    let original = if original_text.is_null() {
+        None
+    } else {
+        unsafe { CStr::from_ptr(original_text) }.to_str().ok()
+    };
+
+    let edited = if edited_text.is_null() {
+        None
+    } else {
+        unsafe { CStr::from_ptr(edited_text) }.to_str().ok()
+    };
+
+    handle
+        .storage
+        .save_edit_analytics(None, word_vec, punct_vec, original, edited)
+        .is_ok()
+}
+
+/// Save a learned words session for undo functionality
+/// words_json: JSON array of strings ["word1", "word2", ...]
+/// Returns session ID (or -1 on error)
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_save_learned_words_session(
+    handle: *mut FlowHandle,
+    words_json: *const c_char,
+) -> i64 {
+    let handle = unsafe { &*handle };
+
+    let json_str = match unsafe { CStr::from_ptr(words_json) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+
+    let words: Vec<String> = match serde_json::from_str(json_str) {
+        Ok(w) => w,
+        Err(_) => return -1,
+    };
+
+    handle
+        .storage
+        .save_learned_words_session(&words)
+        .unwrap_or(-1)
+}
+
+/// Undo the most recent learned words session
+/// Removes the corrections and marks session as used
+/// Returns true if undo was performed
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_undo_learned_words(handle: *mut FlowHandle) -> bool {
+    let handle = unsafe { &*handle };
+
+    let Some((session_id, words)) = handle.storage.get_undoable_learned_words().ok().flatten()
+    else {
+        return false;
+    };
+
+    // Delete each learned word
+    for word in &words {
+        let _ = handle.storage.delete_correction_by_word(word);
+        // Also remove from learning engine cache
+        handle.learning.remove_from_cache(word);
+    }
+
+    // Mark session as used
+    let _ = handle.storage.mark_learned_words_used(session_id);
+
+    debug!("Undid learned words session {}: {:?}", session_id, words);
+    true
+}
+
+/// Get the most recent undoable learned words as JSON
+/// Returns JSON array of strings (caller must free with flow_free_string)
+/// Returns null if no undoable session exists
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_get_undoable_learned_words(handle: *mut FlowHandle) -> *mut c_char {
+    let handle = unsafe { &*handle };
+
+    let Some((_, words)) = handle.storage.get_undoable_learned_words().ok().flatten() else {
+        return ptr::null_mut();
+    };
+
+    let json = serde_json::to_string(&words).unwrap_or_else(|_| "[]".to_string());
+
+    match CString::new(json) {
+        Ok(cstr) => cstr.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+// ============ OpenAI Base URL ============
+
+/// Set a custom OpenAI-compatible base URL for transcription and completion
+/// Pass an empty string to reset to the default (https://api.openai.com/v1)
+/// Returns true on success
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_set_openai_base_url(handle: *mut FlowHandle, url: *const c_char) -> bool {
+    let handle = unsafe { &mut *handle };
+
+    let url_str = if url.is_null() {
+        String::new()
+    } else {
+        match unsafe { CStr::from_ptr(url) }.to_str() {
+            Ok(s) => s.trim().to_string(),
+            Err(_) => return false,
+        }
+    };
+
+    if let Err(e) = handle
+        .storage
+        .set_setting(SETTING_OPENAI_BASE_URL, &url_str)
+    {
+        set_last_error(handle, format!("Failed to save OpenAI base URL: {e}"));
+        return false;
+    }
+
+    // Update the live transcription provider only when currently using cloud OpenAI
+    let use_local = handle
+        .storage
+        .get_setting(SETTING_USE_LOCAL_TRANSCRIPTION)
+        .ok()
+        .flatten()
+        .map(|s| s == "true")
+        .unwrap_or(false);
+
+    let cloud_provider = handle
+        .storage
+        .get_setting(SETTING_CLOUD_TRANSCRIPTION_PROVIDER)
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "auto".to_string());
+
+    if !use_local && cloud_provider == "openai" {
+        let api_key = handle
+            .storage
+            .get_setting(SETTING_OPENAI_API_KEY)
+            .ok()
+            .flatten();
+        let base_url = if url_str.is_empty() {
+            None
+        } else {
+            Some(url_str)
+        };
+        handle.transcription = Arc::new(OpenAITranscriptionProvider::new(api_key, base_url));
+    }
+
+    clear_last_error(handle);
+    true
+}
+
+/// Get the currently configured custom OpenAI base URL
+/// Returns null if using the default (https://api.openai.com/v1)
+/// Caller must free the returned string with flow_free_string
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_get_openai_base_url(handle: *mut FlowHandle) -> *mut c_char {
+    let handle = unsafe { &*handle };
+
+    match handle.storage.get_setting(SETTING_OPENAI_BASE_URL) {
+        Ok(Some(url)) if !url.is_empty() => match CString::new(url) {
+            Ok(cstr) => cstr.into_raw(),
+            Err(_) => ptr::null_mut(),
+        },
+        _ => ptr::null_mut(),
+    }
 }

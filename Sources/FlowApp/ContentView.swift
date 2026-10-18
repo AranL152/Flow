@@ -21,7 +21,8 @@ struct ContentView: View {
                     // Logo
                     HStack(spacing: FW.spacing8) {
                         if let iconURL = Bundle.module.url(forResource: "app-icon-old", withExtension: "png"),
-                           let nsImage = NSImage(contentsOf: iconURL) {
+                           let nsImage = NSImage(contentsOf: iconURL)
+                        {
                             Image(nsImage: nsImage)
                                 .resizable()
                                 .frame(width: 24, height: 24)
@@ -102,9 +103,6 @@ struct ContentView: View {
     private func navigationItem(_ tab: AppTab) -> some View {
         Button(action: {
             appState.selectedTab = tab
-            Analytics.shared.track("Tab Changed", eventProperties: [
-                "tab": tab.rawValue
-            ])
         }) {
             HStack(spacing: FW.spacing12) {
                 Image(systemName: tab.icon)

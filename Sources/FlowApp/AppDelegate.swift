@@ -8,34 +8,14 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         DispatchQueue.main.async { @MainActor in
-            if !ProcessInfo.processInfo.arguments.contains("--demo") {
-                Analytics.shared.configure(apiKey: "874bf4de55312a14f9b942ab3ab21423")
-            }
-            Analytics.shared.track("App Launched")
-
             NSApp.setActivationPolicy(.regular)
             WindowManager.openMainWindow()
         }
     }
 
-    func applicationDidBecomeActive(_ notification: Notification) {
-        Task { @MainActor in
-            Analytics.shared.track("App Became Active")
-        }
-    }
-
-    func applicationDidResignActive(_ notification: Notification) {
-        Task { @MainActor in
-            Analytics.shared.track("App Resigned Active")
-        }
-    }
-
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        Task { @MainActor in
-            Analytics.shared.track("App Reopened")
-        }
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
         WindowManager.openMainWindow()
         return true
     }

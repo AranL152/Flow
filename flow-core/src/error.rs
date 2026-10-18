@@ -40,4 +40,6 @@ pub enum Error {
 
     #[error("Permission needed: {0}")]
     Permission(String),
+    #[error("VAD error: {0}")]
+    Vad(String),
 }

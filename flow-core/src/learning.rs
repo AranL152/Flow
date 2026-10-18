@@ -24,8 +24,6 @@ use crate::types::{Correction, CorrectionSource};
 
 /// Minimum similarity threshold for considering a word pair as a typo correction
 const MIN_SIMILARITY: f64 = 0.7;
-
-/// Minimum similarity for word alignment (lower threshold for pairing)
 const MIN_ALIGNMENT_SIMILARITY: f64 = 0.5;
 
 /// Minimum confidence to auto-apply a correction (lowered to 0.55 to trigger at ~3 occurrences instead of ~5)
@@ -402,19 +400,17 @@ fn align_words<'a>(original: &[&'a str], edited: &[&'a str]) -> Vec<(&'a str, &'
         return Vec::new();
     }
 
-    // Pre-allocate with expected capacity (most words will pair)
-    let mut pairs = Vec::with_capacity(original.len().min(edited.len()));
+    let mut pairs = Vec::new();
 
+    // simple approach: match by position with some tolerance for insertions/deletions
     let mut orig_idx = 0;
     let mut edit_idx = 0;
-    let orig_len = original.len();
-    let edit_len = edited.len();
 
-    while orig_idx < orig_len && edit_idx < edit_len {
+    while orig_idx < original.len() && edit_idx < edited.len() {
         let orig = original[orig_idx];
         let edit = edited[edit_idx];
 
-        // Quick check: if strings are equal, no need to compute similarity
+        // skip the Jaro-Winkler call if the strings already match
         if orig.eq_ignore_ascii_case(edit) {
             pairs.push((orig, edit, 1.0));
             orig_idx += 1;
@@ -422,7 +418,7 @@ fn align_words<'a>(original: &[&'a str], edited: &[&'a str]) -> Vec<(&'a str, &'
             continue;
         }
 
-        // Compute similarity for current pair
+        // if they're similar enough, consider them a pair
         let sim = jaro_winkler(orig, edit);
 
         if sim >= MIN_ALIGNMENT_SIMILARITY {
@@ -430,20 +426,28 @@ fn align_words<'a>(original: &[&'a str], edited: &[&'a str]) -> Vec<(&'a str, &'
             orig_idx += 1;
             edit_idx += 1;
         } else {
-            // Only compute lookahead similarities if needed
-            let has_next_orig = orig_idx + 1 < orig_len;
-            let has_next_edit = edit_idx + 1 < edit_len;
+            // check if the original word was deleted (next edit word matches next orig word better)
+            let skip_orig = if orig_idx + 1 < original.len() {
+                jaro_winkler(original[orig_idx + 1], edit) > sim
+            } else {
+                false
+            };
 
-            let skip_orig = has_next_orig && jaro_winkler(original[orig_idx + 1], edit) > sim;
-            let skip_edit = has_next_edit && jaro_winkler(orig, edited[edit_idx + 1]) > sim;
+            // check if a word was inserted (current orig matches next edit word better)
+            let skip_edit = if edit_idx + 1 < edited.len() {
+                jaro_winkler(orig, edited[edit_idx + 1]) > sim
+            } else {
+                false
+            };
 
-            match (skip_orig, skip_edit) {
-                (true, false) => orig_idx += 1,
-                (false, true) => edit_idx += 1,
-                _ => {
-                    orig_idx += 1;
-                    edit_idx += 1;
-                }
+            if skip_orig && !skip_edit {
+                orig_idx += 1;
+            } else if skip_edit && !skip_orig {
+                edit_idx += 1;
+            } else {
+                // no good match, skip both
+                orig_idx += 1;
+                edit_idx += 1;
             }
         }
     }
@@ -471,54 +475,575 @@ fn is_whole_word(text: &str, start: usize, end: usize) -> bool {
 }
 
 /// Try to match the case pattern of the original word
-/// Optimized to minimize allocations and iterations
-#[inline]
 fn match_case(corrected: &str, original: &str) -> String {
-    // Early exit for empty strings
     if original.is_empty() || corrected.is_empty() {
         return corrected.to_string();
     }
 
-    let mut chars = original.chars();
-    let first_char = chars.next().unwrap();
-
-    // Check case pattern with single pass
-    if first_char.is_uppercase() {
-        let rest_lowercase = chars.all(|c| !c.is_alphabetic() || c.is_lowercase());
-
-        if rest_lowercase {
-            // Title case: capitalize first letter only
-            let mut result = String::with_capacity(corrected.len());
-            let mut corrected_chars = corrected.chars();
-
-            if let Some(first) = corrected_chars.next() {
-                for c in first.to_uppercase() {
-                    result.push(c);
-                }
-                for c in corrected_chars {
-                    for lc in c.to_lowercase() {
-                        result.push(lc);
-                    }
-                }
-            }
-            result
-        } else {
-            // Check if ALL CAPS
-            let all_upper = original.chars().all(|c| !c.is_alphabetic() || c.is_uppercase());
-            if all_upper {
-                corrected.to_uppercase()
-            } else {
-                corrected.to_string()
-            }
+    if original.chars().all(|c| c.is_uppercase()) {
+        // all caps
+        corrected.to_uppercase()
+    } else if original.chars().next().is_some_and(|c| c.is_uppercase())
+        && original.chars().skip(1).all(|c| c.is_lowercase())
+    {
+        // title case
+        let mut chars = corrected.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(first) => first
+                .to_uppercase()
+                .chain(chars.flat_map(|c| c.to_lowercase()))
+                .collect(),
         }
     } else {
-        // Original starts with lowercase, preserve corrected case
+        // preserve corrected case
         corrected.to_string()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn test_apply_corrections() {
+        let engine = LearningEngine::new();
+
+        // manually add a correction to cache
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+
+            cache.insert(
+                "recieve".to_string(),
+                CachedCorrection {
+                    corrected: "receive".to_string(),
+                    confidence: 0.9,
+                },
+            );
+        }
+
+        let (result, applied) = engine.apply_corrections("I will recieve teh package");
+
+        assert_eq!(result, "I will receive the package");
+        assert_eq!(applied.len(), 2);
+    }
+
+    #[test]
+    fn test_case_matching() {
+        assert_eq!(match_case("the", "TEH"), "THE");
+        assert_eq!(match_case("the", "Teh"), "The");
+        assert_eq!(match_case("the", "teh"), "the");
+    }
+
+    #[test]
+    fn test_word_alignment() {
+        let original = vec!["I", "recieve", "teh", "mail"];
+        let edited = vec!["I", "receive", "the", "mail"];
+
+        let pairs = align_words(&original, &edited);
+
+        assert_eq!(pairs.len(), 4);
+        assert_eq!((pairs[1].0, pairs[1].1), ("recieve", "receive"));
+        assert_eq!((pairs[2].0, pairs[2].1), ("teh", "the"));
+    }
+
+    #[test]
+    fn test_similarity_threshold() {
+        // "hello" and "world" are very different
+        let sim = jaro_winkler("hello", "world");
+        assert!(sim < MIN_SIMILARITY);
+
+        // "recieve" and "receive" are similar
+        let sim = jaro_winkler("recieve", "receive");
+        assert!(sim >= MIN_SIMILARITY);
+    }
+
+    #[test]
+    fn test_confidence_below_threshold() {
+        let mut engine = LearningEngine::new();
+        engine.set_min_confidence(0.9);
+
+        // add a low-confidence correction
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "foo".to_string(),
+                CachedCorrection {
+                    corrected: "bar".to_string(),
+                    confidence: 0.5, // below threshold
+                },
+            );
+        }
+
+        let (result, applied) = engine.apply_corrections("test foo here");
+
+        // should not be applied
+        assert_eq!(result, "test foo here");
+        assert!(applied.is_empty());
+    }
+
+    // ========== Additional comprehensive tests ==========
+
+    #[test]
+    fn test_match_case_empty_strings() {
+        // When corrected is empty, returns empty regardless of original's case
+        assert_eq!(match_case("", "TEH"), "");
+        assert_eq!(match_case("", ""), "");
+
+        assert_eq!(match_case("test", ""), "test");
+    }
+
+    #[test]
+    fn test_match_case_mixed_case_original() {
+        // when original has mixed case that isn't title case, preserve corrected's case
+        assert_eq!(match_case("receive", "rEcIeVe"), "receive");
+        assert_eq!(match_case("HELLO", "hElLo"), "HELLO"); // original is all caps in this context
+    }
+
+    #[test]
+    fn test_match_case_unicode() {
+        // unicode characters should not break case matching
+        assert_eq!(match_case("café", "CAFÉ"), "CAFÉ");
+        assert_eq!(match_case("naïve", "Naïve"), "Naïve");
+    }
+
+    #[test]
+    fn test_align_words_with_insertion() {
+        // when a word is inserted in the edited version
+        let original = vec!["I", "the", "mail"];
+        let edited = vec!["I", "received", "the", "mail"];
+
+        let pairs = align_words(&original, &edited);
+
+        // alignment should handle insertion gracefully
+        // the algorithm should skip "received" and align remaining words
+        assert!(!pairs.is_empty());
+    }
+
+    #[test]
+    fn test_align_words_with_deletion() {
+        // when a word is deleted in the edited version
+        let original = vec!["I", "really", "love", "mail"];
+        let edited = vec!["I", "love", "mail"];
+
+        let pairs = align_words(&original, &edited);
+
+        // should handle deletion and still align remaining words
+        assert!(!pairs.is_empty());
+    }
+
+    #[test]
+    fn test_align_words_completely_different() {
+        // completely different texts
+        let original = vec!["hello", "world"];
+        let edited = vec!["foo", "bar", "baz"];
+
+        let pairs = align_words(&original, &edited);
+
+        // should handle gracefully even if no good matches
+        // the algorithm may still produce pairs based on position
+        // just verify it doesn't panic
+        let _ = pairs;
+    }
+
+    #[test]
+    fn test_align_words_empty_inputs() {
+        let empty: Vec<&str> = vec![];
+
+        // empty original
+        let pairs = align_words(&empty, &["hello"]);
+        assert!(pairs.is_empty());
+
+        // empty edited
+        let pairs = align_words(&["hello"], &empty);
+        assert!(pairs.is_empty());
+
+        // both empty
+        let pairs = align_words(&empty, &empty);
+        assert!(pairs.is_empty());
+    }
+
+    #[test]
+    fn test_apply_corrections_empty_text() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        let (result, applied) = engine.apply_corrections("");
+        assert_eq!(result, "");
+        assert!(applied.is_empty());
+    }
+
+    #[test]
+    fn test_apply_corrections_whitespace_only() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        let (result, applied) = engine.apply_corrections("   \t\n  ");
+        // split_whitespace produces no words, original text preserved
+        assert_eq!(result, "   \t\n  ");
+        assert!(applied.is_empty());
+    }
+
+    #[test]
+    fn test_apply_corrections_no_cache() {
+        let engine = LearningEngine::new();
+        // cache is empty
+
+        let (result, applied) = engine.apply_corrections("this is some text");
+        assert_eq!(result, "this is some text");
+        assert!(applied.is_empty());
+    }
+
+    #[test]
+    fn test_apply_corrections_preserves_word_order() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "aaa".to_string(),
+                CachedCorrection {
+                    corrected: "AAA".to_string(),
+                    confidence: 0.95,
+                },
+            );
+            cache.insert(
+                "bbb".to_string(),
+                CachedCorrection {
+                    corrected: "BBB".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        let (result, applied) = engine.apply_corrections("bbb comes before aaa here");
+        assert_eq!(result, "BBB comes before AAA here");
+        assert_eq!(applied.len(), 2);
+        assert_eq!(applied[0].position, 0); // bbb is at position 0
+        assert_eq!(applied[1].position, 17); // byte offset of aaa in the original text
+    }
+
+    #[test]
+    fn test_has_correction() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        assert!(engine.has_correction("teh"));
+        assert!(engine.has_correction("TEH")); // case-insensitive lookup
+        assert!(engine.has_correction("Teh"));
+        assert!(!engine.has_correction("the"));
+        assert!(!engine.has_correction("xyz"));
+    }
+
+    #[test]
+    fn test_get_correction() {
+        let mut engine = LearningEngine::new();
+        engine.set_min_confidence(0.5);
+
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+            cache.insert(
+                "low".to_string(),
+                CachedCorrection {
+                    corrected: "HIGH".to_string(),
+                    confidence: 0.3, // below threshold
+                },
+            );
+        }
+
+        assert_eq!(engine.get_correction("teh"), Some("the".to_string()));
+        assert_eq!(engine.get_correction("TEH"), Some("the".to_string())); // case-insensitive
+        assert_eq!(engine.get_correction("low"), None); // below confidence threshold
+        assert_eq!(engine.get_correction("xyz"), None);
+    }
+
+    #[test]
+    fn test_get_all_corrections() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "aaa".to_string(),
+                CachedCorrection {
+                    corrected: "AAA".to_string(),
+                    confidence: 0.9,
+                },
+            );
+            cache.insert(
+                "bbb".to_string(),
+                CachedCorrection {
+                    corrected: "BBB".to_string(),
+                    confidence: 0.8,
+                },
+            );
+        }
+
+        let all = engine.get_all_corrections();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn test_clear_cache() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        assert_eq!(engine.cache_size(), 1);
+        engine.clear_cache();
+        assert_eq!(engine.cache_size(), 0);
+    }
+
+    #[test]
+    fn test_remove_from_cache() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+            cache.insert(
+                "recieve".to_string(),
+                CachedCorrection {
+                    corrected: "receive".to_string(),
+                    confidence: 0.9,
+                },
+            );
+        }
+
+        assert_eq!(engine.cache_size(), 2);
+        engine.remove_from_cache("teh");
+        assert_eq!(engine.cache_size(), 1);
+        assert!(!engine.has_correction("teh"));
+        assert!(engine.has_correction("recieve"));
+
+        // removing non-existent key is fine
+        engine.remove_from_cache("nonexistent");
+        assert_eq!(engine.cache_size(), 1);
+    }
+
+    #[test]
+    fn test_set_min_confidence_clamp() {
+        let mut engine = LearningEngine::new();
+
+        engine.set_min_confidence(-0.5);
+        assert_eq!(engine.min_confidence, 0.0);
+
+        engine.set_min_confidence(1.5);
+        assert_eq!(engine.min_confidence, 1.0);
+
+        engine.set_min_confidence(0.7);
+        assert_eq!(engine.min_confidence, 0.7);
+    }
+
+    #[test]
+    fn test_default_impl() {
+        let engine = LearningEngine::default();
+        assert_eq!(engine.cache_size(), 0);
+        assert_eq!(engine.min_confidence, MIN_AUTO_APPLY_CONFIDENCE);
+    }
+
+    #[test]
+    fn test_similarity_boundary_cases() {
+        // exact same word
+        let sim = jaro_winkler("hello", "hello");
+        assert!(sim >= 0.99); // should be ~1.0
+
+        // one character difference
+        let sim = jaro_winkler("there", "their");
+        // these are similar but not identical
+        assert!(sim >= MIN_SIMILARITY);
+
+        // length difference boundary
+        // MAX_LENGTH_DIFF is 1, so "cat" -> "cats" should be ok
+        let len_diff = ("cat".len() as isize - "cats".len() as isize).unsigned_abs();
+        assert_eq!(len_diff, 1);
+        assert!(len_diff <= MAX_LENGTH_DIFF);
+
+        // but "cat" -> "catch" has diff of 2
+        let len_diff = ("cat".len() as isize - "catch".len() as isize).unsigned_abs();
+        assert_eq!(len_diff, 2);
+        assert!(len_diff > MAX_LENGTH_DIFF);
+    }
+
+    #[test]
+    fn test_applied_correction_struct() {
+        let correction = AppliedCorrection {
+            original: "teh".to_string(),
+            corrected: "the".to_string(),
+            confidence: 0.95,
+            position: 5,
+        };
+
+        assert_eq!(correction.original, "teh");
+        assert_eq!(correction.corrected, "the");
+        assert!((correction.confidence - 0.95).abs() < 0.001);
+        assert_eq!(correction.position, 5);
+    }
+
+    #[test]
+    fn test_learned_correction_struct() {
+        let learned = LearnedCorrection {
+            original: "recieve".to_string(),
+            corrected: "receive".to_string(),
+            similarity: 0.95,
+        };
+
+        assert_eq!(learned.original, "recieve");
+        assert_eq!(learned.corrected, "receive");
+        assert!((learned.similarity - 0.95).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_apply_corrections_case_preservation_all_caps() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        let (result, _) = engine.apply_corrections("TEH QUICK BROWN FOX");
+        assert_eq!(result, "THE QUICK BROWN FOX");
+    }
+
+    #[test]
+    fn test_apply_corrections_case_preservation_title_case() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        let (result, _) = engine.apply_corrections("Teh quick brown fox");
+        assert_eq!(result, "The quick brown fox");
+    }
+
+    #[test]
+    fn test_align_words_single_word_change() {
+        let original = vec!["hello"];
+        let edited = vec!["hallo"];
+
+        let pairs = align_words(&original, &edited);
+        assert_eq!(pairs.len(), 1);
+        assert_eq!((pairs[0].0, pairs[0].1), ("hello", "hallo"));
+    }
+
+    #[test]
+    fn test_align_words_same_text() {
+        let words = vec!["I", "love", "rust"];
+
+        let pairs = align_words(&words, &words);
+        assert_eq!(pairs.len(), 3);
+        assert_eq!((pairs[0].0, pairs[0].1), ("I", "I"));
+        assert_eq!((pairs[1].0, pairs[1].1), ("love", "love"));
+        assert_eq!((pairs[2].0, pairs[2].1), ("rust", "rust"));
+    }
+
+    #[test]
+    fn test_multiple_corrections_same_word() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        // same typo appears multiple times
+        let (result, applied) = engine.apply_corrections("teh cat and teh dog");
+        assert_eq!(result, "the cat and the dog");
+        assert_eq!(applied.len(), 2);
+    }
+
+    #[test]
+    fn test_correction_with_punctuation_adjacent() {
+        let engine = LearningEngine::new();
+        {
+            let mut cache = engine.corrections.write();
+            cache.insert(
+                "teh".to_string(),
+                CachedCorrection {
+                    corrected: "the".to_string(),
+                    confidence: 0.95,
+                },
+            );
+        }
+
+        let (result, applied) = engine.apply_corrections("I saw teh, cat");
+        assert_eq!(result, "I saw the, cat");
+        assert_eq!(applied.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod fork_tests {
     use super::*;
 
     #[test]

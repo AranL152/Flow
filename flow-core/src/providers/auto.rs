@@ -21,14 +21,13 @@ use crate::style::{ExampleSource, StyleExample};
 const BASE10_PROXY_URL: &str = "https://base10-proxy.old-resonance-ed75.workers.dev";
 const BASE10_VALIDATE_URL: &str =
     "https://base10-proxy.old-resonance-ed75.workers.dev/validate-corrections";
-const STYLE_PROFILE_URL: &str =
-    "https://base10-proxy.old-resonance-ed75.workers.dev/style-profile";
+const STYLE_PROFILE_URL: &str = "https://base10-proxy.old-resonance-ed75.workers.dev/style-profile";
 
 /// Examples sent per profile build, newest first
 const PROFILE_SAMPLE_SIZE: usize = 200;
 
-/// Base10 transcription provider (with integrated completion)
-pub struct Base10TranscriptionProvider {
+/// Auto transcription provider (with integrated completion)
+pub struct AutoTranscriptionProvider {
     client: Client,
 }
 
@@ -60,7 +59,7 @@ struct ValidateCorrectionsResponse {
     results: Vec<CorrectionValidation>,
 }
 
-/// Validate corrections using AI via the Base10 worker
+/// Validate corrections using AI via the Flow worker
 pub async fn validate_corrections(
     corrections: Vec<CorrectionPair>,
 ) -> Result<Vec<CorrectionValidation>> {
@@ -96,7 +95,10 @@ pub async fn validate_corrections(
     Ok(validation_response.results)
 }
 
-async fn post_worker<T: Serialize, R: serde::de::DeserializeOwned>(url: &str, body: &T) -> Result<R> {
+async fn post_worker<T: Serialize, R: serde::de::DeserializeOwned>(
+    url: &str,
+    body: &T,
+) -> Result<R> {
     let response = Client::new().post(url).json(body).send().await?;
 
     if !response.status().is_success() {
@@ -170,14 +172,16 @@ pub async fn build_style_profile(
     };
 
     if request.examples.is_empty() {
-        return Err(Error::Transcription("No examples to build a profile from".to_string()));
+        return Err(Error::Transcription(
+            "No examples to build a profile from".to_string(),
+        ));
     }
 
     let response: StyleProfileResponse = post_worker(STYLE_PROFILE_URL, &request).await?;
     Ok(response.profile)
 }
 
-impl Base10TranscriptionProvider {
+impl AutoTranscriptionProvider {
     pub fn new(_api_key: Option<String>) -> Self {
         Self {
             client: Client::new(),
@@ -221,6 +225,7 @@ struct WorkerCompletionParams {
     voice_instruction: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     personalization: Option<String>,
+    auto_rewriting_enabled: bool,
 }
 
 impl From<CompletionParams> for WorkerCompletionParams {
@@ -231,6 +236,7 @@ impl From<CompletionParams> for WorkerCompletionParams {
             shortcuts_triggered: params.shortcuts_triggered,
             voice_instruction: params.voice_instruction,
             personalization: params.personalization,
+            auto_rewriting_enabled: params.auto_rewriting_enabled,
         }
     }
 }
@@ -244,7 +250,7 @@ struct WorkerResponse {
 }
 
 #[async_trait]
-impl TranscriptionProvider for Base10TranscriptionProvider {
+impl TranscriptionProvider for AutoTranscriptionProvider {
     fn name(&self) -> &'static str {
         "Auto (Cloud)"
     }
@@ -356,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_provider_always_configured() {
-        let provider = Base10TranscriptionProvider::new(None);
+        let provider = AutoTranscriptionProvider::new(None);
         assert!(provider.is_configured());
     }
 }

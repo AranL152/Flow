@@ -4,7 +4,7 @@ Cloudflare Worker that turns dictated audio into finished text. TypeScript with
 Hono for the HTTP layer and LangGraph for the state machine.
 
 Deployed as `base10-proxy`, which is the URL `flow-core` (the Rust client in
-`flow-core/src/providers/base10.rs`) already calls. It replaces the older Rust
+`flow-core/src/providers/auto.rs`) already calls. It replaces the older Rust
 worker that lived in `base10-worker/`, which implemented the same endpoints.
 
 ## How a request flows
