@@ -59,10 +59,11 @@ struct LiquidCommandText: View {
                                 // of bouncing whole words or affecting the message.
                                 for x in stride(from: CGFloat(0), to: size.width, by: 3) {
                                     let distance = x + 1.5 - center
-                                    let envelope = exp(-(distance * distance) / (2 * 60 * 60))
-                                    // A broader, slower swell gives the letters a liquid flow.
+                                    let envelope = exp(-(distance * distance) / (2 * 48 * 48))
+                                    // One crest travels left to right with the highlight;
+                                    // no oscillating carrier or trailing ripples.
                                     let fade = min(1, progress / 0.12, (1 - progress) / 0.12)
-                                    let offset = sin(distance / 16 - progress * 8) * 2.6 * envelope * fade
+                                    let offset = -2.0 * envelope * fade
                                     var slice = context
                                     slice.clip(to: Path(CGRect(x: x, y: 0, width: min(3, size.width - x), height: size.height)))
                                     slice.translateBy(x: 0, y: offset)
@@ -70,7 +71,7 @@ struct LiquidCommandText: View {
                                 }
                             }
                         }
-                        .shadow(color: FlowCommandBadge.ink.opacity(animating && !reduceMotion ? 0.55 : 0.18), radius: animating && !reduceMotion ? 6 : 2)
+                        .shadow(color: FlowCommandBadge.ink.opacity(animating && !reduceMotion ? 0.48 : 0.18), radius: animating && !reduceMotion ? 5 : 2)
                     }
                     .allowsHitTesting(false).accessibilityHidden(true)
                 }

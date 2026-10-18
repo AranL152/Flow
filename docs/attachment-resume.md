@@ -244,3 +244,13 @@ the longer pass before capturing its settled state.
 The build and all seven native preview checks passed; the active frame was
 visually reviewed for the stronger wave and readable letters. The refreshed
 Replay preview remains open. No model APIs or Messages writes were used.
+
+## Single left-to-right crest (October 18)
+
+The user found the stronger oscillation excessive and asked for just one ripple
+from left to right. The sinusoidal carrier is removed: a single Gaussian crest
+now moves with the highlight, with up to 2 points of displacement and the slower
+1.1-second duration. There are no trailing waves. Glow returns to the earlier
+subtle strength.
+The build and seven native preview checks passed again; the regenerated active
+frame was visually reviewed, and the updated Replay preview is open.

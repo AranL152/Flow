@@ -9,9 +9,10 @@ This classifier only styles captions; the worker's authoritative command parser,
 message insertion and attachment safeguards are unchanged.
 
 During recording the command has a soft purple glow. When recording ends, a
-single 1.1-second highlight sweeps across it with up to 2.6 points of letter ripple.
-The broader wave and highlight give it a slower liquid flow, with a gentle fade
-at either end of the pass. The timing is shared by rendering and animation cleanup.
+single 1.1-second highlight and one smooth crest sweep from left to right,
+with up to 2 points of letter displacement. A Gaussian crest follows the highlight
+without oscillation or trailing ripples, with a gentle fade at either end.
+The timing is shared by rendering and animation cleanup.
 There is no replay on each partial recognition update. The glyph alpha image is
 cached per text/width/scale and drawn through narrow Canvas strips, so only the
 command letters distort. Recipient text is outside that layer. Canvas's animation
