@@ -894,6 +894,21 @@ public final class Flow: @unchecked Sendable {
         return withOptionalCString(finalText) { flow_record_final_text(handle, $0) } == 1
     }
 
+    /// The current Messages conversation, read through the native detector.
+    public var activeMessagesContact: String? {
+        guard let handle else { return nil }
+        return takeString(flow_get_active_messages_contact(handle))
+    }
+
+    /// 0 = saved, 1 = saved and profile rebuild due, -1 = discarded because
+    /// no completed baseline exists or the contact changed.
+    public func recordFinalTextForContact(_ finalText: String?, contactName: String) -> Int32 {
+        guard let handle else { return -1 }
+        return withOptionalCString(finalText) { final in
+            contactName.withCString { flow_record_final_text_for_contact(handle, final, $0) }
+        }
+    }
+
     /// Drop the last dictation without learning from it
     public func discardPendingDictation() {
         guard let handle = handle else { return }

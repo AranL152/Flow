@@ -2698,6 +2698,24 @@ pub extern "C" fn flow_record_final_text(
     i32::from(profile_rebuild_due(&handle.storage))
 }
 
+/// Record a send only when its current contact matches the captured recipient.
+/// A missing/mismatched contact discards the pending baseline instead of teaching
+/// one conversation's correction to another. Returns -1, 0 or 1 like record_final_text.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_record_final_text_for_contact(
+    handle: *mut FlowHandle,
+    final_text: *const c_char,
+    contact_name: *const c_char,
+) -> i32 {
+    if handle.is_null() { return -1; }
+    let engine = unsafe { &*handle };
+    let contact = style::contact_key(c_str(contact_name).unwrap_or(""));
+    let matches = !contact.is_empty() && engine.pending_dictation.lock().as_ref()
+        .is_some_and(|pending| pending.contact_key == contact);
+    if !matches { *engine.pending_dictation.lock() = None; return -1; }
+    flow_record_final_text(handle, final_text)
+}
+
 /// Drop the last dictation without learning from it (e.g. the sent text could not be read)
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_discard_pending_dictation(handle: *mut FlowHandle) {
@@ -2727,6 +2745,11 @@ pub extern "C" fn flow_rebuild_style_profile(handle: *mut FlowHandle) -> bool {
         .get_style_examples(STYLE_EXAMPLE_POOL)
         .unwrap_or_default();
     let sample = style::sample_for_profile(&examples, style::PROFILE_EXAMPLES_PER_CATEGORY);
+    if sample.is_empty() {
+        // Recipient-only edits already apply to the next request without a
+        // global profile. Avoid a network rebuild with no global evidence.
+        return handle.storage.set_setting(SETTING_STYLE_PROFILE_EXAMPLE_COUNT, &examples.len().to_string()).is_ok();
+    }
     let current = handle
         .storage
         .get_setting(SETTING_STYLE_PROFILE)
@@ -3330,7 +3353,40 @@ mod dictation_stream_tests {
         assert_eq!(examples.len(), 1);
         assert!(examples[0].edited);
         assert_eq!(examples[0].contact_key, style::contact_key("Alex"));
+        let alex = style::contact_key("Alex");
+        let prompt = personalization_for(engine, "check slides on Friday", "acquaintance", &alex).unwrap();
+        assert!(prompt.contains("yo can u check the deck"));
+        assert!(personalization_for(engine, "check slides on Friday", "acquaintance", &style::contact_key("Sam")).is_none());
+        assert!(personalization_for(engine, "check slides on Friday", "acquaintance", "").is_none());
+        let other_user = flow_init(db.as_ptr());
+        assert!(personalization_for(unsafe { &*other_user }, "check slides on Friday", "acquaintance", &alex).is_none());
+        flow_destroy(other_user);
+        assert!(flow_rebuild_style_profile(handle), "recipient-only memory needs no global network rebuild");
         flow_free_string(result);
+        flow_destroy(handle);
+    }
+
+    #[test]
+    fn changed_contact_at_send_discards_the_pending_learning_baseline() {
+        let db = CString::new(":memory:").unwrap();
+        let handle = flow_init(db.as_ptr());
+        let engine = unsafe { &*handle };
+        *engine.pending_dictation.lock() = Some(PendingDictation {
+            category: "acquaintance".into(), contact_key: style::contact_key("Alex"),
+            said: "review slides".into(), flow_output: "review the slides".into(),
+        });
+        let text = CString::new("review the deck").unwrap();
+        let other = CString::new("Sam").unwrap();
+        assert_eq!(flow_record_final_text_for_contact(handle, text.as_ptr(), other.as_ptr()), -1);
+        assert_eq!(engine.storage.count_style_examples().unwrap(), 0);
+        assert!(engine.pending_dictation.lock().is_none());
+        *engine.pending_dictation.lock() = Some(PendingDictation {
+            category: "acquaintance".into(), contact_key: style::contact_key("Alex"),
+            said: "review slides".into(), flow_output: "review the slides".into(),
+        });
+        let same = CString::new("  alex  ").unwrap();
+        assert_eq!(flow_record_final_text_for_contact(handle, text.as_ptr(), same.as_ptr()), 0);
+        assert_eq!(engine.storage.count_style_examples().unwrap(), 1);
         flow_destroy(handle);
     }
 

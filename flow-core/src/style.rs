@@ -276,8 +276,9 @@ fn similarity(a: &HashSet<String>, b: &HashSet<String>) -> f32 {
 
 /// Pick the examples most useful for formatting `said` to `contact` / `category`.
 ///
-/// Scores favour the same person, then the same recipient category, word overlap with
-/// the new dictation, and examples where the user corrected Flow (the most signal).
+/// Only this user's current contact and unscoped examples are eligible. Another
+/// contact's edits cannot become fallback evidence, even in the same category.
+/// Scores favour the same person, category, overlap and user-corrected examples.
 pub fn select_examples<'a>(
     examples: &'a [StyleExample],
     said: &str,
@@ -289,6 +290,7 @@ pub fn select_examples<'a>(
     let mut scored: Vec<(f32, &StyleExample)> = examples
         .iter()
         .filter(|e| !e.sent.trim().is_empty())
+        .filter(|e| e.contact_key.is_empty() || (!contact.is_empty() && e.contact_key == contact))
         .map(|e| {
             let mut score = similarity(&query, &words(&e.said));
             // Similarity is at most 1.0, so the same person ranks first, then the same category
@@ -336,6 +338,7 @@ pub fn measure_habits(examples: &[StyleExample], category: &str, contact: &str) 
         let for_category: Vec<&str> = examples
             .iter()
             .filter(|e| e.category == category)
+            .filter(|e| e.contact_key.is_empty() || (!contact.is_empty() && e.contact_key == contact))
             .map(|e| e.sent.trim())
             .collect();
         (category_label(category), for_category)
@@ -377,7 +380,10 @@ pub fn measure_habits(examples: &[StyleExample], category: &str, contact: &str) 
 
 /// Balanced sample for profile building: corrections first, then newest, capped per category
 pub fn sample_for_profile(examples: &[StyleExample], per_category: usize) -> Vec<StyleExample> {
-    let mut sorted: Vec<&StyleExample> = examples.iter().collect();
+    // Contact-specific corrections stay in recipient retrieval; do not distil
+    // them into the global user profile where they could affect everyone else.
+    let mut sorted: Vec<&StyleExample> = examples.iter()
+        .filter(|e| e.contact_key.is_empty() || !e.edited).collect();
     sorted.sort_by(|a, b| b.edited.cmp(&a.edited).then(b.created_at.cmp(&a.created_at)));
 
     let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
@@ -403,7 +409,9 @@ pub fn build_personalization(
     let mut out = String::from("\n\n=== HOW THIS USER ACTUALLY WRITES ===\n");
     out.push_str(
         "Sound like THIS user, not like a generic assistant. Their habits below override the generic \
-         tone guidance and examples above (word choice, capitalization, punctuation, emoji, pet names, sign-offs).\n",
+         tone guidance and examples above (word choice, capitalization, punctuation, emoji, pet names, sign-offs).\n\
+         Sent edits are examples for the current recipient, not permanent word substitutions or emoji bans. \
+         An explicit request in the current speech overrides history. Never copy old facts, dates, names or commitments.\n",
     );
 
     if let Some(profile) = profile.map(str::trim).filter(|p| !p.is_empty()) {
@@ -598,4 +606,42 @@ mod tests {
             assert_eq!(RewriteStrength::from_u8(strength.to_u8()), strength);
         }
     }
+    #[test]
+    fn contact_edits_never_fall_back_to_another_person_or_unknown_contact() {
+        let alex = contact_key("Alex");
+        let sam = contact_key("Sam");
+        let examples = vec![
+            StyleExample::dictation("acquaintance", "check slides", "check the slides", "check the deck").with_contact(&alex),
+            StyleExample::imported("acquaintance", "thanks for checking"),
+        ];
+        let own = select_examples(&examples, "check slides", "acquaintance", &alex, 6);
+        assert!(own.iter().any(|e| e.sent.contains("deck")));
+        for contact in [&sam, &String::new()] {
+            let picked = select_examples(&examples, "check slides", "acquaintance", contact, 6);
+            assert_eq!(picked.len(), 1);
+            assert!(picked[0].contact_key.is_empty());
+            assert!(!picked[0].sent.contains("deck"));
+        }
+    }
+
+    #[test]
+    fn measured_habits_do_not_inherit_another_contacts_style() {
+        let alex = contact_key("Alex");
+        let examples: Vec<_> = (0..20).map(|_| StyleExample::imported("acquaintance", "yo!!! ❤️").with_contact(&alex)).collect();
+        assert!(measure_habits(&examples, "acquaintance", &alex).is_some());
+        assert!(measure_habits(&examples, "acquaintance", &contact_key("Sam")).is_none());
+        assert!(measure_habits(&examples, "acquaintance", "").is_none());
+    }
+
+    #[test]
+    fn contact_specific_edits_are_not_promoted_to_the_global_profile() {
+        let contact_edit = StyleExample::dictation("acquaintance", "slides", "slides", "deck").with_contact(&contact_key("Alex"));
+        let global_edit = StyleExample::dictation("acquaintance", "hello", "Hello!", "hello");
+        let examples = [contact_edit, global_edit];
+        let sample = sample_for_profile(&examples, 40);
+        assert_eq!(sample.len(), 1);
+        assert!(sample[0].contact_key.is_empty());
+        assert_eq!(sample[0].sent, "hello");
+    }
+
 }

@@ -472,6 +472,15 @@ int32_t flow_record_final_text(struct FlowHandle *handle,
                                const char *final_text);
 
 /**
+ * Record a send only when its current contact matches the captured recipient.
+ * A missing/mismatched contact discards the pending baseline instead of teaching
+ * one conversation's correction to another. Returns -1, 0 or 1 like record_final_text.
+ */
+int32_t flow_record_final_text_for_contact(struct FlowHandle *handle,
+                                           const char *final_text,
+                                           const char *contact_name);
+
+/**
  * Drop the last dictation without learning from it (e.g. the sent text could not be read)
  */
 void flow_discard_pending_dictation(struct FlowHandle *handle);

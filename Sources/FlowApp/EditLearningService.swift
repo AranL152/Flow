@@ -48,6 +48,8 @@ final class EditLearningService {
 
     /// Target app's PID for the current monitoring session
     private var targetAppPID: pid_t?
+    private var targetContact: String?
+    private var requiresContactCheck = false
 
     /// When monitoring started
     private var monitoringStartTime: Date?
@@ -89,6 +91,14 @@ final class EditLearningService {
 
         self.originalText = originalText
         self.targetAppPID = targetApp?.processIdentifier
+        self.requiresContactCheck = targetApp?.bundleIdentifier == "com.apple.MobileSMS"
+            || targetApp?.localizedName?.lowercased().contains("messages") == true
+        self.targetContact = requiresContactCheck ? engine?.activeMessagesContact : nil
+        if requiresContactCheck && targetContact == nil {
+            log("Cannot pin the Messages recipient; discarding pending learning")
+            cancelMonitoring()
+            return
+        }
         self.monitoringStartTime = Date()
         self.lastReadText = nil
 
@@ -143,13 +153,16 @@ final class EditLearningService {
         guard let original = originalText, let pid = targetAppPID,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
 
+        guard contactStillMatches() else { cancelMonitoring(); return }
         var sent = lastReadText
         if let (current, _) = readFocusedTextElement(pid: pid), !isInvalidText(current) {
             sent = current
         }
 
         log("Return pressed, treating message as sent")
-        if let sent = sent, sent != original {
+        // Messages edits belong to the pinned recipient. Do not also save
+        // them as global vocabulary replacements for every conversation.
+        if let sent = sent, sent != original, !requiresContactCheck {
             processEdit(original: original, edited: sent)
         }
         recordSent(original: original, current: sent)
@@ -174,6 +187,8 @@ final class EditLearningService {
             cancelMonitoring()
             return
         }
+
+        guard contactStillMatches() else { cancelMonitoring(); return }
 
         // Try to read the focused text element
         guard let (currentText, role) = readFocusedTextElement(pid: pid) else {
@@ -223,8 +238,15 @@ final class EditLearningService {
             sent = nil
         }
 
+        let result: Int32
+        if requiresContactCheck, let targetContact {
+            result = engine.recordFinalTextForContact(sent, contactName: targetContact)
+        } else {
+            result = engine.recordFinalText(sent) ? 1 : 0
+        }
+        guard result >= 0 else { log("Style: discarded a changed-recipient baseline"); return }
         log("Style: recorded \(sent == nil ? "unchanged" : "edited") message")
-        if engine.recordFinalText(sent) {
+        if result == 1 {
             log("Style: rebuilding profile in the background")
             DispatchQueue.global(qos: .utility).async {
                 let ok = engine.rebuildStyleProfile()
@@ -256,8 +278,8 @@ final class EditLearningService {
               let alignment = try? JSONDecoder().decode(AlignmentResult.self, from: alignmentData)
         else {
             log("Failed to get alignment from Rust")
-            // Fall back to legacy learning
-            _ = engine.learnFromEdit(original: original, edited: edited)
+            // The complete sent example is still saved for this contact below.
+            // Do not promote an unclassified edit into a global replacement.
             return
         }
 
@@ -375,7 +397,16 @@ final class EditLearningService {
         }
     }
 
+    private func contactStillMatches() -> Bool {
+        guard requiresContactCheck else { return true }
+        guard let expected = targetContact, let current = engine?.activeMessagesContact else { return false }
+        return expected.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            == current.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     private func cleanup() {
+        targetContact = nil
+        requiresContactCheck = false
         originalText = nil
         targetAppPID = nil
         monitoringStartTime = nil
