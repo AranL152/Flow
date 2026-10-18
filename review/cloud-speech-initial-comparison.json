@@ -1,0 +1,131 @@
+{
+  "status": "passed",
+  "realtime_cases": 2,
+  "scope": "Three sequential synthetic utterances, each compared with batch transcription. Real production client, deployed Cloudflare and Rust pipeline; no Messages writes or microphone. Not a median/p95 benchmark.",
+  "samples": [
+    {
+      "audio_seconds": 4.0361875,
+      "cases": [
+        {
+          "error": "",
+          "output": "I would like to bring to your attention the following issue.",
+          "real_model_chunks": 7,
+          "request_to_complete_ms": 6670.6082910000005,
+          "request_to_first_llm_delta_ms": 6405.041791,
+          "route": "realtime",
+          "stop_to_first_llm_delta_ms": 8485.263332999999,
+          "used_realtime_transcript": false,
+          "valid": true
+        },
+        {
+          "error": "",
+          "output": "I would like to bring to your attention the following issue.",
+          "real_model_chunks": 7,
+          "request_to_complete_ms": 2648.916333,
+          "request_to_first_llm_delta_ms": 2451.02825,
+          "route": "batch",
+          "stop_to_first_llm_delta_ms": 2451.02825,
+          "used_realtime_transcript": false,
+          "valid": true
+        }
+      ],
+      "cloud_failure": "Cloud speech did not finish; using recorded audio.",
+      "final_cloud_transcript": "",
+      "finalization_ms": 2080.221542,
+      "live_updates_before_stop": 1,
+      "minimum_confidence": 1,
+      "revisions": [
+        "Here's the issue.",
+        "Here's the flow. Find"
+      ],
+      "scope": "One generated-speech fixture, paced in real time. Production Swift WebSocket client, deployed Cloudflare Nova, Rust personalization/attachment pipeline and real streamed LLM responses. No microphone, Messages writes or production database. Timings are a single sequential sample, not median/p95 or a latency guarantee.",
+      "status": "passed"
+    },
+    {
+      "audio_seconds": 4.6399375,
+      "cases": [
+        {
+          "error": "",
+          "output": "I have attached the dashboard screenshot for your reference.",
+          "real_model_chunks": 8,
+          "request_to_complete_ms": 577.496,
+          "request_to_first_llm_delta_ms": 350.102084,
+          "route": "realtime",
+          "stop_to_first_llm_delta_ms": 463.340626,
+          "used_realtime_transcript": true,
+          "valid": true
+        },
+        {
+          "error": "",
+          "output": "I have attached the dashboard screenshot for your reference.",
+          "real_model_chunks": 8,
+          "request_to_complete_ms": 1894.9795,
+          "request_to_first_llm_delta_ms": 1666.397875,
+          "route": "batch",
+          "stop_to_first_llm_delta_ms": 1666.397875,
+          "used_realtime_transcript": false,
+          "valid": true
+        }
+      ],
+      "cloud_failure": "",
+      "final_cloud_transcript": "Here is the dashboard screenshot. Flow. Find the Orion dashboard image.",
+      "finalization_ms": 113.238542,
+      "live_updates_before_stop": 4,
+      "minimum_confidence": 0.984375,
+      "revisions": [
+        "Here is the dashboard",
+        "Here is the dashboard screenshot. For",
+        "Here is the dashboard screenshot flow",
+        "Here is the dashboard screenshot. Flow. Find the Orion",
+        "Here is the dashboard screenshot. Flow. Find the Orion dashboard image.",
+        "Here is the dashboard screenshot. Flow. Find the Orion dashboard image."
+      ],
+      "scope": "One generated-speech fixture, paced in real time. Production Swift WebSocket client, deployed Cloudflare Nova, Rust personalization/attachment pipeline and real streamed LLM responses. No microphone, Messages writes or production database. Timings are a single sequential sample, not median/p95 or a latency guarantee.",
+      "status": "passed"
+    },
+    {
+      "audio_seconds": 5.3249375,
+      "cases": [
+        {
+          "error": "",
+          "output": "Hello Alex, I am sharing the project review with you.",
+          "real_model_chunks": 7,
+          "request_to_complete_ms": 485.003,
+          "request_to_first_llm_delta_ms": 251.402417,
+          "route": "realtime",
+          "stop_to_first_llm_delta_ms": 388.499417,
+          "used_realtime_transcript": true,
+          "valid": true
+        },
+        {
+          "error": "",
+          "output": "Hello Alex, I am sharing the project review with you.",
+          "real_model_chunks": 6,
+          "request_to_complete_ms": 2029.4682090000001,
+          "request_to_first_llm_delta_ms": 1655.801792,
+          "route": "batch",
+          "stop_to_first_llm_delta_ms": 1655.801792,
+          "used_realtime_transcript": false,
+          "valid": true
+        }
+      ],
+      "cloud_failure": "",
+      "final_cloud_transcript": "Hey, Alex. Here is the project review flow. Find the robotics presentation.",
+      "finalization_ms": 137.097,
+      "live_updates_before_stop": 6,
+      "minimum_confidence": 0.99902344,
+      "revisions": [
+        "Hey, Alex. Here",
+        "Hey, Alex. Here is the project",
+        "Hey, Alex. Here is the project review flow.",
+        "Hey, Alex. Here is the project review flow. Find the robotic",
+        "Hey, Alex. Here is the project review flow.",
+        "Hey, Alex. Here is the project review flow. Find the robotics presentation",
+        "Hey, Alex. Here is the project review flow. Find the robotics presentation.",
+        "Hey, Alex. Here is the project review flow. Find the robotics presentation."
+      ],
+      "scope": "One generated-speech fixture, paced in real time. Production Swift WebSocket client, deployed Cloudflare Nova, Rust personalization/attachment pipeline and real streamed LLM responses. No microphone, Messages writes or production database. Timings are a single sequential sample, not median/p95 or a latency guarantee.",
+      "status": "passed"
+    }
+  ]
+}

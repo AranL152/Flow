@@ -1,7 +1,9 @@
 # Inference latency — October 18, 2026
 
-This is a source-checked proposal, not a deployed backend change or a new
-performance measurement. The latest UI preview made no ASR/LLM calls.
+This records the investigation before implementation. The real-time Cloudflare
+path is now implemented; see [cloud-speech.md](cloud-speech.md) for the deployed
+route, costs, fallback behavior and scoped live verification. The UI-only ripple
+preview itself still makes no ASR/LLM calls.
 
 ## What Jason's sync contributed
 
