@@ -26,7 +26,8 @@ final class StreamedTextInsertion {
               settable(kAXSelectedTextRangeAttribute, on: element),
               let buffer = try? StreamInsertionBuffer(original: text, selection: selection) else { return nil }
         let mode: Mode
-        if settable(kAXValueAttribute, on: element), (AXEditMonitorService.attachmentCount(in: element) ?? 0) == 0 { mode = .value }
+        if settable(kAXValueAttribute, on: element), !text.contains("\u{FFFC}"),
+           (AXEditMonitorService.attachmentCount(in: element) ?? 0) == 0 { mode = .value }
         else if settable(kAXSelectedTextAttribute, on: element) { mode = .selection }
         else { return nil }
         let insertion = StreamedTextInsertion(element: element, pid: app.processIdentifier, mode: mode, buffer: buffer)

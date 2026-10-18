@@ -48,9 +48,20 @@ notifications. Selected files are revalidated immediately before use.
 When there is one confident candidate and the captured Messages composer and
 contact are still current, Flow requests an attachment paste. Otherwise the
 preview offers Add to Messages or Copy attachment. Paste dispatch is labelled
-“Paste requested”; there is no claim of a Messages receipt. Flow never presses
-Send. The previous clipboard is restored after a short paste interval only if
+“Paste requested” until Messages exposes an additional native attachment object
+in its attributed text. Then the status becomes “Attachment added”. Flow never
+presses Send. The previous clipboard is restored after a short paste interval only if
 the user has not copied something else in the meantime.
+
+The native composer is identified by `messageBodyField`, including macOS versions
+where it is an `AXTextField`. An empty composer can report no AXValue; Flow checks
+that its character count is zero before streaming into it. Search fields are
+excluded. Contact checks use native Accessibility without System Events automation.
+
+If a draft already contains attachment objects and Messages cannot expose a
+writable selected-text range, new dictation uses the final-paste fallback to
+preserve those objects. The verified demo sequence streams text first, then
+appends attachments. Attachment-only commands leave existing text untouched.
 
 Text learning keeps the existing user/contact scope. The attachment command is
 excluded from the remembered message span, and U+FFFC attachment markers are
@@ -74,8 +85,9 @@ replace microphone, speech recognition or Accessibility permissions.
 The attachment demo has its own bundle and process. Its synthetic PDFs, generated
 audio and default report live in the temporary directory, outside protected
 Desktop/Documents folders. Building prepares an app; it does not grant permissions.
-During this implementation, GUI relaunches were stopped when the user reported
-repeated access prompts. The final GUI replay was not rerun after that instruction.
+During implementation, GUI relaunches were stopped when the user reported
+repeated access prompts. After their restart, the prepared bundle was reopened
+without rebuilding or re-signing it.
 
 To launch the separate attachment simulation when wanted:
 
@@ -98,7 +110,7 @@ Messages conversation is changed. Replay is available in the window.
 
 - Worker: 84 tests passed; TypeScript checking passed.
 - Rust: 350 tests passed across unit/integration/doc suites; 2 platform tests ignored.
-- Swift: 15 tests passed, including image paste into an isolated native rich-text
+- Swift: 16 tests passed, including image paste into an isolated native rich-text
   composer, clipboard retention, type filtering, file changes and cold-start review.
 - Real Rust → deployed Whisper → LLM pipeline: 5/5 generated-speech cases passed.
   Cases cover message + download, clipboard-only, recipient text, ambiguous
@@ -116,6 +128,52 @@ re-signing. It passed, presented five real model chunks and selected the matchin
 synthetic PDF. Live captions were unavailable; the app did not request access.
 [GUI replay results](../review/attachment-demo-verification.json).
 
-Real Messages attachment acceptance and actual browser download completion
-remain unverified. Unit tests and a dispatched paste event are not evidence that
-Messages accepted an attachment. No real message was sent.
+## Actual Messages verification
+
+The production Swift components were linked into a helper running with the
+editor's existing Accessibility and microphone grants. This avoided rebuilding
+or restarting the user's visible demo or requesting access again. The helper
+required a named conversation and an empty composer before making any change.
+
+The real Messages composer accepted five LLM chunks through five AX text writes.
+A synthetic PDF was appended, then a second attachment-only voice request
+appended a clipboard image. The composer exposed two native `AXAttachment`
+objects and preserved the exact generated text. File objects are exposed through
+`AXAttributedStringForRange`, rather than `AXChildren`; the original child-tree
+check was insufficient and its report is retained for inspection.
+
+Actual microphone capture started, delivered 44.1 kHz samples and stopped cleanly.
+That microphone audio was never uploaded. Generated speech supplied the cloud
+ASR/LLM test and 118 measured audio-level updates to the production recording HUD.
+The waveform envelope varied with speech and returned to zero during silence.
+This is a loudness display, not a pitch/frequency analyzer.
+
+The live prompt-memory regression passed all five checks: a sent edit influenced
+Alex's subsequent agentic output, another contact and another user did not inherit
+it, and current explicit wording overrode the remembered preference. This used
+isolated synthetic Send receipts; no Return/Send event was issued in Messages.
+
+[Messages verification](../review/imessage-verification.json),
+[initial child-tree observation](../review/imessage-initial-verification.json),
+[learning regression](../review/contact-learning-verification.json).
+
+Messages is left with an unsent verification draft containing the generated text,
+synthetic PDF and image. Existing user drafts were not replaced. Live input
+captions remain unavailable because Speech Recognition is not authorized for the
+testing process. Global hotkey delivery and actual browser download completion
+were not tested in this run. No real message was sent.
+
+To inspect grants without writing, or test an empty Messages draft explicitly:
+
+```sh
+python3 scripts/verify-imessage.py
+python3 scripts/verify-imessage.py --run
+```
+
+The second command leaves an unsent draft and requires an existing empty composer.
+It does not open permission dialogs. A follow-up append test protects the exact
+prior generated message and requires the original single PDF:
+
+```sh
+python3 scripts/verify-imessage.py --run --append-image --baseline review/imessage-verification.json
+```

@@ -19,7 +19,7 @@ Push only to `AranL152/Flow`, never upstream. No coauthor trailers or new branch
 
 ## Verification and current limits
 
-350 Rust tests passed (2 ignored), 84 worker tests passed, 15 Swift tests passed.
+350 Rust tests passed (2 ignored), 84 worker tests passed, 16 Swift tests passed.
 The real Rust/Whisper/LLM audio probe passed all 5 cases. See
 `review/attachment-stream-verification.json` and `docs/attachment-commands.md`.
 The final worker deployment is version `388d2369-ca4f-4516-89c0-640e4dbfe68b`.
@@ -37,15 +37,32 @@ selected `Project-review.pdf` from the synthetic Downloads folder. Live captions
 were unavailable and no authorization was requested. The window was left open.
 See `review/attachment-demo-verification.json`.
 
-Actual Messages attachment acceptance and actual browser download completion
-remain unverified. Paste dispatch is deliberately labelled “Paste requested”.
-Do not send a real message during verification.
+The user then clarified that the demo must use real Messages. A helper linked
+the production Swift components under the editor's existing AX/microphone grants.
+Messages accepted five genuine LLM chunks through five AX writes. A PDF was
+appended, then a separate attachment-only request appended a clipboard image.
+Two native AXAttachment objects remain in the actual unsent draft; original text
+was preserved. Do not send or clear this draft without the user's instruction.
+See `review/imessage-verification.json`.
+
+The real test found/fixed the AXTextField `messageBodyField` composer and its
+empty AXValue behavior. Contact capture now uses native AX rather than System
+Events. Native attribution also confirms acceptance after paste. Streaming into
+an already attachment-bearing draft uses the final-paste fallback if no safe AX
+selected-text writer is available; existing objects must never be flattened.
+
+Actual microphone start/sample capture/stop passed at 44.1 kHz. Generated audio
+fed the real HUD's measured levels; speech response and silence settling passed.
+The real contact-learning regression also passed all five checks. Microphone
+audio was not uploaded; synthetic audio was used for cloud ASR. Live captions
+remain unauthorized. Global hotkey delivery and real browser download completion
+were not tested during this run.
 
 ## Restart considerations
 
 Normal app learning is persisted in its database. Isolated demo memory is
-process-local and resets on restart. No user's real conversations were sent or
-edited during verification.
+process-local and resets on restart. No messages were sent. A new unsent test
+draft with synthetic attachments was inserted into the initially empty composer.
 
 The user asked about one-time file access. Answer given: System Settings →
 Privacy & Security → Full Disk Access for the app actually named in the prompt

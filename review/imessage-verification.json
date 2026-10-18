@@ -1,0 +1,85 @@
+{
+  "attachment_after_tree": [
+    {
+      "AXIdentifier": "MessageEntryView",
+      "AXRole": "AXGroup",
+      "depth": "0"
+    },
+    {
+      "AXDescription": "(present)",
+      "AXRole": "AXButton",
+      "depth": "1"
+    },
+    {
+      "AXDescription": "Message",
+      "AXIdentifier": "messageBodyField",
+      "AXRole": "AXTextField",
+      "depth": "1"
+    },
+    {
+      "AXDescription": "(present)",
+      "AXRole": "AXButton",
+      "depth": "1"
+    }
+  ],
+  "attachment_baseline_tree": [
+    {
+      "AXIdentifier": "MessageEntryView",
+      "AXRole": "AXGroup",
+      "depth": "0"
+    },
+    {
+      "AXDescription": "(present)",
+      "AXRole": "AXButton",
+      "depth": "1"
+    },
+    {
+      "AXDescription": "Message",
+      "AXIdentifier": "messageBodyField",
+      "AXRole": "AXTextField",
+      "depth": "1"
+    },
+    {
+      "AXDescription": "(present)",
+      "AXRole": "AXButton",
+      "depth": "1"
+    }
+  ],
+  "attachment_count_after_image": 2,
+  "attachment_count_before_image": 1,
+  "attachment_filename": "Flow-verification-DD10AFFE.pdf",
+  "attachment_inspection_method": "Native AXAttachment attributes from AXAttributedStringForRange; the PDF and image append leave the original message text intact.",
+  "attachment_status": "Attachment added to [current contact]\u2019s Messages draft. Review, then send.",
+  "ax_text_writes": 5,
+  "checks": {
+    "accessibility_already_granted": true,
+    "attachment_command_excluded_from_text": true,
+    "attachment_only_does_not_rewrite_text": true,
+    "attachment_paste_dispatched_to_same_contact": true,
+    "attachment_preserves_existing_message": true,
+    "attachment_visible_in_messages": true,
+    "clipboard_image_accepted_by_messages": true,
+    "existing_pdf_preserved_when_appending_image": true,
+    "messages_final_text_matches_llm": true,
+    "microphone_already_granted": true,
+    "microphone_captured_real_samples": true,
+    "microphone_released": true,
+    "multiple_llm_chunks_in_messages": true,
+    "no_send_event": true,
+    "real_empty_messages_composer": true,
+    "recording_started": true,
+    "recording_was_active": true,
+    "waveform_reacts_to_measured_speech": true,
+    "waveform_settles_during_silence": true
+  },
+  "draft": "I've got the deck right here",
+  "live_captions_authorized": false,
+  "microphone_sample_rate": 44100,
+  "microphone_samples_checked": 8192,
+  "model_chunks": 5,
+  "pdf_confirmation": "One native AXAttachment object alongside the exact streamed text; filename is not exposed through AXChildren.",
+  "scope": "Production Swift components; actual Messages draft; no Send event. Generated audio uploaded; live microphone audio never uploaded.",
+  "status": "passed",
+  "waveform_frames": 118,
+  "waveform_peak": 0.9999998807907104
+}
