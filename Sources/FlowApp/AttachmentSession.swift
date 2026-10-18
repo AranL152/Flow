@@ -49,7 +49,7 @@ final class AttachmentSession: ObservableObject {
     private var timer: Timer?
     private var target: AttachmentPasteTarget?
     private var sessionID = UUID()
-    private let fileSearch = AttachmentFileSearch()
+    private let fileSearch: AttachmentSearch
     private var searchTask: Task<Void, Never>?
     private var searchGeneration = UUID()
     var onDismiss: (() -> Void)?
@@ -57,7 +57,9 @@ final class AttachmentSession: ObservableObject {
     var selected: AttachmentCandidate? { candidates.first { $0.id == selectedID } }
     var recipient: String? { target?.contact }
 
-    init(downloads: AttachmentDownloads = AttachmentDownloads()) { self.downloads = downloads }
+    init(downloads: AttachmentDownloads = AttachmentDownloads(), fileSearch: AttachmentSearch? = nil) {
+        self.downloads = downloads; self.fileSearch = fileSearch ?? AttachmentSearch()
+    }
 
     @discardableResult
     func startObservingDownloads() -> Bool {
@@ -312,7 +314,7 @@ final class AttachmentSession: ObservableObject {
         searchTask?.cancel(); fileSearch.cancel()
         searchGeneration = UUID()
         candidates = []; selectedID = nil; needsChoice = true; searching = true; hasIssue = false
-        status = "Searching filenames on this Mac…"
+        status = request.kind == .image ? "Searching filenames and text in recent screenshots…" : "Searching filenames on this Mac…"
         let session = sessionID
         let text = searchText
         searchTask = Task { [weak self] in
@@ -322,8 +324,8 @@ final class AttachmentSession: ObservableObject {
                 guard !Task.isCancelled, self.sessionID == session else { return }
                 self.candidates = found
                 self.status = found.isEmpty
-                    ? "No matching filenames in Spotlight. Try fewer words or choose a file manually."
-                    : "Choose a file to preview, then Add to Messages. Nothing is attached automatically."
+                    ? (request.kind == .image ? "No matching filenames or recent screenshot text. Try words visible in the screenshot, or choose a file." : "No matching filenames in Spotlight. Try fewer words or choose a file manually.")
+                    : "Choose a file to preview or add to Messages."
             } catch {
                 guard !Task.isCancelled, self.sessionID == session else { return }
                 self.hasIssue = true; self.status = error.localizedDescription

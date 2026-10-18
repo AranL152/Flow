@@ -20,7 +20,7 @@ struct AttachmentCard: View {
                     if session.searching || session.busy { ProgressView().controlSize(.mini) }
                     Menu {
                         if plan.request?.source == .fileSearch {
-                            Button("Refine filename search…") { showSearch.toggle() }
+                            Button(plan.request?.kind == .image ? "Refine search…" : "Refine filename search…") { showSearch.toggle() }
                                 .disabled(session.pasteRequested)
                             Button("Choose another file…") { session.chooseFile() }
                                 .disabled(session.pasteRequested)
@@ -37,10 +37,10 @@ struct AttachmentCard: View {
                 }
                 if showSearch, plan.request?.source == .fileSearch {
                     HStack(spacing: 6) {
-                        TextField("Filename words", text: $session.searchText)
+                        TextField(plan.request?.kind == .image ? "Filename or screenshot text" : "Filename words", text: $session.searchText)
                             .textFieldStyle(.roundedBorder).onSubmit { session.searchFiles() }
                         Button { session.searchFiles() } label: { Image(systemName: "magnifyingglass") }
-                            .help("Search filenames")
+                            .help(plan.request?.kind == .image ? "Search filenames and visible text in recent screenshots locally" : "Search filenames")
                     }.disabled(session.busy || session.pasteRequested)
                 }
                 HStack {
@@ -109,7 +109,7 @@ struct AttachmentCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(candidate.filename).font(.system(size: 12, weight: .medium))
                             .lineLimit(1).truncationMode(.middle)
-                        Text(attached ? "In draft" : candidate.approximateRecency ? "Confirm this file" : session.plan?.request?.source == .fileSearch && session.candidates.first?.id == candidate.id ? "Best filename match" : candidate.sourceLabel)
+                        Text(candidate.matchDescription.map { attached ? "In draft · " + $0 : $0 } ?? (attached ? "In draft" : candidate.approximateRecency ? "Confirm this file" : session.plan?.request?.source == .fileSearch && session.candidates.first?.id == candidate.id ? "Best filename match" : candidate.sourceLabel))
                             .font(.system(size: 10)).foregroundStyle(attached ? FW.accent : FW.textMuted)
                             .lineLimit(1)
                     }
@@ -129,6 +129,9 @@ struct AttachmentCard: View {
                     VStack(alignment: .leading, spacing: 10) {
                         AttachmentThumbnail(candidate: candidate, previewSize: 720).frame(width: 300, height: 230)
                         Text(candidate.filename).font(.system(size: 12, weight: .medium)).textSelection(.enabled)
+                        if let reason = candidate.matchDescription {
+                            Text(reason).font(.caption).foregroundStyle(FW.accent)
+                        }
                         Text(candidate.sourceLabel).font(.caption).foregroundStyle(FW.textMuted)
                     }.padding(14).background(FW.background)
                 }

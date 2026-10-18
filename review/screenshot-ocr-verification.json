@@ -1,0 +1,24 @@
+{
+  "checks" : {
+    "all_words_required_partial_match_excluded" : true,
+    "candidate_explains_visible_word_match" : true,
+    "changed_image_invalidates_cached_text" : true,
+    "filenames_alone_do_not_match" : true,
+    "native_picker_with_match_reason_rendered" : true,
+    "no_messages_target_means_no_paste" : true,
+    "persistent_cache_avoids_repeat_ocr" : true,
+    "production_session_uses_ocr" : true,
+    "real_pixels_find_correct_screenshot" : true,
+    "real_vision_ran_on_three_images" : true,
+    "spotlight_discovers_recent_generic_screenshots" : true
+  },
+  "cold_search_seconds" : 0.41187691688537598,
+  "matched_filename" : "Screenshot 2026-10-18 at 12.00.00.png",
+  "matched_words" : [
+    "payment",
+    "error"
+  ],
+  "passed" : true,
+  "scope" : "Actual local Apple Vision OCR, Spotlight discovery, persistent cache and production attachment picker. Synthetic screenshots with generic filenames. No cloud API calls, Messages writes, sends or permission requests.",
+  "warm_search_seconds" : 0.049651980400085449
+}
