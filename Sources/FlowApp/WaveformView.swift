@@ -1,147 +1,49 @@
-//
-// WaveformView.swift
-// Flow
-//
-// Animated waveform visualization. The hero visual element.
-//
-
+import Flow
 import SwiftUI
 
+/// Clocked at 30 Hz, including during constant silence. Every bar is a real
+/// microphone-level sample with a quick attack and a gentler release.
 struct WaveformView: View {
     let isRecording: Bool
     let barCount: Int
     let audioLevel: Float?
-
-    @State private var sampleBuffer: [Float] = []
-    @State private var isDecaying = false
+    @State private var history: AudioWaveformHistory
+    @State private var latestLevel: Float = 0
 
     init(isRecording: Bool, barCount: Int = 32, audioLevel: Float? = nil) {
         self.isRecording = isRecording
-        self.barCount = barCount
+        self.barCount = min(96, max(1, barCount))
         self.audioLevel = audioLevel
+        _history = State(initialValue: AudioWaveformHistory(barCount: barCount))
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1/30)) { _ in
-            Canvas { context, size in
-                let barWidth: CGFloat = 1.5
-                let gap: CGFloat = 2.5
-                let totalWidth = CGFloat(barCount) * (barWidth + gap) - gap
-                let startX = (size.width - totalWidth) / 2
-                let maxHeight = size.height * 0.85
-                let minHeight = size.height * 0.15
-
-                let displaySamples = computeDisplaySamples()
-
-                // Find max in current window for normalization
-                let windowMax = displaySamples.max() ?? 0.01
-                let normalizationFactor = max(0.3, windowMax) // Use at least 0.3 as baseline
-                let bufferFilling = sampleBuffer.count < barCount
-
-                for i in 0..<barCount {
-                    let x = startX + CGFloat(i) * (barWidth + gap)
-
-                    // Get sample for this bar and apply log scale normalization
-                    var sample = displaySamples[i]
-
-                    // Add positional variation when buffer is filling for immediate visual feedback
-                    if bufferFilling && sample > 0.01 {
-                        let barPosition = Double(i) / Double(barCount - 1)
-                        let positionVariation = sin(barPosition * .pi) // Arc shape
-                        sample = sample * Float(0.5 + positionVariation * 0.5)
-                    }
-
-                    let normalized = sample / normalizationFactor
-                    // Apply gentle log scale to compress dynamic range
-                    let amplitude = normalized > 0.01 ? log10(1 + normalized * 9) : 0.0
-
-                    // Always show bars at minHeight, scale up with amplitude
-                    let height = minHeight + (maxHeight - minHeight) * CGFloat(amplitude)
-                    let y = (size.height - height) / 2
-
-                    let rect = CGRect(x: x, y: y, width: barWidth, height: height)
-                    let path = RoundedRectangle(cornerRadius: barWidth / 2)
-                        .path(in: rect)
-
-                    // color gradient based on position
-                    let progress = CGFloat(i) / CGFloat(barCount - 1)
-                    let color = isRecording
-                        ? interpolateColor(from: FW.recording, to: FW.recording.opacity(0.6), progress: progress)
-                        : interpolateColor(from: FW.accent, to: FW.accentSecondary, progress: progress)
-
-                    context.fill(path, with: .color(color))
-                }
+        Canvas { context, size in
+            let gap: CGFloat = barCount < 16 ? 2.5 : 3
+            let width = min(4, max(1.5, (size.width - CGFloat(barCount - 1) * gap) / CGFloat(barCount)))
+            let totalWidth = CGFloat(barCount) * width + CGFloat(barCount - 1) * gap
+            let startX = (size.width - totalWidth) / 2
+            for (index, sample) in history.samples.enumerated() {
+                let height = max(2, CGFloat(sample) * size.height * 0.9)
+                let rect = CGRect(x: startX + CGFloat(index) * (width + gap), y: (size.height - height) / 2, width: width, height: height)
+                let path = RoundedRectangle(cornerRadius: width / 2).path(in: rect)
+                context.fill(path, with: .color((isRecording ? FW.recording : FW.accent).opacity(0.55 + Double(sample) * 0.45)))
             }
         }
-        .onChange(of: audioLevel) { _, newLevel in
-            guard isRecording, let level = newLevel else { return }
-            sampleBuffer.append(level)
-            if sampleBuffer.count > barCount {
-                sampleBuffer.removeFirst()
-            }
-        }
-        .onChange(of: isRecording) { oldValue, newValue in
-            if oldValue && !newValue {
-                isDecaying = true
-            } else if newValue {
-                isDecaying = false
-            }
-        }
-        .task(id: isDecaying) {
-            guard isDecaying else { return }
-            // Decay loop: tick at ~30fps, automatically cancelled when isDecaying
-            // changes or the view disappears
+        .accessibilityLabel(isRecording ? "Microphone level" : "Microphone idle")
+        .onAppear { latestLevel = audioLevel ?? 0 }
+        .onChange(of: audioLevel) { _, level in latestLevel = level ?? 0 }
+        .task(id: isRecording) {
+            if isRecording { history = AudioWaveformHistory(barCount: barCount) }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1.0 / 30.0))
-                guard isDecaying else { break }
-                let allZero = sampleBuffer.allSatisfy { $0 < 0.01 }
-                if allZero {
-                    isDecaying = false
-                    sampleBuffer = []
-                } else {
-                    let count = sampleBuffer.count
-                    sampleBuffer = sampleBuffer.enumerated().map { index, value in
-                        // Newer samples (right side) decay slower
-                        let position = Float(index) / Float(max(count, 1))
-                        let decayRate: Float = 0.92 + position * 0.05 // 0.92 (left) to 0.97 (right)
-                        return value * decayRate
-                    }
-                }
+                history.tick(level: latestLevel, recording: isRecording)
+                if !isRecording && history.samples.allSatisfy({ $0 == 0 }) { break }
+                do { try await Task.sleep(for: .seconds(1.0 / 30.0)) }
+                catch { break }
             }
         }
-    }
-
-    private func computeDisplaySamples() -> [Float] {
-        if sampleBuffer.count < barCount {
-            // If buffer isn't full yet, repeat the latest sample to fill space (immediate visual feedback)
-            let fillValue = sampleBuffer.last ?? 0.0
-            return Array(repeating: fillValue, count: barCount - sampleBuffer.count) + sampleBuffer
-        } else {
-            return Array(sampleBuffer.suffix(barCount))
-        }
-    }
-
-    private func interpolateColor(from: Color, to: Color, progress: CGFloat) -> Color {
-        // simplified linear interpolation
-        let nsFrom = NSColor(from)
-        let nsTo = NSColor(to)
-
-        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
-        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
-
-        nsFrom.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
-        nsTo.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
-
-        return Color(
-            red: r1 + (r2 - r1) * progress,
-            green: g1 + (g2 - g1) * progress,
-            blue: b1 + (b2 - b1) * progress,
-            opacity: a1 + (a2 - a1) * progress
-        )
     }
 }
-
-// MARK: - Compact waveform for menu bar
 
 struct CompactWaveformView: View {
     let isRecording: Bool
@@ -153,23 +55,7 @@ struct CompactWaveformView: View {
     }
 
     var body: some View {
-        WaveformView(isRecording: isRecording, barCount: 9, audioLevel: audioLevel)
-            .frame(width: 50, height: 14)
+        WaveformView(isRecording: isRecording, barCount: 15, audioLevel: audioLevel)
+            .frame(width: 64, height: 22)
     }
-}
-
-// MARK: - Preview
-
-#Preview("Idle") {
-    WaveformView(isRecording: false)
-        .frame(width: 300, height: 80)
-        .padding()
-        .background(Color.black.opacity(0.9))
-}
-
-#Preview("Recording") {
-    WaveformView(isRecording: true)
-        .frame(width: 300, height: 80)
-        .padding()
-        .background(Color.black.opacity(0.9))
 }
