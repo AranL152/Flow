@@ -2,6 +2,13 @@ import XCTest
 @testable import Flow
 
 final class RecordingTests: XCTestCase {
+    func testContactTitlesExcludeSetupWindowsAndPreserveGroupNames() {
+        XCTAssertNil(MessagesContext.normalizedContact(" Messages "))
+        XCTAssertNil(MessagesContext.normalizedContact("New Message"))
+        XCTAssertNil(MessagesContext.normalizedContact("  "))
+        XCTAssertEqual(MessagesContext.normalizedContact(" Alex "), "Alex")
+        XCTAssertEqual(MessagesContext.normalizedContact("Alex, Sam + 2 more"), "Alex, Sam + 2 more")
+    }
     func testSilenceAdvancesAndClearsSpeechPeaks() {
         var history = AudioWaveformHistory(barCount: 15)
         for _ in 0..<15 { history.tick(level: 0.2, recording: true) }

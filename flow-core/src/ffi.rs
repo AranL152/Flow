@@ -503,6 +503,18 @@ pub extern "C" fn flow_read_recording_samples(
 /// Returns true on success
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_start_recording(handle: *mut FlowHandle) -> bool {
+    start_recording(handle, None)
+}
+
+/// Swift supplies the contact from its already-authorized native AX connection.
+/// A null contact explicitly means no contact; it never invokes AppleScript.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_start_recording_with_contact(handle: *mut FlowHandle, contact: *const c_char) -> bool {
+    start_recording(handle, Some(c_str(contact).map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned)))
+}
+
+fn start_recording(handle: *mut FlowHandle, native_contact: Option<Option<String>>) -> bool {
+    if handle.is_null() { return false; }
     let handle = unsafe { &*handle };
 
     // Capture the active Messages contact at recording START (before any focus changes)
@@ -516,7 +528,9 @@ pub extern "C" fn flow_start_recording(handle: *mut FlowHandle) -> bool {
         })
         .unwrap_or(false);
 
-    if is_messages {
+    if let Some(contact) = native_contact {
+        *handle.captured_contact.lock() = contact;
+    } else if is_messages {
         match MessagesDetector::get_active_contact() {
             Ok(Some(contact_name)) => {
                 debug!(

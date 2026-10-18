@@ -7,6 +7,7 @@
 
 import CFlow
 import Foundation
+import AppKit
 
 /// Writing modes for text style adjustment
 public enum WritingMode: UInt8, Sendable, CaseIterable {
@@ -235,7 +236,9 @@ public final class Flow: @unchecked Sendable {
     /// - Returns: true if recording started successfully
     public func startRecording() -> Bool {
         guard let handle = handle else { return false }
-        return flow_start_recording(handle)
+        let contact = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.MobileSMS"
+            ? MessagesContext.currentContact() : nil
+        return withOptionalCString(contact) { flow_start_recording_with_contact(handle, $0) }
     }
 
     /// Stop audio recording
@@ -904,8 +907,7 @@ public final class Flow: @unchecked Sendable {
 
     /// The current Messages conversation, read through the native detector.
     public var activeMessagesContact: String? {
-        guard let handle else { return nil }
-        return takeString(flow_get_active_messages_contact(handle))
+        MessagesContext.currentContact()
     }
 
     /// 0 = saved, 1 = saved and profile rebuild due, -1 = discarded because

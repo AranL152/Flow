@@ -94,6 +94,12 @@ size_t flow_read_recording_samples(struct FlowHandle *handle,
 bool flow_start_recording(struct FlowHandle *handle);
 
 /**
+ * Swift supplies the contact from its already-authorized native AX connection.
+ * A null contact explicitly means no contact; it never invokes AppleScript.
+ */
+bool flow_start_recording_with_contact(struct FlowHandle *handle, const char *contact);
+
+/**
  * Stop audio recording and get the duration
  *
  * This function extracts audio data and fully releases the microphone device.
