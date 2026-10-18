@@ -5,15 +5,30 @@ struct FlowCommandCaptionView: View {
     let transcript: String
     let status: String
     let isRecording: Bool
+    var isTranscriptFinal = false
     @ObservedObject var attachments: AttachmentSession
+    var onPresentationState: ((Bool) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.flowReduceMotion) private var requestedReduceMotion
     private var reduceMotion: Bool { systemReduceMotion || requestedReduceMotion }
     @State private var rippleStart: Date?
     @State private var rippleActive = false
-    @State private var played = false
+    @State private var reveal = CaptionTextReveal()
+    @State private var recognized = false
 
-    private var parts: FlowCommandCaption? { FlowCommandCaption.detect(in: transcript, isRecording: isRecording) }
+    static let whiteCaptionHold: TimeInterval = 0.22
+    private struct Input: Equatable {
+        let text: String
+        let recording: Bool
+        let final: Bool
+    }
+
+    // The boundary may lay out in white while speaking, but never activates an
+    // effect until the entire finalized caption has actually been displayed.
+    private var parts: FlowCommandCaption? {
+        guard FlowCommandCaption.detect(in: transcript) != nil else { return nil }
+        return FlowCommandCaption.detect(in: reveal.text)
+    }
     private var commandStatus: String? {
         guard let plan = attachments.plan else { return nil }
         if plan.clarification != nil { return "Needs detail" }
@@ -35,7 +50,7 @@ struct FlowCommandCaptionView: View {
                 Image(systemName: "mic.fill")
                 if isRecording {
                     ListeningStatusLabel()
-                } else if parts != nil, let commandStatus {
+                } else if recognized, let commandStatus {
                     Text(commandStatus)
                         .foregroundStyle(FlowCommandBadge.ink)
                         .accessibilityIdentifier("flow-command-status")
@@ -56,13 +71,13 @@ struct FlowCommandCaptionView: View {
                                 .font(.system(size: 16, weight: .medium)).foregroundStyle(.white.opacity(0.95))
                                 .lineLimit(1).truncationMode(.head)
                         }
-                        LiquidCommandText(command: displayCommand(parts.command), width: FlowCaptionMetrics.textWidth, rippleStart: rippleStart, animating: rippleActive)
+                        LiquidCommandText(command: displayCommand(parts.command), width: FlowCaptionMetrics.textWidth, rippleStart: rippleStart, animating: rippleActive, recognized: recognized)
                     }
                 } else {
-                    Text(transcript.isEmpty ? status : String(transcript.suffix(160)))
+                    Text(reveal.text.isEmpty ? status : reveal.text)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(transcript.isEmpty ? 0.5 : 0.95))
-                        .lineLimit(2).contentTransition(.opacity)
+                        .foregroundStyle(.white.opacity(reveal.text.isEmpty ? 0.5 : 0.95))
+                        .lineLimit(2)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
@@ -72,29 +87,40 @@ struct FlowCommandCaptionView: View {
         .frame(width: FlowCaptionMetrics.width)
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.88)))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.12), lineWidth: 1))
-        .onAppear { startRippleIfReady() }
-        .onChange(of: isRecording) { _, recording in
-            if recording { played = false; rippleActive = false; rippleStart = nil }
-            else { startRippleIfReady() }
-        }
-        .onChange(of: parts != nil) { _, detected in
-            if !detected { rippleActive = false; rippleStart = nil }
-            else { startRippleIfReady() }
-        }
+        .task(id: Input(text: transcript, recording: isRecording, final: isTranscriptFinal)) { await presentCaption() }
+        .onDisappear { onPresentationState?(false) }
         .onChange(of: reduceMotion) { _, reduced in if reduced { rippleActive = false } }
-        .task(id: rippleStart) {
-            guard let started = rippleStart else { return }
-            do { try await Task.sleep(for: .seconds(LiquidCommandText.animationDuration)) } catch { return }
-            guard !Task.isCancelled, started == rippleStart else { return }
-            rippleActive = false
-        }
     }
 
-    private func startRippleIfReady() {
-        guard !isRecording, parts != nil, !played else { return }
-        played = true
-        guard !reduceMotion else { return }
-        rippleStart = Date(); rippleActive = true
+    private func presentCaption() async {
+        recognized = false; rippleActive = false; rippleStart = nil
+        let finalCommand = !isRecording && isTranscriptFinal && FlowCommandCaption.detect(in: transcript) != nil
+        onPresentationState?(finalCommand)
+        let target: String
+        if let full = FlowCommandCaption.detect(in: transcript) {
+            target = String(full.message.trimmingCharacters(in: .whitespacesAndNewlines).suffix(100))
+                + (full.message.isEmpty ? "" : " ") + displayCommand(full.command)
+        } else { target = String(transcript.suffix(160)) }
+        reveal.retarget(target)
+        do {
+            while reveal.advance() {
+                if !reduceMotion { try await Task.sleep(for: .milliseconds(18)) }
+                try Task.checkCancellation()
+            }
+            guard finalCommand else { return }
+            // A rendered, complete white caption precedes recognition, even if
+            // the provider delivered its last words after recording stopped.
+            try await Task.sleep(for: .seconds(Self.whiteCaptionHold))
+            try Task.checkCancellation()
+            recognized = true
+            if !reduceMotion {
+                rippleStart = Date(); rippleActive = true
+                try await Task.sleep(for: .seconds(LiquidCommandText.animationDuration))
+            }
+            try Task.checkCancellation()
+            rippleActive = false
+            onPresentationState?(false)
+        } catch { /* A new ASR revision owns the next presentation task. */ }
     }
 
     private func displayCommand(_ command: String) -> String {

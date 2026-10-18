@@ -11,6 +11,7 @@ struct LiquidCommandText: View {
     let width: CGFloat
     let rippleStart: Date?
     let animating: Bool
+    var recognized = true
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.flowReduceMotion) private var requestedReduceMotion
@@ -35,10 +36,10 @@ struct LiquidCommandText: View {
     }
 
     var body: some View {
-        glyphs.foregroundStyle(FlowCommandBadge.ink)
-            .opacity(raster != nil && renderedKey == key ? 0 : 1)
+        glyphs.foregroundStyle(recognized ? FlowCommandBadge.ink : .white.opacity(0.95))
+            .opacity(recognized && raster != nil && renderedKey == key ? 0 : 1)
             .overlay(alignment: .topLeading) {
-                if let raster, renderedKey == key {
+                if recognized, let raster, renderedKey == key {
                     TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !animating || reduceMotion)) { timeline in
                         let elapsed = rippleStart.map { timeline.date.timeIntervalSince($0) } ?? Self.animationDuration
                         let progress = animating && !reduceMotion ? min(1, max(0, elapsed / Self.rippleDuration)) : 1
@@ -86,8 +87,8 @@ struct LiquidCommandText: View {
                     .allowsHitTesting(false).accessibilityHidden(true)
                 }
             }
-            .task(id: key) {
-                guard width > 0 else { return }
+            .task(id: recognized ? key : nil) {
+                guard recognized, width > 0 else { return }
                 let currentKey = key
                 let renderer = ImageRenderer(content: glyphs.foregroundStyle(.white).frame(width: width, alignment: .leading))
                 renderer.proposedSize = ProposedViewSize(width: width, height: nil)

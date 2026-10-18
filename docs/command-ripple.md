@@ -16,9 +16,11 @@ message insertion and attachment safeguards are unchanged.
 During recording all spoken words remain white. Only the Listening label and
 its three dots are purple; the dots pulse in a small left-to-right wave while
 audio is being captured, and remain static with Reduce Motion. There is no
-command highlight until recording stops.
-After recording stops, an explicit command with an object turns purple and a
-single 700 ms highlight and one smooth crest sweep from left to right,
+command highlight until the transcript is finalized and completely visible.
+Late final words reveal in 18 ms Unicode grapheme steps. The complete white
+command holds for 220 ms before turning purple in the same layout. Fast model
+responses cannot hide the HUD before this recognition animation finishes.
+A single 700 ms highlight and one smooth crest sweep from left to right,
 with up to 2 points of letter displacement. A Gaussian crest follows the highlight
 without oscillation or trailing ripples, with a gentle fade at either end.
 Once the crest has settled, all command letters flash a brighter luminous purple
@@ -69,19 +71,18 @@ existing signed app bundle and permissions are preserved; this is a separate
 review helper using the updated app components.
 
 The preview exports [a GIF](../review/command-ripple.gif), stills for listening,
-mid-ripple, synchronized finishing glow, settled, ordinary mentions, reduced motion
+complete white speech before recognition, mid-ripple, synchronized finishing glow, settled, ordinary mentions, reduced motion
 and long commands, and
 [a scoped report](../review/command-ripple-verification.json). Its frame interval
 is a capture target, not a measured production frame-rate guarantee.
 
-35 Swift tests passed, including recording-phase gating, incomplete commands,
-quotation, negation, Unicode and full-context guards. Thirteen native preview
-checks passed after removing the generic command label. The exported stills
-were visually reviewed: command motion/glow, unchanged recipient text, no
-microphone waveform during processing, readable long commands and static reduced
-motion. A pixel comparison between active/settled fixtures also found no changes
-in the recipient-message region while command-region pixels changed. This was
-not a new voice-to-Messages or microphone integration run.
+46 Swift tests passed, including late final-caption reveal, Unicode revisions,
+command context guards and popup lifetime. Fourteen native preview checks passed.
+The complete-white, active and finishing stills were visually reviewed: the full
+sentence appears white before the command changes color, in the same position.
+The recipient text remains white and the finishing inner/outer glow stays synced.
+These preview checks use synthetic captions and local OCR, without microphone,
+cloud requests or Messages writes.
 
 ## Full Messages demo
 
@@ -98,11 +99,12 @@ draft and appends a synthetic screenshot. It never sends. Unlike the isolated
 visual preview, this path makes real ASR/LLM requests. Existing text and files
 remain intact, and the installed permissioned app bundle is not replaced.
 
-The latest October 18 run passed 13 checks: 16 live-caption updates detected the
-real Flow cue, six model chunks became 44 small display frames and 22 native
-writes over about 2.07 seconds, and an alternative screenshot was safely swapped
-in and back. The popup says Other matches and lists only alternatives to the
-file already attached; selecting one offers Replace. See
-[the actual picker](../review/imessage-other-matches.png).
-See review/imessage-full-demo-verification.json. The processing label is now
-centered with balanced spinner space and a visible spinner on the dark pill.
+The latest October 18 run passed 14 checks in 9.88 seconds: 12 live-caption
+updates, finalized speech before recognition, and completed command presentation
+before hiding the HUD. Six genuine model chunks became 44 small display frames
+and 22 native writes over 1.81 seconds. Cloud real-time ASR finalized in 75 ms;
+the first rewritten display frame arrived 403 ms after Stop. These are one-run
+measurements, not latency guarantees. The screenshot was appended with another
+match available, preserving the original draft and attachments. Nothing was sent.
+See [the actual picker](../review/imessage-other-matches.png) and
+[the run report](../review/imessage-full-demo-verification.json).

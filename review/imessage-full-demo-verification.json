@@ -1,7 +1,7 @@
 {
   "cases": [
     {
-      "asr_finalization_ms": 180.86302280426025,
+      "asr_finalization_ms": 75.1429796218872,
       "attached_filename": "Orion-dashboard.png",
       "candidates": [
         "Orion-dashboard.png",
@@ -13,6 +13,8 @@
         "best_filename_selected": true,
         "command_effect_detected": true,
         "command_excluded_from_message": true,
+        "command_presentation_finished_before_hide": true,
+        "final_caption_prepared": true,
         "live_captions": true,
         "native_attachment_confirmed": true,
         "original_attachments_plus_one": true,
@@ -23,21 +25,21 @@
         "small_native_writes": true
       },
       "command": "Flow. Find the Orion dashboard image.",
-      "display_frames": 38,
-      "display_reveal_seconds": 1.5506459474563599,
-      "generated_message": "I've got a screenshot of the dashboard",
+      "display_frames": 44,
+      "display_reveal_seconds": 1.8095279932022095,
+      "generated_message": "I've got the dashboard screenshot right here",
       "kind": "screenshot",
       "largest_display_chunk": 1,
       "largest_native_write": 2,
-      "llm_chunks": 5,
-      "native_text_writes": 19,
+      "llm_chunks": 6,
+      "native_text_writes": 22,
       "passed": true,
       "replacement": {},
-      "stop_to_first_display_ms": 637.3209953308105,
+      "stop_to_first_display_ms": 403.2019376754761,
       "used_realtime_cloud_asr": true
     }
   ],
   "scope": "Generated speech; actual on-device/cloud captions and waveform; real streamed cloud rewriting typed into Messages; production attachment ranking and append followed by candidate popup. Real-time ASR can fall back to recorded audio; the case reports which path ran. No Send event.",
-  "seconds": 9.837604999542236,
+  "seconds": 9.875563025474548,
   "status": "ready"
 }

@@ -28,6 +28,7 @@ final class RipplePreview: ObservableObject {
         guard !running else { return }
         running = true; status = "Playing preview…"; frames = []; reduceMotion = false; attachments.dismiss(); results?.hide()
         state.isRecording = false; state.isProcessing = false; state.liveTranscript = ""
+        state.liveTranscriptFinalized = false; state.captionPresentationActive = false
         var checks: [String: Bool] = [:]
         do {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
@@ -54,10 +55,13 @@ final class RipplePreview: ObservableObject {
             checks["listening_dots_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-listening-dots.png").path)
             checks["recording_cue_has_no_command_highlight"] = FlowCommandCaption.detect(in: state.liveTranscript, isRecording: true) == nil
             checks["explicit_cue_detected"] = FlowCommandCaption.detect(in: state.liveTranscript)?.command == "Flow, find the screenshot showing payment error."
+            state.finalizeLiveTranscript(state.liveTranscript)
             state.isRecording = false; state.isProcessing = true
             // A stale audio sample must not show a microphone waveform in this phase.
             state.smoothedAudioLevel = 0.9
-            try await Task.sleep(for: .milliseconds(250)); savePNG("command-ripple-active.png")
+            try await Task.sleep(for: .milliseconds(100)); savePNG("command-ripple-complete-white.png")
+            checks["complete_white_caption_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-complete-white.png").path)
+            try await Task.sleep(for: .seconds(FlowCommandCaptionView.whiteCaptionHold + 0.25 - 0.1)); savePNG("command-ripple-active.png")
             try await Task.sleep(for: .seconds(LiquidCommandText.rippleDuration + LiquidCommandText.settleDuration / 2 - 0.25))
             savePNG("command-ripple-settling.png")
             checks["settling_synced_glow_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-settling.png").path)
@@ -80,7 +84,7 @@ final class RipplePreview: ObservableObject {
             status = "Preview complete · Replay to watch again"
         } catch { status = error.localizedDescription }
         let report: [String: Any] = ["scope": "Native production caption/ripple views with labelled simulated captions and real local OCR. No microphone recording, cloud API calls or Messages changes. Still images and GIF require visual review.",
-            "checks": checks, "frames": frames.count, "frame_interval_ms_target": 50, "status": checks.count == 13 && checks.values.allSatisfy { $0 } ? "ready" : "failed"]
+            "checks": checks, "frames": frames.count, "frame_interval_ms_target": 50, "status": checks.count == 14 && checks.values.allSatisfy { $0 } ? "ready" : "failed"]
         try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: output.appendingPathComponent("command-ripple-verification.json"))
         running = false
     }
@@ -104,7 +108,8 @@ final class RipplePreview: ObservableObject {
         var checks: [String: Bool] = [:]
         variant.reduceMotion = true
         variant.state.isRecording = false; variant.state.isProcessing = true; variant.state.liveTranscript = sentence
-        try? await Task.sleep(for: .milliseconds(250))
+        variant.state.finalizeLiveTranscript(sentence)
+        try? await Task.sleep(for: .milliseconds(350))
         variant.savePNG("command-ripple-reduced-motion.png")
         checks["reduced_motion_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-reduced-motion.png").path)
         variant.state.isRecording = true; variant.state.isProcessing = false; variant.state.liveTranscript = "I use Flow every day."
@@ -113,7 +118,8 @@ final class RipplePreview: ObservableObject {
         checks["ordinary_mention_is_not_a_command"] = FlowCommandCaption.detect(in: variant.state.liveTranscript) == nil
         variant.state.isRecording = false; variant.state.isProcessing = true
         variant.state.liveTranscript = "Here's the issue. Flow, find the screenshot showing " + String(repeating: "payment error details ", count: 12)
-        try? await Task.sleep(for: .milliseconds(150))
+        variant.state.finalizeLiveTranscript(variant.state.liveTranscript)
+        try? await Task.sleep(for: .milliseconds(350))
         variant.savePNG("command-ripple-long-command.png")
         checks["long_command_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-long-command.png").path)
         return checks

@@ -28,6 +28,10 @@ final class AppState: ObservableObject {
     @Published var audioLevel: Float = 0.0
     @Published var smoothedAudioLevel: Float = 0.0
     @Published var liveTranscript = ""
+    @Published var liveTranscriptFinalized = false
+    @Published var captionPresentationActive = false {
+        didSet { if oldValue != captionPresentationActive && !isVoiceSimulation { updateRecordingIndicatorVisibility() } }
+    }
     @Published var liveCaptionStatus = "Listening…"
     private let speechCaptions = LiveSpeechCaptions()
     private let cloudSpeech = CloudSpeechStream()
@@ -536,6 +540,7 @@ final class AppState: ObservableObject {
             streamedInsertion?.onInterrupted = { [weak self] in self?.streamTask?.cancel() }
         }
         liveTranscript = ""
+        liveTranscriptFinalized = false; captionPresentationActive = false
         cloudSpeech.cancel(); cloudHasTranscript = false
         recordingUsesCloudSpeech = false
         liveCaptionStatus = liveCaptionsEnabled ? "Listening…" : "Live captions are off"
@@ -566,7 +571,7 @@ final class AppState: ObservableObject {
                 self.recordingUsesCloudSpeech = self.recordingUsesStreaming && self.engine.supportsRealtimeCloudSpeech
                 if self.recordingUsesCloudSpeech {
                     self.cloudSpeech.onText = { [weak self] text in
-                        guard let self else { return }
+                        guard let self, !self.liveTranscriptFinalized else { return }
                         self.cloudHasTranscript = true
                         if self.liveCaptionsEnabled { self.liveTranscript = text }
                     }
@@ -738,6 +743,7 @@ final class AppState: ObservableObject {
                 let stopped = ContinuousClock.now
                 let transcript = self.recordingUsesCloudSpeech ? await self.cloudSpeech.finish(from: self.engine) : nil
                 try Task.checkCancellation()
+                if let transcript { self.finalizeLiveTranscript(transcript) }
                 self.log("⏱️ [CLOUD SPEECH] Finalization: \(stopped.duration(to: .now)); real-time transcript: \(transcript != nil)")
                 var receivedFirstDelta = false
                 for try await event in DictationPresentation.smooth(self.engine.transcribeStream(appName: appName, finalTranscript: transcript)) {
@@ -812,6 +818,7 @@ final class AppState: ObservableObject {
     }
 
     private func receiveAttachment(_ plan: AttachmentPlan) {
+        if !liveTranscriptFinalized { finalizeLiveTranscript(plan.message + " " + plan.command) }
         attachments.onDismiss = { [weak self] in self?.attachmentPreview?.hide() }
         attachments.receive(plan)
         if attachmentPreview == nil { attachmentPreview = AttachmentPreviewWindow(session: attachments, engine: engine) }
@@ -833,9 +840,10 @@ final class AppState: ObservableObject {
     private func startLiveCaptions() {
         captionTask?.cancel(); speechCaptions.cancel()
         guard liveCaptionsEnabled else { return }
-        speechCaptions.onText = { [weak self] text, _ in
-            guard let self, !self.cloudHasTranscript else { return }
+        speechCaptions.onText = { [weak self] text, final in
+            guard let self, !self.cloudHasTranscript, !self.liveTranscriptFinalized else { return }
             self.liveTranscript = text
+            if final && !self.recordingUsesCloudSpeech { self.finalizeLiveTranscript(text) }
         }
         speechCaptions.onStatus = { [weak self] status in self?.liveCaptionStatus = status }
         captionTask = Task { [weak self] in
@@ -933,12 +941,18 @@ final class AppState: ObservableObject {
     }
 
     private func updateRecordingIndicatorVisibility() {
-        if isRecording || isProcessing || isInitializingModel {
+        if isRecording || isProcessing || isInitializingModel || captionPresentationActive {
             ensureRecordingIndicator()
             recordingIndicator?.show()
         } else {
             recordingIndicator?.hide()
         }
+    }
+
+    func finalizeLiveTranscript(_ text: String) {
+        liveTranscript = text
+        liveTranscriptFinalized = true
+        if liveCaptionsEnabled && FlowCommandCaption.detect(in: text) != nil { captionPresentationActive = true }
     }
 
     // MARK: - Settings

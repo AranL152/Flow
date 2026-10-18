@@ -101,14 +101,17 @@ final class RecordingIndicatorWindow {
 struct RecordingIndicatorView: View {
     @EnvironmentObject var appState: AppState
     var attachmentSession: AttachmentSession? = nil
+    private var processing: Bool { appState.isProcessing || (!appState.isRecording && appState.captionPresentationActive) }
     var body: some View {
         VStack(spacing: 10) {
             if appState.liveCaptionsEnabled && !appState.isInitializingModel {
                 FlowCommandCaptionView(transcript: appState.liveTranscript, status: appState.liveCaptionStatus,
-                                       isRecording: appState.isRecording, attachments: attachmentSession ?? appState.attachments)
+                                       isRecording: appState.isRecording, isTranscriptFinal: appState.liveTranscriptFinalized,
+                                       attachments: attachmentSession ?? appState.attachments,
+                                       onPresentationState: { appState.captionPresentationActive = $0 })
             }
             HStack(spacing: 10) {
-                if appState.isProcessing || appState.isInitializingModel {
+                if processing || appState.isInitializingModel {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .controlSize(.small)
@@ -132,7 +135,7 @@ struct RecordingIndicatorView: View {
                     Text(String(format: "%d:%02d", appState.recordingDuration / 60000, appState.recordingDuration / 1000 % 60))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.45))
-                } else if appState.isProcessing || appState.isInitializingModel {
+                } else if processing || appState.isInitializingModel {
                     // Balance the spinner's width so the label itself is centered.
                     Color.clear.frame(width: 14, height: 14).accessibilityHidden(true)
                 }

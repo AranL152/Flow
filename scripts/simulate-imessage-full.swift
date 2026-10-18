@@ -127,6 +127,7 @@ final class FullMessagesDemo {
     private let captions = LiveSpeechCaptions()
     private let cloudSpeech = CloudSpeechStream()
     private var cloudCaptionReceived = false
+    private var onDeviceFinal: String?
     private var preview: AttachmentPreviewWindow?
     private var indicator: RecordingIndicatorWindow?
     private var player: AVAudioPlayer?
@@ -193,6 +194,7 @@ final class FullMessagesDemo {
                 state.isProcessing = true
                 let stopped = Date()
                 let realtimeTranscript = await cloudSpeech.finish()
+                if let complete = realtimeTranscript ?? onDeviceFinal { state.finalizeLiveTranscript(complete) }
                 let finalizationMs = Date().timeIntervalSince(stopped) * 1000
                 var output = "", chunks = 0, rawOutput = "", rawChunks = 0, largestDisplayChunk = 0
                 var firstFrame: Date?, lastFrame: Date?
@@ -216,7 +218,9 @@ final class FullMessagesDemo {
                         if firstFrame == nil { firstFrame = Date() }; lastFrame = Date()
                         state.isStreamingOutput = true
                         try await writer.append(delta)
-                    case .attachment(let request): plan = request
+                    case .attachment(let request):
+                        plan = request
+                        if !state.liveTranscriptFinalized { state.finalizeLiveTranscript(request.message + " " + request.command) }
                     case .completed(let final):
                         guard final == output.trimmingCharacters(in: .whitespacesAndNewlines) else { throw demoError("The model stream was not complete.") }
                     }
@@ -253,7 +257,10 @@ final class FullMessagesDemo {
                 }
                 let revealSeconds = lastFrame?.timeIntervalSince(firstFrame ?? Date()) ?? 0
                 let minimumRevealSeconds = output.count <= 240 ? Double(max(0, output.count - 1)) * 0.035 : 0.2
+                for _ in 0..<400 where state.captionPresentationActive { try await Task.sleep(for: .milliseconds(20)) }
                 var checks: [String: Bool] = [
+                    "final_caption_prepared": state.liveTranscriptFinalized,
+                    "command_presentation_finished_before_hide": !state.captionPresentationActive,
                     "live_captions": captionUpdates > 0,
                     "command_effect_detected": FlowCommandCaption.detect(in: state.liveTranscript) != nil,
                     "real_llm_chunks_inserted": rawChunks > 1 && writer.writes > 1 && writer.insertedText == output && rawOutput == output,
@@ -298,15 +305,20 @@ final class FullMessagesDemo {
         let audioURL = folder.appendingPathComponent(name + ".aiff")
         let file = try AVAudioFile(forReading: audioURL)
         let rate = file.processingFormat.sampleRate
-        captionUpdates = 0; state.liveTranscript = ""; state.isRecording = true; state.isProcessing = false
+        captionUpdates = 0; state.liveTranscript = ""; state.liveTranscriptFinalized = false
+        state.captionPresentationActive = false; state.isRecording = true; state.isProcessing = false
+        onDeviceFinal = nil
         cloudSpeech.start()
         cloudCaptionReceived = false
         cloudSpeech.onText = { [weak self] text in
+            guard self?.state.liveTranscriptFinalized == false else { return }
             self?.cloudCaptionReceived = true; self?.state.liveTranscript = text; self?.captionUpdates += 1
         }
         cloudSpeech.onFailure = { [weak self] in self?.cloudCaptionReceived = false }
-        captions.onText = { [weak self] text, _ in
-            guard let self, !self.cloudCaptionReceived else { return }
+        captions.onText = { [weak self] text, final in
+            guard let self else { return }
+            if final { self.onDeviceFinal = text }
+            guard !self.cloudCaptionReceived, !self.state.liveTranscriptFinalized else { return }
             self.state.liveTranscript = text; self.captionUpdates += 1
         }
         captions.onStatus = { [weak self] text in self?.state.liveCaptionStatus = text }

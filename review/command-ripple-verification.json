@@ -1,6 +1,7 @@
 {
   "checks" : {
     "animation_exported" : true,
+    "complete_white_caption_preview_rendered" : true,
     "explicit_cue_detected" : true,
     "hide_then_show_preserves_latest_visibility" : true,
     "listening_dots_preview_rendered" : true,
@@ -15,7 +16,7 @@
     "status_uses_real_search_state" : true
   },
   "frame_interval_ms_target" : 50,
-  "frames" : 51,
+  "frames" : 56,
   "scope" : "Native production caption\/ripple views with labelled simulated captions and real local OCR. No microphone recording, cloud API calls or Messages changes. Still images and GIF require visual review.",
   "status" : "ready"
 }
