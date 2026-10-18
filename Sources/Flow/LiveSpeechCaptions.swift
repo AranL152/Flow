@@ -1,0 +1,110 @@
+import AVFoundation
+import Foundation
+import Speech
+
+/// Partial, on-device recognition of the same audio used by final dictation.
+/// No second microphone stream, formatting, or remote recognition fallback.
+@MainActor
+public final class LiveSpeechCaptions {
+    public var onText: ((String, Bool) -> Void)?
+    public var onStatus: ((String) -> Void)?
+    public private(set) var isListening = false
+    private var recognizer: SFSpeechRecognizer?
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var recognition: SFSpeechRecognitionTask?
+    private var drain: Task<Void, Never>?
+    private var generation = UUID()
+    private var offset: UInt64 = 0
+
+    public init() {}
+
+    public func start() async {
+        cancel()
+        let session = generation
+        guard Bundle.main.object(forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription") != nil else {
+            onStatus?("Live captions need the bundled Flow app.")
+            return
+        }
+        onStatus?("Preparing live captions…")
+        let authorization = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
+        }
+        guard session == generation, !Task.isCancelled else { return }
+        guard authorization == .authorized else {
+            onStatus?("Allow Speech Recognition in System Settings for live captions.")
+            return
+        }
+        guard let recognizer = SFSpeechRecognizer(locale: Locale.current),
+              recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
+            onStatus?("On-device captions aren’t available for this language on this Mac.")
+            return
+        }
+        self.recognizer = recognizer
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        request.requiresOnDeviceRecognition = true
+        request.addsPunctuation = false
+        request.taskHint = .dictation
+        self.request = request
+        isListening = true
+        onStatus?("Listening…")
+        recognition = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            let text = result?.bestTranscription.formattedString
+            let final = result?.isFinal ?? false
+            Task { @MainActor in
+                guard let self, self.generation == session else { return }
+                if let text { self.onText?(text, final) }
+                if final {
+                    self.isListening = false
+                    self.onStatus?("Live transcript")
+                } else if let error {
+                    self.isListening = false
+                    self.onStatus?("Live captions stopped: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// Audio fixtures use this same recognition path without a second microphone.
+    public func append(samples: [Float], sampleRate: UInt32) {
+        guard isListening, !samples.isEmpty, sampleRate > 0,
+              let format = AVAudioFormat(standardFormatWithSampleRate: Double(sampleRate), channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
+              let channel = buffer.floatChannelData?[0] else { return }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { input in
+            if let base = input.baseAddress { channel.update(from: base, count: input.count) }
+        }
+        request?.append(buffer)
+    }
+
+    public func feed(from engine: Flow) {
+        guard isListening else { return }
+        for _ in 0..<8 {
+            let chunk = engine.recordingSamples(after: offset)
+            guard !chunk.frames.isEmpty else { break }
+            append(samples: chunk.frames, sampleRate: chunk.sampleRate)
+            offset = chunk.nextOffset
+        }
+    }
+
+    public func finish(from engine: Flow? = nil) {
+        guard isListening else { cancel(); return }
+        if let engine { feed(from: engine) }
+        request?.endAudio()
+        let session = generation
+        drain = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self, self.generation == session else { return }
+            self.cancel()
+        }
+    }
+
+    public func cancel() {
+        generation = UUID()
+        drain?.cancel(); drain = nil
+        request?.endAudio(); recognition?.cancel()
+        recognition = nil; request = nil; recognizer = nil
+        isListening = false; offset = 0
+    }
+}
