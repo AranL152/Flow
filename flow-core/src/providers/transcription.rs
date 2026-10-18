@@ -2,9 +2,13 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::AudioData;
 use crate::error::Result;
+
+/// Return false to cancel. Empty strings are liveness checks, not tokens.
+pub type DictationDelta = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 /// Request for transcription
 #[derive(Debug, Clone)]
@@ -101,6 +105,14 @@ pub trait TranscriptionProvider: Send + Sync {
 
     /// Transcribe audio to text
     async fn transcribe(&self, request: TranscriptionRequest) -> Result<TranscriptionResponse>;
+
+    /// Providers without token support keep the buffered path; no fake deltas.
+    async fn transcribe_stream(&self, request: TranscriptionRequest, on_delta: DictationDelta) -> Result<TranscriptionResponse> {
+        if !on_delta("") { return Err(crate::error::Error::Transcription("Dictation cancelled".into())); }
+        let result = self.transcribe(request).await?;
+        if !on_delta("") { return Err(crate::error::Error::Transcription("Dictation cancelled".into())); }
+        Ok(result)
+    }
 
     /// Check if the provider is configured and ready
     fn is_configured(&self) -> bool;

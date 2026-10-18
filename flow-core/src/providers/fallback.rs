@@ -83,6 +83,25 @@ impl TranscriptionProvider for FallbackTranscriptionProvider {
     fn is_configured(&self) -> bool {
         self.primary.is_configured() || self.fallback.is_configured()
     }
+
+    async fn transcribe_stream(&self, request: TranscriptionRequest, on_delta: super::DictationDelta) -> Result<TranscriptionResponse> {
+        // A partially emitted response must never be silently replaced by a retry.
+        let emitted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = emitted.clone();
+        let next = on_delta.clone();
+        let tracked: super::DictationDelta = Arc::new(move |text| {
+            if !text.is_empty() { flag.store(true, std::sync::atomic::Ordering::Relaxed); }
+            next(text)
+        });
+        match self.primary.transcribe_stream(request.clone(), tracked).await {
+            Ok(response) if is_usable(&response) => Ok(response),
+            result if emitted.load(std::sync::atomic::Ordering::Relaxed) => result,
+            _ => {
+                if !on_delta("") { return Err(Error::Transcription("Dictation cancelled".into())); }
+                self.fallback.transcribe_stream(request, on_delta).await
+            }
+        }
+    }
 }
 
 #[cfg(test)]

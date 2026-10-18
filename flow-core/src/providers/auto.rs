@@ -315,6 +315,20 @@ impl TranscriptionProvider for AutoTranscriptionProvider {
     fn is_configured(&self) -> bool {
         true
     }
+
+    async fn transcribe_stream(&self, request: TranscriptionRequest, on_delta: super::DictationDelta) -> Result<TranscriptionResponse> {
+        if !on_delta("") { return Err(Error::Transcription("Dictation cancelled".into())); }
+        let completion = request.completion.ok_or_else(|| Error::Transcription("Completion params required for Auto mode".into()))?;
+        let wav = pcm_to_wav(&request.audio, request.sample_rate, 1);
+        let body = WorkerRequest { whisper_input: WhisperInput {
+            audio: Some(AudioInput { audio_b64: STANDARD.encode(wav) }), text: None,
+            whisper_params: WhisperParams { audio_language: request.language.unwrap_or_else(|| "auto".into()) },
+        }, completion: completion.into() };
+        let endpoint = std::env::var("FLOW_STREAM_ENDPOINT").unwrap_or_else(|_| format!("{BASE10_PROXY_URL}/transcribe-stream"));
+        let response = self.client.post(endpoint).json(&body).send().await?;
+        let duration_ms = (request.audio.len() as u64 / 2 * 1000) / u64::from(request.sample_rate);
+        super::dictation_stream::consume(response, duration_ms, on_delta).await
+    }
 }
 
 fn pcm_to_wav(pcm: &[u8], sample_rate: u32, channels: u16) -> Vec<u8> {

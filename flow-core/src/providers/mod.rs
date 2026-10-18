@@ -3,6 +3,7 @@
 //! Supports pluggable providers for cloud (OpenAI, ElevenLabs, Anthropic, Gemini) and local services.
 mod auto;
 mod completion;
+mod dictation_stream;
 mod fallback;
 mod gemini;
 mod local_whisper;
@@ -25,6 +26,6 @@ pub use streaming::{
     CompletionChunk, CompletionStream, StreamingCompletionProvider, collect_stream,
 };
 pub use transcription::{
-    CompletionParams as TranscriptionCompletionParams, TranscriptionProvider, TranscriptionRequest,
+    CompletionParams as TranscriptionCompletionParams, DictationDelta, TranscriptionProvider, TranscriptionRequest,
     TranscriptionResponse,
 };
