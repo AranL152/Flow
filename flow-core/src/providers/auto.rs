@@ -325,7 +325,17 @@ impl TranscriptionProvider for AutoTranscriptionProvider {
             whisper_params: WhisperParams { audio_language: request.language.unwrap_or_else(|| "auto".into()) },
         }, completion: completion.into() };
         let endpoint = std::env::var("FLOW_STREAM_ENDPOINT").unwrap_or_else(|_| format!("{BASE10_PROXY_URL}/transcribe-stream"));
-        let response = self.client.post(endpoint).json(&body).send().await?;
+        if request.sample_rate == 0 { return Err(Error::Transcription("Invalid sample rate".into())); }
+        let pending_response = self.client.post(endpoint).json(&body).timeout(std::time::Duration::from_secs(90)).send();
+        tokio::pin!(pending_response);
+        let response = loop {
+            tokio::select! {
+                response = &mut pending_response => break response?,
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                    if !on_delta("") { return Err(Error::Transcription("Dictation cancelled".into())); }
+                }
+            }
+        };
         let duration_ms = (request.audio.len() as u64 / 2 * 1000) / u64::from(request.sample_rate);
         super::dictation_stream::consume(response, duration_ms, on_delta).await
     }

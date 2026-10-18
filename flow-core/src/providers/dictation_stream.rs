@@ -61,7 +61,14 @@ pub async fn consume(response: reqwest::Response, duration_ms: u64, on_delta: Di
     let mut stream = response.bytes_stream();
     let mut pending = Vec::new();
     let mut decoder = Decoder::default();
-    while let Some(chunk) = stream.next().await {
+    loop {
+        let chunk = tokio::select! {
+            chunk = stream.next() => match chunk { Some(chunk) => chunk, None => break },
+            _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                if !on_delta("") { return Err(failure("Dictation cancelled")); }
+                continue;
+            }
+        };
         if !on_delta("") { return Err(failure("Dictation cancelled")); }
         pending.extend_from_slice(&chunk?);
         if pending.len() > 131072 { return Err(failure("Invalid stream buffer")); }
@@ -112,4 +119,28 @@ mod tests {
         assert!(decoder.line("", &callback).is_err());
         assert!(!decoder.done);
     }
+    #[tokio::test]
+    async fn stalled_network_cancels_without_waiting_for_another_token() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0; 4096]; socket.read(&mut request).await.unwrap();
+            socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n").await.unwrap();
+            std::future::pending::<()>().await;
+        });
+        let response = reqwest::get(format!("http://{address}")).await.unwrap();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let copy = cancelled.clone();
+        let callback: DictationDelta = Arc::new(move |_| !copy.load(Ordering::SeqCst));
+        let consumer = tokio::spawn(consume(response, 1000, callback));
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        cancelled.store(true, Ordering::SeqCst);
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), consumer).await.unwrap().unwrap();
+        assert!(result.unwrap_err().to_string().contains("cancelled"));
+        server.abort();
+    }
+
 }
