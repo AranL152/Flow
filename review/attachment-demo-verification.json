@@ -1,0 +1,133 @@
+{
+  "attachment_command": "Flow, attach the PDF I just downloaded.",
+  "attachment_filename": "Project-review.pdf",
+  "attachment_source": "Downloads",
+  "edited_examples": 0,
+  "error": "",
+  "events": [
+    {
+      "event": "captions_unavailable",
+      "seconds": 0.004106998443603516,
+      "text": "Live captions are unavailable; voice dictation still works."
+    },
+    {
+      "event": "audio_finished",
+      "seconds": 4.014860987663269,
+      "text": "attachment"
+    },
+    {
+      "event": "composer_before_model",
+      "seconds": 4.014890074729919,
+      "text": ""
+    },
+    {
+      "event": "saved_examples_available",
+      "seconds": 4.015094995498657,
+      "text": "0"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 5.37406599521637,
+      "text": "I"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 5.374324083328247,
+      "text": "I"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 5.374332070350647,
+      "text": "I"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 5.412700057029724,
+      "text": " have"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 5.441469073295593,
+      "text": " attached"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 5.473011016845703,
+      "text": " the presentation"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 5.507022023200989,
+      "text": " deck."
+    },
+    {
+      "event": "attachment_request",
+      "seconds": 5.50795304775238,
+      "text": "Flow, attach the PDF I just downloaded."
+    },
+    {
+      "event": "model_complete_received",
+      "seconds": 5.50803804397583,
+      "text": "I have attached the presentation deck."
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 5.565358996391296,
+      "text": " have"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 5.56537401676178,
+      "text": "I have"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 5.753700017929077,
+      "text": " attached"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 5.753710985183716,
+      "text": "I have attached"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 5.944900035858154,
+      "text": " the presentation"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 5.944911003112793,
+      "text": "I have attached the presentation"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 6.135667085647583,
+      "text": " deck."
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 6.135714054107666,
+      "text": "I have attached the presentation deck."
+    },
+    {
+      "event": "model_complete_presented",
+      "seconds": 6.3722370862960815,
+      "text": "I have attached the presentation deck."
+    },
+    {
+      "event": "attachment_resolved",
+      "seconds": 6.404674053192139,
+      "text": "Project-review.pdf"
+    }
+  ],
+  "final_draft": "I have attached the presentation deck.",
+  "presentation_delay_per_chunk_ms": 180,
+  "readable_playback": true,
+  "requested_after_latest_edit": false,
+  "saved_edits": [],
+  "saved_examples_available": 0,
+  "scope": "isolated native simulation; generated speech; scripted edit and local send; actual Rust/cloud pipeline; no Messages AX insertion",
+  "status": "passed",
+  "used_learned_word": true
+}

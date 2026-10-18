@@ -30,10 +30,16 @@ prompts. GUI relaunches were stopped. Do not repeatedly launch/re-sign demos and
 ask for access again. New normal and demo bundles were prepared without opening
 them: `.build/Flow Attachments.app` and `.build/Flow Attachments Demo.app`.
 
+After restarting, the user requested continuation with all demos closed. One
+prepared attachment demo was reopened with `--reuse-bundle`, without rebuilding
+or re-signing. Its GUI run passed, presented five genuine model chunks and
+selected `Project-review.pdf` from the synthetic Downloads folder. Live captions
+were unavailable and no authorization was requested. The window was left open.
+See `review/attachment-demo-verification.json`.
+
 Actual Messages attachment acceptance and actual browser download completion
 remain unverified. Paste dispatch is deliberately labelled “Paste requested”.
-The next useful check is a single manual run in the prepared app after the user
-has completed their macOS permission setup. Do not send a real message.
+Do not send a real message during verification.
 
 ## Restart considerations
 

@@ -111,6 +111,11 @@ Messages conversation is changed. Replay is available in the window.
 The first failing audio run is retained in
 [initial results](../review/attachment-stream-initial-verification.json).
 
-Real Messages attachment acceptance, actual browser download completion and the
-final GUI replay remain unverified. Unit tests and a dispatched paste event are
-not evidence that Messages accepted an attachment. No real message was sent.
+After the restart, the prepared GUI demo was reopened without rebuilding or
+re-signing. It passed, presented five real model chunks and selected the matching
+synthetic PDF. Live captions were unavailable; the app did not request access.
+[GUI replay results](../review/attachment-demo-verification.json).
+
+Real Messages attachment acceptance and actual browser download completion
+remain unverified. Unit tests and a dispatched paste event are not evidence that
+Messages accepted an attachment. No real message was sent.
