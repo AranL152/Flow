@@ -83,6 +83,13 @@ To launch the separate attachment simulation when wanted:
 python3 scripts/simulate-voice.py --attachment
 ```
 
+For subsequent launches, use `--reuse-bundle` to keep the already signed app
+unchanged and preserve its permission identity:
+
+```sh
+python3 scripts/simulate-voice.py --attachment --reuse-bundle
+```
+
 It uses real ASR and LLM streaming, with a synthetic older PDF, a newly observed
 PDF carrying an old modification time, and an unrelated newer ZIP. No real
 Messages conversation is changed. Replay is available in the window.

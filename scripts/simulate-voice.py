@@ -27,6 +27,7 @@ def fixture_pdf(title):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--reuse-bundle", action="store_true", help="Launch the already signed app without rebuilding or re-signing it")
     parser.add_argument("--report", type=Path)
     parser.add_argument("--stop", action="store_true")
     parser.add_argument("--attachment", action="store_true", help="Separate real-pipeline attachment demo using fixture downloads")
@@ -46,8 +47,12 @@ def main():
     build = ["python3", str(ROOT/"scripts/build-demo.py")]
     bundle = ROOT/(".build/Flow Attachments Demo.app" if args.attachment else ".build/Flow Demo.app")
     build.extend(["--bundle", str(bundle)])
-    if args.skip_build: build.append("--skip-build")
-    subprocess.run(build, cwd=ROOT, check=True)
+    if args.reuse_bundle:
+        if not (bundle/"Contents/MacOS/Flow").is_file():
+            raise SystemExit(f"Prepared app is missing: {bundle}. Build it once before using --reuse-bundle.")
+    else:
+        if args.skip_build: build.append("--skip-build")
+        subprocess.run(build, cwd=ROOT, check=True)
     folder.mkdir(parents=True, exist_ok=True)
     phrases = {"first": "Can you check the slides tomorrow?", "second": "Can you check the slides on Friday?"}
     if args.attachment:

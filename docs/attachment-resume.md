@@ -50,9 +50,10 @@ does not require repeated approvals for every file under a stable authorized app
 To run the separate attachment simulation when the user wants it:
 
 ```sh
-python3 scripts/simulate-voice.py --attachment --skip-build
+python3 scripts/simulate-voice.py --attachment --reuse-bundle
 ```
 
-This launches the prepared demo and can use existing speech authorization, but
+This reuses the signed bundle without rebuilding or re-signing it. It launches
+the prepared demo and can use existing speech authorization, but
 never automatically requests it. The simulation operates on synthetic Downloads
 and does not insert into a real Messages conversation.
