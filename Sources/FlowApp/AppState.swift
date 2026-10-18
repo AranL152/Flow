@@ -671,7 +671,7 @@ final class AppState: ObservableObject {
                             return
                         }
                         if text.isEmpty {
-                            Task { await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: true) }
+                            Task { await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: true); self.showAttachmentPreview() }
                             self.refreshHistory(); self.finishProcessing()
                             return
                         }
@@ -683,7 +683,7 @@ final class AppState: ObservableObject {
                     self.activateTargetAppIfNeeded()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                         self?.pasteText()
-                        if let self { Task { await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: true) } }
+                        if let self { Task { await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: true); self.showAttachmentPreview() } }
                         self?.finishProcessing()
                     }
                     self.refreshHistory()
@@ -763,6 +763,7 @@ final class AppState: ObservableObject {
                         self.errorMessage = nil
                         completed = true
                         await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: self.streamTargetUnchanged)
+                        self.showAttachmentPreview()
                     }
                 }
                 if !completed { throw NSError(domain: "Flow.Stream", code: 4,
@@ -791,6 +792,11 @@ final class AppState: ObservableObject {
         attachments.onDismiss = { [weak self] in self?.attachmentPreview?.hide() }
         attachments.receive(plan)
         if attachmentPreview == nil { attachmentPreview = AttachmentPreviewWindow(session: attachments, engine: engine) }
+        if plan.request?.source != .fileSearch { showAttachmentPreview() }
+    }
+
+    private func showAttachmentPreview() {
+        guard let plan = attachments.plan else { return }
         attachmentPreview?.show(candidateCount: attachments.candidates.count, isSearch: plan.request?.source == .fileSearch)
     }
 

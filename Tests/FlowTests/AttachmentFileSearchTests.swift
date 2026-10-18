@@ -3,6 +3,20 @@ import XCTest
 
 final class AttachmentFileSearchTests: XCTestCase {
     @MainActor
+    func testExactFilenameBeatsNewerLooserMatchAndTiesKeepRecencyOrder() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("RankSearch-\(UUID())")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let names = ["Orion-review-notes.pdf", "Orion-review-draft.pdf", "Orion-review.pdf"]
+        let urls = try names.map { name in
+            let url = folder.appendingPathComponent(name)
+            try Data("fixture".utf8).write(to: url)
+            return url
+        }
+        XCTAssertEqual(AttachmentFileSearch.candidates(from: urls, text: "Orion review", kind: .pdf).map(\.filename),
+                       ["Orion-review.pdf", "Orion-review-notes.pdf", "Orion-review-draft.pdf"])
+    }
+    @MainActor
     func testResultsFilterNamesTypesLinksPartialAndHiddenFilesAndRevalidate() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("FlowSearch-\(UUID())")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

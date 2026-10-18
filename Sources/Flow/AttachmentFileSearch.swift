@@ -1,7 +1,7 @@
 import Foundation
 
 /// Filename search in the local Spotlight index. File contents never leave the Mac.
-/// A search result is a suggestion; callers must require a deliberate selection.
+/// Results rank literal filename matches; no image/content inference is implied.
 @MainActor
 public final class AttachmentFileSearch {
     private var query: NSMetadataQuery?
@@ -78,7 +78,12 @@ public final class AttachmentFileSearch {
         guard let terms = try? terms(for: text) else { return [] }
         var seen = Set<URL>()
         var results: [AttachmentCandidate] = []
-        for url in urls {
+        // Spotlight supplies recency order. Preserve it when names score equally.
+        let ranked = urls.enumerated().sorted {
+            let a = filenameScore($0.element, terms: terms), b = filenameScore($1.element, terms: terms)
+            return a == b ? $0.offset < $1.offset : a > b
+        }
+        for (_, url) in ranked {
             guard url.isFileURL, seen.insert(url.standardizedFileURL).inserted,
                   !url.pathComponents.contains(where: { $0.hasPrefix(".") || ["Library", "node_modules"].contains($0) || $0.hasSuffix(".app") }),
                   !["crdownload", "download", "part", "partial", "tmp"].contains(url.pathExtension.lowercased()),
@@ -90,6 +95,18 @@ public final class AttachmentFileSearch {
             }
         }
         return results
+    }
+
+    private static func filenameScore(_ url: URL, terms: [String]) -> Int {
+        func words(_ value: String) -> [String] {
+            value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+        }
+        let name = words(url.deletingPathExtension().lastPathComponent)
+        let query = terms.flatMap(words)
+        if name == query { return 1000 }
+        let phrase = query.joined(separator: " ")
+        return (name.joined(separator: " ").contains(phrase) ? 300 : 100) - max(0, name.count - query.count)
     }
 
     public func cancel() { complete(.failure(CancellationError())) }

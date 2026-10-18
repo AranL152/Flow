@@ -38,6 +38,7 @@ final class AttachmentSession: ObservableObject {
     @Published private(set) var pasteRequested = false
     @Published private(set) var attachmentConfirmed = false
     @Published private(set) var needsChoice = false
+    @Published private(set) var attachedID: UUID?
     @Published var searchText = ""
     @Published private(set) var searching = false
     private var clipboard: AttachmentClipboardSnapshot?
@@ -48,6 +49,7 @@ final class AttachmentSession: ObservableObject {
     private var sessionID = UUID()
     private let fileSearch = AttachmentFileSearch()
     private var searchTask: Task<Void, Never>?
+    private var searchGeneration = UUID()
     var onDismiss: (() -> Void)?
 
     var selected: AttachmentCandidate? { candidates.first { $0.id == selectedID } }
@@ -110,7 +112,7 @@ final class AttachmentSession: ObservableObject {
     }
 
     private func resolve() {
-        candidates = []; selectedID = nil; needsChoice = false; pasteRequested = false; attachmentConfirmed = false
+        candidates = []; selectedID = nil; needsChoice = false; pasteRequested = false; attachmentConfirmed = false; attachedID = nil
         guard let plan else { return }
         if let clarification = plan.clarification { status = clarification; return }
         guard let request = plan.request else { return }
@@ -138,13 +140,21 @@ final class AttachmentSession: ObservableObject {
     func choose(_ id: UUID) {
         guard !busy, candidates.contains(where: { $0.id == id }) else { return }
         selectedID = id; needsChoice = false
-        status = "Selected for review. You send the message."
+        status = id == attachedID ? "Already in your Messages draft. You send the message."
+            : attachedID == nil ? "Selected for review. You send the message." : "Previewing an alternative. Copy it if you want to change the attachment."
     }
 
     func automaticallyStage(engine: Flow, insertionUnchanged: Bool) async {
-        guard plan?.request?.source != .fileSearch,
-              insertionUnchanged, !clipboardChanged, let selected, !selected.approximateRecency,
-              target?.matches(engine: engine) == true else { return }
+        guard insertionUnchanged, target?.matches(engine: engine) == true else { return }
+        let session = sessionID, search = searchGeneration
+        if plan?.request?.source == .fileSearch {
+            await searchTask?.value
+            guard sessionID == session, searchGeneration == search, !Task.isCancelled,
+                  searchText == plan?.request?.query, target?.matches(engine: engine) == true else { return }
+            if selectedID == nil, let best = candidates.first { choose(best.id) }
+        }
+        guard plan?.request?.source != .clipboard || !clipboardChanged,
+              let selected, !selected.approximateRecency else { return }
         await stage(engine: engine, activate: false)
     }
 
@@ -182,6 +192,7 @@ final class AttachmentSession: ObservableObject {
             down.flags = .maskCommand; up.flags = .maskCommand
             down.postToPid(target.app.processIdentifier); up.postToPid(target.app.processIdentifier)
             pasteRequested = true
+            attachedID = candidate.id
             status = "Paste requested in \(target.contact)’s Messages draft. Review the attachment, then send."
             // Restore only our own write. A later copy by the user always wins.
             try? await Task.sleep(for: .milliseconds(600))
@@ -214,6 +225,7 @@ final class AttachmentSession: ObservableObject {
     func searchFiles() {
         guard !busy, !pasteRequested, let request = plan?.request, request.source == .fileSearch else { return }
         searchTask?.cancel(); fileSearch.cancel()
+        searchGeneration = UUID()
         candidates = []; selectedID = nil; needsChoice = true; searching = true
         status = "Searching filenames on this Mac…"
         let session = sessionID
@@ -259,6 +271,7 @@ final class AttachmentSession: ObservableObject {
         sessionID = UUID(); plan = nil; candidates = []; selectedID = nil
         clipboard = nil; target = nil; clipboardChanged = false
         needsChoice = false; status = ""; busy = false; pasteRequested = false; attachmentConfirmed = false
+        attachedID = nil
         onDismiss?()
     }
 }

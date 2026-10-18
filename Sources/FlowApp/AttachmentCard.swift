@@ -38,6 +38,11 @@ struct AttachmentCard: View {
                                     AttachmentThumbnail(candidate: candidate).frame(width: 52, height: 52)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(candidate.filename).font(.subheadline.weight(.medium)).lineLimit(2)
+                                        if session.attachedID == candidate.id {
+                                            Text("Added to draft").font(.caption).foregroundStyle(FW.accent)
+                                        } else if plan.request?.source == .fileSearch && session.candidates.first?.id == candidate.id {
+                                            Text("Best filename match").font(.caption).foregroundStyle(FW.accent)
+                                        }
                                         Text(candidate.sourceLabel + (candidate.approximateRecency ? " · choose to confirm" : ""))
                                             .font(.caption).foregroundStyle(FW.textMuted)
                                     }
@@ -47,11 +52,11 @@ struct AttachmentCard: View {
                                 .padding(10)
                                 .background(session.selectedID == candidate.id ? FW.accent.opacity(0.1) : FW.surface)
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }.buttonStyle(.plain).disabled(session.busy || session.pasteRequested)
+                            }.buttonStyle(.plain).disabled(session.busy)
                         }
                     }
                 }
-                .frame(height: min(CGFloat(session.candidates.count) * 82, plan.request?.source == .fileSearch ? 180 : 240))
+                .frame(height: min(CGFloat(session.candidates.count) * 98, 240))
                 if plan.request?.source == .fileSearch, let selected = session.selected {
                     AttachmentThumbnail(candidate: selected, previewSize: 640)
                         .frame(maxWidth: .infinity).frame(height: 140)
