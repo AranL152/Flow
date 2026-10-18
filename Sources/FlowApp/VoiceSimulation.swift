@@ -3,6 +3,14 @@ import AVFoundation
 import Flow
 import SwiftUI
 
+struct SimulationSavedEdit: Identifiable {
+    let id = UUID()
+    let before: String
+    let after: String
+    let scripted: Bool
+    var edited: Bool { before.split(whereSeparator: \.isWhitespace) != after.split(whereSeparator: \.isWhitespace) }
+}
+
 /// Audible fixtures run through Apple's live recognizer and the normal Rust
 /// audio → Whisper → streamed formatting → final-text learning pipeline.
 @MainActor
@@ -11,13 +19,14 @@ final class VoiceSimulationModel: ObservableObject {
     @Published var stage = "Ready to simulate voice input"
     @Published var draft = ""
     @Published var sent = ""
-    @Published var memory = ""
     @Published var error: String?
     @Published var finished = false
     @Published var readableStreaming = true
     @Published var draftPhase = "Waiting for voice"
     @Published var canSend = false
     @Published var chunkCount = 0
+    @Published var savedEdits: [SimulationSavedEdit] = []
+    @Published var requestedAfterLatestEdit = false
     let state: AppState
     private let captions = LiveSpeechCaptions()
     private var player: AVAudioPlayer?
@@ -34,13 +43,14 @@ final class VoiceSimulationModel: ObservableObject {
         task = Task {
             do {
                 _ = state.engine.resetStyleLearning()
-                sent = ""; memory = ""; canSend = false; events = []; started = Date()
+                sent = ""; canSend = false; savedEdits = []; requestedAfterLatestEdit = false; events = []; started = Date()
                 state.currentApp = "Messages"; state.targetAppName = "Messages · Alex (simulation)"
                 state.lastTranscription = nil; state.liveTranscript = ""; state.streamedOutput = ""
                 stage = "1 / 3 · Generated voice → real captions and model output"
                 try await take(name: "first")
                 try await Task.sleep(for: .seconds(1.5))
                 stage = "2 / 3 · Simulated user edit: “slides” → “deck”, then Send"
+                let original = draft
                 let correction = "yo can u check the deck tomorrow?"
                 // This is an explicitly labelled scripted edit, never fabricated
                 // model output. Sending here updates only the in-memory fixture.
@@ -50,8 +60,9 @@ final class VoiceSimulationModel: ObservableObject {
                 guard state.engine.recordFinalTextForContact(correction, contactName: "Alex") >= 0 else { throw failure("The contact-specific edit could not be saved") }
                 canSend = false
                 guard state.engine.styleStats?.edited == 1 else { throw failure("The edited example was not saved") }
+                savedEdits.append(SimulationSavedEdit(before: original, after: correction, scripted: true))
                 sent = correction; draft = ""
-                memory = "Saved one edited example for Alex · slides → deck"
+                requestedAfterLatestEdit = false
                 note("learning_saved", text: correction)
                 try await Task.sleep(for: .seconds(1.5))
                 stage = "3 / 3 · New voice input → model uses Alex’s saved example"
@@ -96,10 +107,14 @@ final class VoiceSimulationModel: ObservableObject {
             error = "This draft no longer has a completed baseline for Alex. Dictate again."
             return
         }
+        let edit = SimulationSavedEdit(before: state.lastTranscription ?? "", after: draft, scripted: false)
+        savedEdits.append(edit)
+        note("manual_send_saved", text: draft)
         canSend = false
         sent = draft; draft = ""
-        memory = "Saved \(state.engine.styleStats?.examples ?? 0) examples for Alex"
-        stage = "Your draft was saved to this isolated conversation · no real message sent"
+        requestedAfterLatestEdit = false
+        stage = "Saved for Alex. Click Dictate again to use your edit in the next response."
+        saveReport(status: "passed")
     }
 
     private func take(name: String) async throws {
@@ -143,6 +158,8 @@ final class VoiceSimulationModel: ObservableObject {
         note("audio_finished", text: name)
         draftPhase = "Waiting for LLM output"
         note("composer_before_model", text: draft)
+        requestedAfterLatestEdit = !savedEdits.isEmpty
+        note("saved_examples_available", text: String(savedEdits.count))
         var gotCompletion = false
         // Receive independently from presentation, so recorded receipt times
         // retain actual model latency when readable playback is enabled.
@@ -190,6 +207,9 @@ final class VoiceSimulationModel: ObservableObject {
         guard let index = args.firstIndex(of: "--verification-report"), args.indices.contains(index + 1) else { return }
         let result: [String: Any] = ["status": status, "error": error ?? "", "events": events,
             "edited_examples": state.engine.styleStats?.edited ?? 0, "final_draft": draft,
+            "saved_edits": savedEdits.map { ["before": $0.before, "after": $0.after, "contact": "Alex", "scripted": $0.scripted] as [String: Any] },
+            "saved_examples_available": savedEdits.count,
+            "requested_after_latest_edit": requestedAfterLatestEdit,
             "used_learned_word": draft.localizedCaseInsensitiveContains("deck"),
             "readable_playback": readableStreaming, "presentation_delay_per_chunk_ms": readableStreaming ? 180 : 0,
             "scope": "isolated native simulation; generated speech; scripted edit and local send; actual Rust/cloud pipeline; no Messages AX insertion"]
@@ -220,17 +240,26 @@ struct VoiceSimulationView: View {
                     Label("Alex", systemImage: "person.crop.circle.fill").font(.title2.weight(.semibold))
                     Text("Simulated conversation · Project review").font(.caption).foregroundStyle(FW.textMuted)
                     Divider()
-                    Text(model.stage).font(.subheadline.weight(.medium))
-                    if !model.sent.isEmpty {
-                        Text(model.sent).padding(14).frame(maxWidth: .infinity, alignment: .trailing)
-                            .background(FW.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
-                        Text("Simulated Send · saved in Rust").font(.caption).foregroundStyle(FW.textMuted)
-                    }
-                    if !model.memory.isEmpty {
-                        Label(model.memory, systemImage: "brain.head.profile")
-                            .font(.caption).foregroundStyle(FW.accent).padding(12).fwSection()
-                    }
-                    Spacer()
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text(model.stage).font(.subheadline.weight(.medium))
+                            if !model.sent.isEmpty {
+                                Text(model.sent).padding(14).frame(maxWidth: .infinity, alignment: .trailing)
+                                    .background(FW.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
+                                Text("Sent to this simulated conversation").font(.caption).foregroundStyle(FW.textMuted)
+                            }
+                            if let latest = model.savedEdits.last {
+                                savedEditCard(latest)
+                                if model.savedEdits.count > 1 {
+                                    DisclosureGroup("All saved examples (\(model.savedEdits.count))") {
+                                        ForEach(model.savedEdits.dropLast().reversed()) { edit in
+                                            savedEditCard(edit).padding(.top, 8)
+                                        }
+                                    }.font(.caption)
+                                }
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }.frame(maxHeight: .infinity)
                     if let error = model.error { Text(error).foregroundStyle(FW.danger).font(.caption) }
                     Toggle("Readable playback", isOn: $model.readableStreaming).disabled(model.running)
                         .font(.caption)
@@ -260,4 +289,21 @@ struct VoiceSimulationView: View {
         .task { model.start() }
         .onDisappear { model.stop() }
     }
+    private func savedEditCard(_ edit: SimulationSavedEdit) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(edit.edited ? "Edit saved for Alex" : "Example saved for Alex", systemImage: "checkmark.circle.fill")
+                .font(.caption.weight(.semibold)).foregroundStyle(FW.accent)
+            Text("Flow generated").font(.caption2).foregroundStyle(FW.textMuted)
+            Text(edit.before).font(.caption).foregroundStyle(FW.textSecondary).textSelection(.enabled)
+            Text("You sent").font(.caption2).foregroundStyle(FW.textMuted)
+            Text(edit.after).font(.callout.weight(.medium)).foregroundStyle(FW.textPrimary).textSelection(.enabled)
+            Text(model.requestedAfterLatestEdit
+                 ? "New response requested with Alex’s saved examples. Wording may vary."
+                 : "Saved. Click Dictate again to use your saved examples in the next response.")
+                .font(.caption2).foregroundStyle(FW.textMuted)
+            Text(edit.scripted ? "Scripted example · isolated user + Alex" : "Your edit · isolated user + Alex")
+                .font(.caption2).foregroundStyle(FW.textMuted)
+        }.padding(12).frame(maxWidth: .infinity, alignment: .leading).fwSection()
+    }
+
 }

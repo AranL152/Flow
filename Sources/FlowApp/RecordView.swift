@@ -314,7 +314,7 @@ struct RecordView: View {
     private func outputSection(_ text: String, streaming: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: FW.spacing8) {
             HStack {
-                Text(streaming ? "Writing draft…" : "Output")
+                Text(streaming ? "Writing draft…" : (appState.isVoiceSimulation ? "Original LLM output" : "Output"))
                     .font(.caption.weight(.medium))
                     .foregroundStyle(FW.textMuted)
 

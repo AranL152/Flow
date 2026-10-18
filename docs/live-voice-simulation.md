@@ -32,7 +32,10 @@ playback timing is not a latency measurement. There is no timer-generated speech
 transcript or completed-response splitting.
 
 After completion, edit the second draft and use Simulated Send to save that
-example. Dictate again reuses those saved edits in the next model request;
+example. The **Edit saved for Alex** card shows **Flow generated → You sent**,
+so you can inspect the exact correction. The left panel is labelled **Original
+LLM output** and retains the original generation. Saving does not rewrite that
+history. Dictate again reuses relevant saved edits in the next model request;
 Reset and replay explicitly clears fixture memory. Manual drafts stay inside
 this process. This does not test Accessibility insertion into iMessage.
 
@@ -41,3 +44,9 @@ The report is `.build/voice-simulation/report.json`. The checked-in
 recognizer updates, individual received/presented chunks, and the learning result.
 The launcher’s temporary job remains active to keep the window open. Stop it with
 `python3 scripts/simulate-voice.py --stop`, or close its window.
+
+This version updates the local report immediately after a manual Simulated Send,
+including the exact before/after text. The card shows available recipient memory;
+it does not claim every example was selected or that every correction must be
+copied literally. Native UI changes appear after a new launch. Avoid restarting
+a current analysis session without finishing it: its existing database is in memory.
