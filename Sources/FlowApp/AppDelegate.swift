@@ -10,9 +10,16 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var verificationWindow: NSWindow?
+    private var streamVerification: StreamInsertionVerification?
     func applicationDidFinishLaunching(_: Notification) {
         DispatchQueue.main.async { @MainActor in
             NSApp.setActivationPolicy(.regular)
+            if ProcessInfo.processInfo.arguments.contains("--stream-insertion-preview") {
+                let verification = StreamInsertionVerification()
+                self.streamVerification = verification
+                verification.run()
+                return
+            }
             if ProcessInfo.processInfo.arguments.contains("--recording-preview") {
                 let host = NSHostingController(rootView: RecordingPreviewView().environmentObject(AppState()))
                 let window = NSWindow(contentViewController: host)

@@ -1,0 +1,7 @@
+{
+  "checks": {},
+  "final_draft": "before OLD after",
+  "kind": "isolated native NSTextView Accessibility integration",
+  "reason": "Accessibility permission is not granted to this verification app",
+  "status": "unavailable"
+}

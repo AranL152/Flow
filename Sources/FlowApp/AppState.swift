@@ -41,6 +41,7 @@ final class AppState: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private var streamInputMonitor: Any?
     private var streamTargetUnchanged = true
+    private var recordingUsesStreaming = false
     private var streamedInsertion: StreamedTextInsertion?
     var streamOutputEnabled: Bool { UserDefaults.standard.object(forKey: "streamOutputEnabled") as? Bool ?? true }
 
@@ -107,6 +108,7 @@ final class AppState: ObservableObject {
     init() {
         let demoOnly = ProcessInfo.processInfo.arguments.contains("--demo")
             || ProcessInfo.processInfo.arguments.contains("--recording-preview")
+            || ProcessInfo.processInfo.arguments.contains("--stream-insertion-preview")
         self.engine = Flow(dbPath: demoOnly ? ":memory:" : nil)
         self.isConfigured = engine.isConfigured
         self.hotkey = Hotkey.load()
@@ -509,7 +511,8 @@ final class AppState: ObservableObject {
         streamedOutput = ""; isStreamingOutput = false
         streamedInsertion?.cancel(restoringOriginal: true)
         streamedInsertion = nil
-        if streamOutputEnabled {
+        recordingUsesStreaming = streamOutputEnabled
+        if recordingUsesStreaming {
             let ignoredKeyCode: UInt16?
             if case let .custom(keyCode, _, _) = hotkey.kind { ignoredKeyCode = UInt16(keyCode) }
             else { ignoredKeyCode = nil }
@@ -631,7 +634,7 @@ final class AppState: ObservableObject {
     }
 
     private func transcribe() {
-        if streamOutputEnabled { transcribeStreaming(); return }
+        if recordingUsesStreaming { transcribeStreaming(); return }
         let appName = targetApplication?.localizedName ?? currentApp
         let mode = currentMode
 
