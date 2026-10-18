@@ -1,0 +1,18 @@
+{
+  "candidate_filenames": [
+    "Orion-review-notes.pdf",
+    "Orion-review-deck.pdf"
+  ],
+  "checks": {
+    "attachment_only_does_not_generate_message": true,
+    "existing_attachments_preserved": true,
+    "existing_draft_preserved": true,
+    "matching_files_visible": true,
+    "real_messages_target_captured": true,
+    "selection_still_required": true,
+    "voice_resolves_filename_search": true
+  },
+  "command": "Flow, find the Orion Review PDF.",
+  "scope": "Generated voice through the real Rust/cloud parser; production search popup bound to actual Messages. Existing draft is preserved. No Send event or automatic paste.",
+  "status": "ready"
+}

@@ -39,6 +39,14 @@ under the native app's host context worked without any prompt, producing 32 live
 caption updates and nine model chunks. The older attachment simulation was
 closed; the normal app and the new isolated file-search replay remain open.
 
+The user then requested the popup over actual Messages. The isolated replay was
+closed and `scripts/simulate-imessage-popup.py` launched the production panel,
+bound to the current real Messages composer/contact. An attachment-only voice
+request found the two Orion review PDFs. Existing draft text and attachment count
+were preserved. No automatic paste or Send was issued; the user can select and
+press Add to Messages. The helper stays running with the popup interactive.
+See `review/imessage-popup-verification.json`. No app was re-signed or restarted.
+
 ## Completed
 
 - Explicit voice command parsing before formatting, with separate inert source

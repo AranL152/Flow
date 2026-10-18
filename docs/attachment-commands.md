@@ -176,6 +176,19 @@ the same host context as that app; the first launchd replay did not inherit the
 new speech grant, while the direct launch produced live captions without another
 permission request. No actual Messages draft is changed.
 
+To see the same production popup bound to an actual open Messages conversation:
+
+```sh
+python3 scripts/simulate-imessage-popup.py
+```
+
+This plays the attachment-only phrase “Flow, find the Orion review PDF”, runs it
+through the real cloud parser, and opens the native floating panel over Messages.
+It preserves the existing composer text and attachments and waits for the user
+to select a PDF and click Add to Messages. No Send event is generated. The helper
+uses existing access and links existing production objects without re-signing or
+restarting Flow. It stays running so the panel remains interactive.
+
 After the restart, the prepared GUI demo was reopened without rebuilding or
 re-signing. It passed, presented five real model chunks and selected the matching
 synthetic PDF. Live captions were unavailable; the app did not request access.
