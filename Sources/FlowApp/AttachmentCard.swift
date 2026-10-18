@@ -3,87 +3,137 @@ import Flow
 import SwiftUI
 import QuickLookThumbnailing
 
+/// A small picker beside the composer; larger previews are available on demand.
 struct AttachmentCard: View {
     @ObservedObject var session: AttachmentSession
     let engine: Flow
+    @State private var previewID: UUID?
+    @State private var showSearch = false
 
     var body: some View {
         if let plan = session.plan {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Flow, attach", systemImage: "paperclip").font(.headline)
+                HStack(spacing: 8) {
+                    Image(systemName: "paperclip").foregroundStyle(FW.accent)
+                    Text("Flow attach").font(.system(size: 13, weight: .semibold))
                     Spacer()
-                    Button { session.dismiss() } label: { Image(systemName: "xmark") }
-                        .buttonStyle(.plain).disabled(session.busy).help("Dismiss attachment preview")
+                    if session.searching || session.busy { ProgressView().controlSize(.mini) }
+                    Menu {
+                        if plan.request?.source == .fileSearch {
+                            Button("Refine filename search…") { showSearch.toggle() }
+                                .disabled(session.pasteRequested)
+                            Button("Choose another file…") { session.chooseFile() }
+                                .disabled(session.pasteRequested)
+                        } else {
+                            Button("Refresh source") { session.refresh() }.disabled(session.pasteRequested)
+                        }
+                        Button("Copy selected file") { session.copySelected() }.disabled(session.selected == nil)
+                    } label: { Image(systemName: "ellipsis") }
+                    .menuStyle(.borderlessButton).fixedSize().disabled(session.busy)
+                    .help("Attachment options")
+                    Button { session.dismiss() } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
+                        .buttonStyle(.plain).foregroundStyle(FW.textMuted).disabled(session.busy)
+                        .help("Dismiss attachments")
                 }
-                Text(plan.command).font(.caption).foregroundStyle(FW.textMuted).textSelection(.enabled)
-                if plan.request?.source == .fileSearch {
-                    HStack {
+                if showSearch, plan.request?.source == .fileSearch {
+                    HStack(spacing: 6) {
                         TextField("Filename words", text: $session.searchText)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit { session.searchFiles() }
-                            .disabled(session.busy || session.pasteRequested)
-                        Button("Search") { session.searchFiles() }
-                            .disabled(session.busy || session.pasteRequested)
-                    }
-                    Text("Matches filenames, not what an image depicts. Files stay on your Mac.")
-                        .font(.caption).foregroundStyle(FW.textMuted)
-                    if session.searching { ProgressView().controlSize(.small) }
+                            .textFieldStyle(.roundedBorder).onSubmit { session.searchFiles() }
+                        Button { session.searchFiles() } label: { Image(systemName: "magnifyingglass") }
+                            .help("Search filenames")
+                    }.disabled(session.busy || session.pasteRequested)
                 }
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(session.candidates) { candidate in
-                            Button { session.choose(candidate.id) } label: {
-                                HStack(spacing: 12) {
-                                    AttachmentThumbnail(candidate: candidate).frame(width: 52, height: 52)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(candidate.filename).font(.subheadline.weight(.medium)).lineLimit(2)
-                                        if session.attachedID == candidate.id {
-                                            Text("Added to draft").font(.caption).foregroundStyle(FW.accent)
-                                        } else if plan.request?.source == .fileSearch && session.candidates.first?.id == candidate.id {
-                                            Text("Best filename match").font(.caption).foregroundStyle(FW.accent)
-                                        }
-                                        Text(candidate.sourceLabel + (candidate.approximateRecency ? " · choose to confirm" : ""))
-                                            .font(.caption).foregroundStyle(FW.textMuted)
-                                    }
-                                    Spacer()
-                                    if session.selectedID == candidate.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(FW.accent) }
-                                }
-                                .padding(10)
-                                .background(session.selectedID == candidate.id ? FW.accent.opacity(0.1) : FW.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }.buttonStyle(.plain).disabled(session.busy)
+                HStack {
+                    Text(session.attachmentConfirmed ? "Added to your draft" : session.searching ? "Finding files…" : "Choose an attachment")
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(FW.textSecondary)
+                    Spacer()
+                    if !session.candidates.isEmpty {
+                        Text("\(session.candidates.count) \(session.candidates.count == 1 ? "match" : "matches")")
+                            .font(.system(size: 10)).foregroundStyle(FW.textMuted)
+                    }
+                }
+                if !session.candidates.isEmpty {
+                    ScrollView {
+                        LazyVStack(spacing: 4) {
+                            ForEach(session.candidates) { candidate in row(candidate) }
                         }
                     }
-                }
-                .frame(height: min(CGFloat(session.candidates.count) * 98, 240))
-                if plan.request?.source == .fileSearch, let selected = session.selected {
-                    AttachmentThumbnail(candidate: selected, previewSize: 640)
-                        .frame(maxWidth: .infinity).frame(height: 140)
-                        .padding(8).background(FW.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .accessibilityLabel("Preview of \(selected.filename)")
-                }
-                Text(session.status).font(.caption).foregroundStyle(FW.textSecondary)
-                HStack {
-                    if plan.request?.source == .fileSearch {
-                        Button("Choose file…") { session.chooseFile() }.disabled(session.busy || session.pasteRequested)
-                    } else {
-                        Button("Refresh source") { session.refresh() }.disabled(session.busy || plan.request == nil)
+                    .frame(height: CGFloat(min(session.candidates.count, 3)) * 58 - 4)
+                    .focusable().focusEffectDisabled()
+                    .onMoveCommand { direction in
+                        guard !session.busy, direction == .up || direction == .down else { return }
+                        let current = session.candidates.firstIndex { $0.id == session.selectedID } ?? -1
+                        let next = min(session.candidates.count - 1, max(0, current + (direction == .down ? 1 : -1)))
+                        session.choose(session.candidates[next].id)
                     }
-                    Spacer()
-                    Button("Copy attachment") { session.copySelected() }.disabled(session.selected == nil || session.busy)
-                }.buttonStyle(FWSecondaryButtonStyle())
-                Button(session.pasteRequested ? "Review in Messages" : "Add to Messages") {
-                        if session.pasteRequested { session.revealTarget() }
+                }
+                // Keep errors visible, while successful state is communicated in the row.
+                if session.selected == nil || session.busy || (!session.attachmentConfirmed && session.pasteRequested) || session.hasIssue {
+                    Text(session.status).font(.system(size: 11)).foregroundStyle(FW.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true).lineLimit(3)
+                }
+                HStack(spacing: 8) {
+                    Text(session.attachedID != nil && session.selectedID != session.attachedID ? "Replaces Flow’s file only" : "You review and send")
+                        .font(.system(size: 10)).foregroundStyle(FW.textMuted)
+                    Spacer(minLength: 2)
+                    Button(actionTitle) {
+                        if session.selectedID == session.attachedID { session.revealTarget(); session.dismiss() }
                         else { Task { await session.stage(engine: engine) } }
-                }.buttonStyle(FWSecondaryButtonStyle()).disabled(session.selected == nil || session.busy)
+                    }
+                    .buttonStyle(FWSecondaryButtonStyle())
+                    .disabled(session.selected == nil || session.busy)
+                }
             }
-            .padding(16).fwSection()
+            .padding(14).background(FW.background).foregroundStyle(FW.textPrimary)
             .accessibilityIdentifier("attachment-preview")
+            .onExitCommand { if !session.busy { session.dismiss() } }
         }
     }
 
+    private var actionTitle: String {
+        if session.selectedID == session.attachedID, session.attachedID != nil { return "Done" }
+        return session.attachedID == nil ? "Add file" : "Use this file"
+    }
+
+    private func row(_ candidate: AttachmentCandidate) -> some View {
+        let selected = session.selectedID == candidate.id
+        let attached = session.attachedID == candidate.id
+        return HStack(spacing: 0) {
+            Button { session.choose(candidate.id) } label: {
+                HStack(spacing: 9) {
+                    AttachmentThumbnail(candidate: candidate).frame(width: 34, height: 36)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(candidate.filename).font(.system(size: 12, weight: .medium))
+                            .lineLimit(1).truncationMode(.middle)
+                        Text(attached ? "In draft" : candidate.approximateRecency ? "Confirm this file" : session.plan?.request?.source == .fileSearch && session.candidates.first?.id == candidate.id ? "Best filename match" : candidate.sourceLabel)
+                            .font(.system(size: 10)).foregroundStyle(attached ? FW.accent : FW.textMuted)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 15)).foregroundStyle(selected ? FW.accent : FW.border)
+                }
+                .contentShape(Rectangle()).padding(.leading, 9).padding(.vertical, 8)
+            }.buttonStyle(.plain).disabled(session.busy)
+                .accessibilityLabel("\(candidate.filename)\(attached ? ", in draft" : "")")
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            Button { previewID = candidate.id } label: {
+                Image(systemName: "eye").font(.system(size: 12)).foregroundStyle(FW.textSecondary)
+                    .frame(width: 32, height: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain).help("Preview \(candidate.filename)")
+                .popover(isPresented: Binding(get: { previewID == candidate.id }, set: { if !$0 { previewID = nil } }), arrowEdge: .leading) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        AttachmentThumbnail(candidate: candidate, previewSize: 720).frame(width: 300, height: 230)
+                        Text(candidate.filename).font(.system(size: 12, weight: .medium)).textSelection(.enabled)
+                        Text(candidate.sourceLabel).font(.caption).foregroundStyle(FW.textMuted)
+                    }.padding(14).background(FW.background)
+                }
+        }
+        .frame(height: 54)
+        .background(selected ? FW.accent.opacity(0.08) : FW.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? FW.accent.opacity(0.35) : FW.border.opacity(0.65), lineWidth: 1))
+    }
 }
 
 private struct AttachmentThumbnail: View {

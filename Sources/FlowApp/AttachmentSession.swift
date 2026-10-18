@@ -41,6 +41,8 @@ final class AttachmentSession: ObservableObject {
     @Published private(set) var attachedID: UUID?
     @Published var searchText = ""
     @Published private(set) var searching = false
+    @Published private(set) var hasIssue = false
+    private var ownedAttachment: AXUIElement?
     private var clipboard: AttachmentClipboardSnapshot?
     private var clipboardChanged = false
     private let downloads: AttachmentDownloads
@@ -112,7 +114,7 @@ final class AttachmentSession: ObservableObject {
     }
 
     private func resolve() {
-        candidates = []; selectedID = nil; needsChoice = false; pasteRequested = false; attachmentConfirmed = false; attachedID = nil
+        candidates = []; selectedID = nil; needsChoice = false; pasteRequested = false; attachmentConfirmed = false; attachedID = nil; ownedAttachment = nil; hasIssue = false
         guard let plan else { return }
         if let clarification = plan.clarification { status = clarification; return }
         guard let request = plan.request else { return }
@@ -139,9 +141,9 @@ final class AttachmentSession: ObservableObject {
 
     func choose(_ id: UUID) {
         guard !busy, candidates.contains(where: { $0.id == id }) else { return }
-        selectedID = id; needsChoice = false
+        selectedID = id; needsChoice = false; hasIssue = false
         status = id == attachedID ? "Already in your Messages draft. You send the message."
-            : attachedID == nil ? "Selected for review. You send the message." : "Previewing an alternative. Copy it if you want to change the attachment."
+            : attachedID == nil ? "Selected for review. You send the message." : "Choose Use this file to replace only the attachment Flow added."
     }
 
     func automaticallyStage(engine: Flow, insertionUnchanged: Bool) async {
@@ -159,8 +161,11 @@ final class AttachmentSession: ObservableObject {
     }
 
     func stage(engine: Flow, activate: Bool = true) async {
-        guard !busy, !pasteRequested, let candidate = selected else { return }
+        guard !busy, let candidate = selected, candidate.id != attachedID else { return }
+        let replacing = pasteRequested
+        hasIssue = false
         guard let target else {
+            hasIssue = true
             status = "Automatic attachment insertion needs a captured Messages composer and contact. Copy the attachment and paste it into your draft."
             return
         }
@@ -172,6 +177,7 @@ final class AttachmentSession: ObservableObject {
             try? await Task.sleep(for: .milliseconds(150))
         }
         guard sessionID == session, !Task.isCancelled, target.matches(engine: engine) else {
+            hasIssue = true
             status = "The contact or composer changed. Attachment kept here; nothing was pasted."
             return
         }
@@ -184,7 +190,16 @@ final class AttachmentSession: ObservableObject {
                   AXValueGetValue(selection as! AXValue, .cfRange, &range), range.length == 0 else {
                 throw AttachmentFailure.unavailable("Place the cursor without selecting existing text or attachments, then add the file.")
             }
-            let before = AXEditMonitorService.attachmentCount(in: target.element)
+            guard let before = MessagesAttachmentSnapshot.read(target.element) else {
+                throw AttachmentFailure.unavailable("Cannot inspect this Messages draft. Your draft was kept.")
+            }
+            var replacementRange: CFRange?
+            if replacing {
+                guard let ownedAttachment, let item = before.items.first(where: { CFEqual($0.element, ownedAttachment) }) else {
+                    throw AttachmentFailure.unavailable("Flow’s original file is no longer in this draft. Copy the selected file to add it manually.")
+                }
+                replacementRange = CFRange(location: item.range.location, length: item.range.length)
+            }
             let board = NSPasteboard.general
             let previous = (board.pasteboardItems ?? []).map { item in
                 item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
@@ -196,20 +211,83 @@ final class AttachmentSession: ObservableObject {
                 restore(previous, board: board, expectedCount: writtenCount)
                 throw AttachmentFailure.unavailable("Couldn't create the attachment paste event.")
             }
+            if var replacementRange {
+                guard let value = AXValueCreate(.cfRange, &replacementRange),
+                      AXUIElementSetAttributeValue(target.element, kAXSelectedTextRangeAttribute as CFString, value) == .success else {
+                    restore(previous, board: board, expectedCount: writtenCount)
+                    throw AttachmentFailure.unavailable("Messages could not select Flow’s file. Your draft was kept.")
+                }
+                var observed: CFTypeRef?
+                var actual = CFRange()
+                guard AXUIElementCopyAttributeValue(target.element, kAXSelectedTextRangeAttribute as CFString, &observed) == .success,
+                      let observed, CFGetTypeID(observed) == AXValueGetTypeID(),
+                      AXValueGetValue(observed as! AXValue, .cfRange, &actual),
+                      actual.location == replacementRange.location, actual.length == 1 else {
+                    restore(previous, board: board, expectedCount: writtenCount)
+                    throw AttachmentFailure.unavailable("Messages did not confirm the file selection. Nothing was pasted.")
+                }
+            }
             down.flags = .maskCommand; up.flags = .maskCommand
             down.postToPid(target.app.processIdentifier); up.postToPid(target.app.processIdentifier)
             pasteRequested = true
-            attachedID = candidate.id
+            attachmentConfirmed = false
             status = "Paste requested in \(target.contact)’s Messages draft. Review the attachment, then send."
             // Restore only our own write. A later copy by the user always wins.
             try? await Task.sleep(for: .milliseconds(600))
             restore(previous, board: board, expectedCount: writtenCount)
-            if sessionID == session, let before,
-               let after = AXEditMonitorService.attachmentCount(in: target.element), after > before {
-                attachmentConfirmed = true
-                status = "Attachment added to \(target.contact)’s Messages draft. Review, then send."
+            guard sessionID == session else { return }
+            guard var after = MessagesAttachmentSnapshot.read(target.element) else {
+                throw AttachmentFailure.unavailable("Paste requested. Check the attachment in Messages.")
             }
-        } catch { status = error.localizedDescription }
+            let added = after.added(comparedTo: before)
+            let preserved = after.preservesObjects(in: before, excluding: replacing ? ownedAttachment : nil)
+            if replacing, added.count == 1, preserved, after.items.count == before.items.count,
+               let ownedAttachment, !after.contains(ownedAttachment),
+               let old = before.items.first(where: { CFEqual($0.element, ownedAttachment) }), after.text != before.text {
+                // Messages inserts a newline when pasting over a file object.
+                // Remove only that exact newly inserted separator, after proving
+                // every other character and native object is unchanged.
+                let original = before.text as NSString
+                var separator: CFRange?
+                if after.text == original.replacingCharacters(in: old.range, with: "\n\u{FFFC}") {
+                    separator = CFRange(location: old.range.location, length: 1)
+                } else if after.text == original.replacingCharacters(in: old.range, with: "\u{FFFC}\n") {
+                    separator = CFRange(location: old.range.location + 1, length: 1)
+                }
+                if var separator, target.matches(engine: engine),
+                   MessagesAttachmentSnapshot.read(target.element)?.text == after.text,
+                   let value = AXValueCreate(.cfRange, &separator),
+                   AXUIElementSetAttributeValue(target.element, kAXSelectedTextRangeAttribute as CFString, value) == .success {
+                    var observed: CFTypeRef?
+                    var actual = CFRange()
+                    if AXUIElementCopyAttributeValue(target.element, kAXSelectedTextRangeAttribute as CFString, &observed) == .success,
+                       let observed, CFGetTypeID(observed) == AXValueGetTypeID(),
+                       AXValueGetValue(observed as! AXValue, .cfRange, &actual), actual.location == separator.location, actual.length == 1,
+                       let down = CGEvent(keyboardEventSource: nil, virtualKey: 0x33, keyDown: true),
+                       let up = CGEvent(keyboardEventSource: nil, virtualKey: 0x33, keyDown: false) {
+                        down.flags = []; up.flags = []
+                        down.postToPid(target.app.processIdentifier); up.postToPid(target.app.processIdentifier)
+                        for _ in 0..<20 {
+                            try? await Task.sleep(for: .milliseconds(20))
+                            guard sessionID == session, !Task.isCancelled else { return }
+                            if let current = MessagesAttachmentSnapshot.read(target.element), current.text == before.text {
+                                after = current; break
+                            }
+                        }
+                    }
+                }
+            }
+            guard added.count == 1, preserved,
+                  after.items.count == before.items.count + (replacing ? 0 : 1), after.contains(added[0].element),
+                  after.preservesObjects(in: before, excluding: replacing ? ownedAttachment : nil),
+                  !replacing || (ownedAttachment.map { !after.contains($0) } == true && after.text == before.text) else {
+                throw AttachmentFailure.unavailable("Messages did not confirm the attachment change. Review the draft before continuing.")
+            }
+            ownedAttachment = added[0].element
+            attachedID = candidate.id
+            attachmentConfirmed = true
+            status = replacing ? "Attachment replaced. You send the message." : "Attachment added. You send the message."
+        } catch { hasIssue = true; status = error.localizedDescription }
     }
 
     private func restore(_ items: [[(NSPasteboard.PasteboardType, Data)]], board: NSPasteboard, expectedCount: Int) {
@@ -226,14 +304,14 @@ final class AttachmentSession: ObservableObject {
     func copySelected() {
         guard let selected else { return }
         do { try selected.write(to: .general); status = "Attachment copied. Paste it into your draft; you send the message." }
-        catch { status = error.localizedDescription }
+        catch { hasIssue = true; status = error.localizedDescription }
     }
 
     func searchFiles() {
         guard !busy, !pasteRequested, let request = plan?.request, request.source == .fileSearch else { return }
         searchTask?.cancel(); fileSearch.cancel()
         searchGeneration = UUID()
-        candidates = []; selectedID = nil; needsChoice = true; searching = true
+        candidates = []; selectedID = nil; needsChoice = true; searching = true; hasIssue = false
         status = "Searching filenames on this Mac…"
         let session = sessionID
         let text = searchText
@@ -248,7 +326,7 @@ final class AttachmentSession: ObservableObject {
                     : "Choose a file to preview, then Add to Messages. Nothing is attached automatically."
             } catch {
                 guard !Task.isCancelled, self.sessionID == session else { return }
-                self.status = error.localizedDescription
+                self.hasIssue = true; self.status = error.localizedDescription
             }
             self.searching = false
         }
@@ -278,7 +356,7 @@ final class AttachmentSession: ObservableObject {
         sessionID = UUID(); plan = nil; candidates = []; selectedID = nil
         clipboard = nil; target = nil; clipboardChanged = false
         needsChoice = false; status = ""; busy = false; pasteRequested = false; attachmentConfirmed = false
-        attachedID = nil
+        attachedID = nil; ownedAttachment = nil; hasIssue = false
         onDismiss?()
     }
 }

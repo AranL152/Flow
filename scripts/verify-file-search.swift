@@ -37,8 +37,13 @@ struct SearchCheck {
                     let engine = Flow(dbPath: ":memory:")
                     await session.automaticallyStage(engine: engine, insertionUnchanged: true)
                     checks["no_target_means_no_auto_paste"] = !session.pasteRequested
-                    let view = NSHostingView(rootView: AttachmentCard(session: session, engine: engine).padding(16).background(FW.background))
-                    view.frame = NSRect(x: 0, y: 0, width: 500, height: 850)
+                    let picker = AttachmentPreviewWindow(session: session, engine: engine)
+                    picker.show(candidateCount: session.candidates.count, isSearch: true)
+                    try await Task.sleep(for: .milliseconds(300))
+                    checks["compact_native_panel"] = picker.contentSize.width == 360 && (180...330).contains(picker.contentSize.height)
+                    picker.hide()
+                    let view = NSHostingView(rootView: AttachmentCard(session: session, engine: engine).frame(width: 360).fixedSize(horizontal: false, vertical: true).background(FW.background))
+                    view.frame = NSRect(origin: .zero, size: view.fittingSize)
                     let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
                     window.contentView = view
                     view.layoutSubtreeIfNeeded()
@@ -66,7 +71,7 @@ struct SearchCheck {
                 catch { checks["cancel_stops_pending_search"] = false }
             } catch { result["error"] = error.localizedDescription }
             result["checks"] = checks
-            result["passed"] = checks.count == 11 && checks.values.allSatisfy { $0 }
+            result["passed"] = checks.count == 12 && checks.values.allSatisfy { $0 }
             try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]).write(to: report)
             exit(result["passed"] as? Bool == true ? 0 : 1)
         }
