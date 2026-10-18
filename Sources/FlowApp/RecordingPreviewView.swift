@@ -35,7 +35,7 @@ struct RecordingPreviewView: View {
                 .font(.caption).foregroundStyle(.secondary)
             RecordingIndicatorView()
                 .environmentObject(appState)
-                .frame(width: 500, height: 150)
+                .frame(width: 500, height: 190)
             WaveformView(isRecording: appState.isRecording, audioLevel: appState.smoothedAudioLevel)
                 .frame(width: 300, height: 60)
             Text(report.isEmpty ? "Ready" : report)

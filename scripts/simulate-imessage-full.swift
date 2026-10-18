@@ -137,7 +137,7 @@ final class FullMessagesDemo {
             try await Task.sleep(for: .seconds(1.2))
             preview = AttachmentPreviewWindow(session: session, engine: state.engine)
             session.onDismiss = { [weak self] in self?.preview?.hide() }
-            indicator = RecordingIndicatorWindow(appState: state)
+            indicator = RecordingIndicatorWindow(appState: state, attachments: session)
             let selected = value("--kind")
             let kinds = selected == "both" ? ["file", "screenshot"] : [selected]
             for kind in kinds {

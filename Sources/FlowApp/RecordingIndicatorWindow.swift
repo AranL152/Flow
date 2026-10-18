@@ -13,8 +13,8 @@ final class RecordingIndicatorWindow {
     private let window: NSPanel
     private var visibility = UUID()
 
-    init(appState: AppState) {
-        let view = RecordingIndicatorView()
+    init(appState: AppState, attachments: AttachmentSession? = nil) {
+        let view = RecordingIndicatorView(attachmentSession: attachments)
             .environmentObject(appState)
         let hosting = NSHostingController(rootView: view)
 
@@ -28,7 +28,7 @@ final class RecordingIndicatorWindow {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
-        panel.setFrame(NSRect(x: 0, y: 0, width: 500, height: 150), display: false)
+        panel.setFrame(NSRect(x: 0, y: 0, width: 500, height: 190), display: false)
 
         window = panel
         positionWindow()
@@ -91,32 +91,12 @@ final class RecordingIndicatorWindow {
 
 struct RecordingIndicatorView: View {
     @EnvironmentObject var appState: AppState
+    var attachmentSession: AttachmentSession? = nil
     var body: some View {
         VStack(spacing: 10) {
             if appState.liveCaptionsEnabled && !appState.isInitializingModel {
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "mic.fill")
-                        Text(appState.isRecording ? "YOU’RE SAYING" : "YOU SAID")
-                        Spacer()
-                        if appState.isRecording { Text("LIVE").foregroundStyle(FW.recording) }
-                    }
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(1)
-                    .foregroundStyle(.white.opacity(0.5))
-                    Text(appState.liveTranscript.isEmpty ? appState.liveCaptionStatus : String(appState.liveTranscript.suffix(160)))
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(appState.liveTranscript.isEmpty ? 0.5 : 0.95))
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                        .contentTransition(.opacity)
-                        .accessibilityIdentifier("recording-live-transcript")
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .frame(width: 440)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.88)))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                FlowCommandCaptionView(transcript: appState.liveTranscript, status: appState.liveCaptionStatus,
+                                       isRecording: appState.isRecording, attachments: attachmentSession ?? appState.attachments)
             }
             HStack(spacing: 10) {
                 if appState.isProcessing || appState.isInitializingModel {
@@ -130,7 +110,7 @@ struct RecordingIndicatorView: View {
                 if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {
                     CompactWaveformView(isRecording: true, audioLevel: appState.smoothedAudioLevel)
                 }
-                Text(appState.isInitializingModel ? "Loading model…" : (appState.isProcessing ? "Transcribing…" : "Listening"))
+                Text(appState.isInitializingModel ? "Loading model…" : (appState.isRecording && !appState.isProcessing ? "Listening" : "Transcribing…"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.85))
                 if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {

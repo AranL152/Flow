@@ -16,6 +16,7 @@ struct AttachmentCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: "paperclip").foregroundStyle(FW.accent)
                     Text("Flow attach").font(.system(size: 13, weight: .semibold))
+                    FlowCommandBadge(title: "Command")
                     Spacer()
                     if session.searching || session.busy { ProgressView().controlSize(.mini) }
                     Menu {
