@@ -29,6 +29,7 @@ def stop_previous(work, executable):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--kind', choices=['both', 'file', 'screenshot'], default='both')
+    parser.add_argument('--verify-replacement', action='store_true', help='Swap Flow’s own file to an alternative and back without sending')
     args = parser.parse_args()
     work = ROOT / '.build/messages-full-demo'
     work.mkdir(parents=True, exist_ok=True)
@@ -70,8 +71,10 @@ def main():
     report.unlink(missing_ok=True)
     subprocess.run(['open', '-a', 'Messages'], check=True)
     with (folder / 'stdout.log').open('w') as out, (folder / 'stderr.log').open('w') as err:
-        process = subprocess.Popen([str(executable), '--voice-simulation', '--folder', str(folder), '--fixtures', str(fixtures),
-            '--report', str(report), '--kind', args.kind], stdout=out, stderr=err, start_new_session=True)
+        command = [str(executable), '--voice-simulation', '--folder', str(folder), '--fixtures', str(fixtures),
+            '--report', str(report), '--kind', args.kind]
+        if args.verify_replacement: command.append('--verify-replacement')
+        process = subprocess.Popen(command, stdout=out, stderr=err, start_new_session=True)
     (work / 'pid').write_text(str(process.pid))
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:

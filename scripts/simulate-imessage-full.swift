@@ -29,11 +29,17 @@ private final class DemoMessageStream {
 
     func append(_ delta: String) async throws {
         guard !delta.isEmpty else { return }
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier,
-              let focused = AXEditMonitorService.getFocusedTextElement(pid: app.processIdentifier), CFEqual(focused, composer),
-              AXEditMonitorService.textValueIncludingEmpty(composer) == expected,
-              AXEditMonitorService.attachmentCount(in: composer) == attachmentCount else {
-            throw demoError("The draft or focus changed. Further insertion stopped.")
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier else {
+            throw demoError("Messages lost foreground focus after \(writes) text updates.")
+        }
+        guard let focused = AXEditMonitorService.getFocusedTextElement(pid: app.processIdentifier), CFEqual(focused, composer) else {
+            throw demoError("The composer lost focus after \(writes) text updates.")
+        }
+        guard let actual = AXEditMonitorService.textValueIncludingEmpty(composer), canonicalQuotes(actual) == canonicalQuotes(expected) else {
+            throw demoError("The draft changed after \(writes) text updates. Further insertion stopped.")
+        }
+        guard AXEditMonitorService.attachmentCount(in: composer) == attachmentCount else {
+            throw demoError("Attachments changed after \(writes) text updates. Further insertion stopped.")
         }
         var selection: CFTypeRef?
         guard AXUIElementCopyAttributeValue(composer, kAXSelectedTextRangeAttribute as CFString, &selection) == .success,
@@ -139,13 +145,26 @@ final class FullMessagesDemo {
                 try await speak(kind, folder: folder)
                 let pcm = try Data(contentsOf: folder.appendingPathComponent(kind + ".pcm"))
                 state.isProcessing = true
-                var output = "", chunks = 0
+                var output = "", chunks = 0, rawOutput = "", rawChunks = 0
+                var firstFrame: Date?, lastFrame: Date?
                 var plan: AttachmentPlan?
-                for try await event in state.engine.transcribeAudioStream(pcm16: pcm, sampleRate: 16000, appName: "Messages", contactName: contact) {
+                let queue = AsyncThrowingStream<DictationStreamEvent, Error>.makeStream()
+                let receiving = Task { @MainActor in
+                    do {
+                        for try await event in state.engine.transcribeAudioStream(pcm16: pcm, sampleRate: 16000, appName: "Messages", contactName: contact) {
+                            if case .delta(let text) = event { rawChunks += 1; rawOutput += text }
+                            queue.continuation.yield(event)
+                        }
+                        queue.continuation.finish()
+                    } catch { queue.continuation.finish(throwing: error) }
+                }
+                defer { receiving.cancel() }
+                for try await event in DictationPresentation.smooth(queue.stream) {
                     switch event {
                     case .delta(let delta):
                         guard state.engine.activeMessagesContact == contact else { throw demoError("The conversation changed during streaming.") }
                         chunks += 1; output += delta
+                        if firstFrame == nil { firstFrame = Date() }; lastFrame = Date()
                         state.isStreamingOutput = true
                         try await writer.append(delta)
                     case .attachment(let request): plan = request
@@ -159,21 +178,47 @@ final class FullMessagesDemo {
                 let after = AXEditMonitorService.attachmentCount(in: composer)
                 let expectedFile = kind == "file" ? "Orion-review.pdf" : "Orion-dashboard.png"
                 let textNow = AXEditMonitorService.textValueIncludingEmpty(composer)
-                let checks: [String: Bool] = [
+                let initialConfirmed = session.attachmentConfirmed
+                var replacementVerified = false
+                var replacementDetails: [String: Any] = [:]
+                if args.contains("--verify-replacement"), let attached = session.selected,
+                   let alternative = session.candidates.first(where: { $0.id != attached.id }),
+                   let snapshot = MessagesAttachmentSnapshot.read(composer) {
+                    session.choose(alternative.id)
+                    await session.stage(engine: state.engine)
+                    replacementDetails = ["alternative_confirmed": session.attachmentConfirmed,
+                        "alternative_selected": session.attachedID == alternative.id,
+                        "count_preserved": AXEditMonitorService.attachmentCount(in: composer) == after,
+                        "text_preserved": MessagesAttachmentSnapshot.read(composer)?.text == snapshot.text,
+                        "status": session.status.replacingOccurrences(of: contact, with: "[contact]")]
+                    let changed = session.attachmentConfirmed && session.attachedID == alternative.id
+                        && MessagesAttachmentSnapshot.read(composer)?.text == snapshot.text
+                        && AXEditMonitorService.attachmentCount(in: composer) == after
+                    // Restore the original demo file through the same production action.
+                    session.choose(attached.id)
+                    await session.stage(engine: state.engine)
+                    replacementVerified = changed && session.attachmentConfirmed && session.attachedID == attached.id
+                        && MessagesAttachmentSnapshot.read(composer)?.text == snapshot.text
+                        && AXEditMonitorService.attachmentCount(in: composer) == after
+                }
+                var checks: [String: Bool] = [
                     "live_captions": captionUpdates > 0,
-                    "real_llm_chunks_inserted": chunks > 1 && writer.writes == chunks,
+                    "real_llm_chunks_inserted": rawChunks > 1 && writer.writes == chunks && rawOutput == output,
+                    "paced_display_frames": chunks > 1 && (lastFrame?.timeIntervalSince(firstFrame ?? Date()) ?? 0) >= 0.2,
                     "original_draft_preserved": original != nil && textNow.map { canonicalQuotes($0).hasPrefix(canonicalQuotes(original!)) } == true,
                     "original_attachments_plus_one": before != nil && after == before! + 1,
                     "best_filename_selected": session.selected?.filename == expectedFile,
-                    "native_attachment_confirmed": session.attachmentConfirmed,
+                    "native_attachment_confirmed": initialConfirmed,
                     "alternatives_available": session.candidates.count >= 2,
                     "command_excluded_from_message": !output.lowercased().contains("flow")]
+                if args.contains("--verify-replacement") { checks["alternative_replacement"] = replacementVerified }
                 state.isProcessing = false; state.isStreamingOutput = false; indicator?.hide()
                 preview?.show(candidateCount: session.candidates.count, isSearch: true)
                 results.append(["kind": kind, "generated_message": output, "command": plan.command,
-                    "caption_updates": captionUpdates, "llm_chunks": chunks, "native_text_writes": writer.writes,
+                    "caption_updates": captionUpdates, "llm_chunks": rawChunks, "display_frames": chunks, "native_text_writes": writer.writes,
+                    "display_reveal_seconds": lastFrame?.timeIntervalSince(firstFrame ?? Date()) ?? 0,
                     "attached_filename": session.selected?.filename ?? "", "candidates": session.candidates.map(\.filename),
-                    "checks": checks, "passed": checks.values.allSatisfy { $0 }])
+                    "replacement": replacementDetails, "checks": checks, "passed": checks.values.allSatisfy { $0 }])
                 save("running")
                 guard checks.values.allSatisfy({ $0 }) else { throw demoError("A full-demo verification check failed; the current draft was left unsent.") }
                 if kind != kinds.last { try await Task.sleep(for: .seconds(7)) }

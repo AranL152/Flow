@@ -77,7 +77,8 @@ struct AttachmentCard: View {
                         .font(.system(size: 10)).foregroundStyle(FW.textMuted)
                     Spacer(minLength: 2)
                     Button(actionTitle) {
-                        if session.selectedID == session.attachedID { session.revealTarget(); session.dismiss() }
+                        if needsManualCopy { session.copySelected() }
+                        else if session.selectedID == session.attachedID { session.revealTarget(); session.dismiss() }
                         else { Task { await session.stage(engine: engine) } }
                     }
                     .buttonStyle(FWSecondaryButtonStyle())
@@ -90,14 +91,17 @@ struct AttachmentCard: View {
         }
     }
 
+    private var needsManualCopy: Bool { session.pasteRequested && !session.attachmentConfirmed }
+
     private var actionTitle: String {
+        if needsManualCopy { return "Copy file" }
         if session.selectedID == session.attachedID, session.attachedID != nil { return "Done" }
         return session.attachedID == nil ? "Add file" : "Use this file"
     }
 
     private func row(_ candidate: AttachmentCandidate) -> some View {
         let selected = session.selectedID == candidate.id
-        let attached = session.attachedID == candidate.id
+        let attached = session.attachmentConfirmed && session.attachedID == candidate.id
         return HStack(spacing: 0) {
             Button { session.choose(candidate.id) } label: {
                 HStack(spacing: 9) {

@@ -149,3 +149,26 @@ This reuses the signed bundle without rebuilding or re-signing it. It launches
 the prepared demo and can use existing speech authorization, but
 never automatically requests it. The simulation operates on synthetic Downloads
 and does not insert into a real Messages conversation.
+
+
+## Compact attachment picker and smooth output (2026-10-18)
+
+The picker now measures its contents at 360 points wide, shows three compact
+candidate rows at a time, and opens larger Quick Look previews from eye buttons.
+Selection and In draft state are distinct. Use this file replaces only the native
+attachment object owned by this session, preserving text and other objects.
+Messages adds a newline during replacement; remove only the proven new separator
+before confirming the exact original text. Unconfirmed changes offer manual copy.
+
+Shared genuine-model presentation uses small frames around 45 ms apart with
+punctuation pauses and catch-up for long bursts. It preserves event order and
+Unicode, receives independently, and stops on cancellation/errors. This is display
+pacing, not a model-latency improvement. The normal rich-draft fallback is unchanged.
+
+24 Swift tests and 12 real Spotlight/native-panel checks passed. Both full Messages
+cases passed all ten checks, including switching to an alternative and back while
+preserving text and unrelated files. Raw 7/6 model chunks became 19/23 display
+writes over about 0.86/1.04 seconds. The eye-button preview was also opened through
+native Accessibility and visually checked. See the updated review JSONs and
+file-search-preview.png. The final compact screenshot picker/helper remains open;
+nothing was sent. The normal authorized app bundle was not re-signed or replaced.

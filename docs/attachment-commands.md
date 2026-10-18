@@ -47,11 +47,19 @@ Messages composer, then the popup shows it alongside alternatives. Contact,
 focus and selection are checked before pasting. A changed query or target stops
 automatic insertion. Existing selected text/attachments are never overwritten.
 Outside a verified Messages target, selection and manual copy remain available.
-Selecting an alternative previews it; Copy attachment lets the user change it
-manually. Flow does not automatically delete or replace an existing attachment.
+The compact picker shows three rows at a time, with a distinct **In draft** label
+and a selection indicator. The eye button opens a larger preview on demand.
+Select an alternative and press **Use this file** to replace only the attachment
+Flow added during this session. Native AX object identity anchors the replacement;
+other attachment identities and the draft text must remain intact. If the owned
+object disappeared, Flow stops and offers manual copy. Messages adds a newline
+when replacing a file; Flow removes only that proven new separator and verifies
+the original text and unrelated attachment identities again. Choosing a row alone never
+changes the Messages draft. **Done** dismisses the picker and returns to Messages.
 
-The search field can refine filename words without another recording.
-**Choose file…** opens the native picker if a file is not indexed, is on another
+The **…** menu exposes filename search refinement, manual file selection and copy.
+Search refinement and source changes are available before attachment insertion.
+**Choose another file…** opens the native picker if a file is not indexed, is on another
 volume or the search is too broad. Matching is by filename words, not semantic
 understanding of an image. File contents and local paths are not uploaded.
 Spotlight results are rechecked locally; hidden files, incomplete downloads,
@@ -63,8 +71,9 @@ continue receiving the original clipboard/download plans and clarifications.
 
 ## Preview and Messages staging
 
-Flow shows the recognized command, filename, source and a Quick Look thumbnail
-where available. Clipboard images retain their own bytes before text insertion
+Flow uses a 360-point-wide picker that fits its contents instead of a fixed
+720-point-tall panel. It shows filename, source, attachment state and a small Quick
+Look thumbnail, with full previews in a popover. Clipboard images retain their own bytes before text insertion
 can overwrite the clipboard. Refresh explicitly captures a new source.
 
 Downloads are filtered by the requested type. Partial downloads, directories,
@@ -76,7 +85,7 @@ notifications. Selected files are revalidated immediately before use.
 
 When there is one confident candidate and the captured Messages composer and
 contact are still current, Flow requests an attachment paste. Otherwise the
-preview offers Add to Messages or Copy attachment. Paste dispatch is labelled
+preview offers **Add file** or manual copy in the options menu. Paste dispatch is labelled
 “Paste requested” until Messages exposes an additional native attachment object
 in its attributed text. Then the status becomes “Attachment added”. Flow never
 presses Send. The previous clipboard is restored after a short paste interval only if
@@ -162,8 +171,9 @@ The first failing audio run is retained in
 home folder, tests real Spotlight results and the native selection/preview flow,
 and removes the fixtures. It never pastes into Messages or requests permissions.
 See [file search results](../review/file-search-verification.json).
-All 11 native checks passed, including actual indexed matches, multiword query
-refinement, explicit selection for a single result, rendering and cancellation.
+All 12 native checks passed, including actual indexed matches, multiword query
+refinement, explicit selection for a single result, compact panel sizing,
+rendering and cancellation.
 This verification does not paste a search result into a real Messages draft;
 the search path uses the same guarded staging method verified below.
 
@@ -173,6 +183,7 @@ the search path uses the same guarded staging method verified below.
 python3 scripts/simulate-imessage-full.py
 python3 scripts/simulate-imessage-full.py --kind file
 python3 scripts/simulate-imessage-full.py --kind screenshot
+python3 scripts/simulate-imessage-full.py --verify-replacement
 ```
 
 The default plays both cases with a seven-second pause between them. Generated
@@ -189,11 +200,14 @@ clipboard paste was rejected because Messages added spaces between tokens.
 Normal app source retains its safe final-paste fallback for rich drafts; the
 Unicode streaming adapter currently belongs to this demo runner.
 
-Both actual Messages cases passed all eight checks. The PDF used seven model
-chunks/native writes and 15 caption updates; the screenshot used six writes and
-16 caption updates. Both attached the exact filename match, retained existing
-draft content/objects, and displayed alternatives afterward. The helper and last
-popup stay open. [Full demo report](../review/imessage-full-demo-verification.json).
+Both actual Messages cases passed all ten checks with `--verify-replacement`.
+The PDF's seven raw model chunks became 19 native text updates over 0.86 seconds;
+the screenshot's six chunks became 23 updates over 1.04 seconds. These are
+presentation times, not model generation latency. The cases produced 15 and 16
+live-caption updates. Both attached the exact match, switched to an alternative
+and back, and preserved the existing text and unrelated objects throughout.
+The compact picker and final helper remain open.
+[Full demo report](../review/imessage-full-demo-verification.json).
 The prepared native app's code signature/grants were left unchanged; the helper
 links the updated production objects and embeds the speech usage description.
 
