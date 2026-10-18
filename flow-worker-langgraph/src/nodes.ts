@@ -56,8 +56,10 @@ export async function transcribeNode(
 
   // Seed the wake phrase into the decoder hint so Whisper spells it
   // consistently, which is what the detect step keys off.
-  const prompt =
-    promptHint && promptHint.length > 0 ? `Hey Flow. ${promptHint}` : "Hey Flow.";
+  const vocabulary = state.attachmentCommandsEnabled
+    ? "Voice dictation. Proper names and vocabulary: Flow, clipboard, PDF, Downloads."
+    : "Hey Flow.";
+  const prompt = promptHint && promptHint.length > 0 ? `${vocabulary} ${promptHint}` : vocabulary;
 
   try {
     const transcription = await transcribeAudio(requireEnv(config), {

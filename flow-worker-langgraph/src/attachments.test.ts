@@ -4,6 +4,7 @@ import { parseAttachmentCommand as parse } from "./attachments.js";
 describe("explicit attachment boundary", () => {
   it.each([
     ["Here's the deck. Flow, attach the PDF I just downloaded.", "Here's the deck.", "recent_download", "pdf"],
+    ["Here's the deck. Flow. Attach the PDF I just downloaded.", "Here's the deck.", "recent_download", "pdf"],
     ["Here's the deck Flow attach the pdf I just downloaded", "Here's the deck", "recent_download", "pdf"],
     ["Here it is. Flow attach the latest download", "Here it is.", "recent_download", "any"],
     ["Flow, attach the image on my clipboard", "", "clipboard", "image"],
@@ -18,6 +19,7 @@ describe("explicit attachment boundary", () => {
     'The tutorial says "Flow, attach my clipboard".',
     "I told Flow attach my clipboard", "Don't Flow attach my clipboard",
     "I said ‘Flow attach my clipboard’", "The phrase Flow attach is useful",
+    "‘Flow attach my clipboard’", "Don’t Flow attach my clipboard",
   ])("doesn't execute recipient or reported speech: %s", text => {
     expect(parse(text)).toBeUndefined();
   });

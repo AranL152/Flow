@@ -1,0 +1,123 @@
+{
+  "scope": "Generated speech, real Rust + deployed Workers AI pipeline, isolated user. No actual Downloads selection, Messages insertion or sending.",
+  "passed": false,
+  "cases": 5,
+  "results": [
+    {
+      "input": "Here's the deck. Flow, attach the PDF I just downloaded.",
+      "output": "I have attached the PDF document that I recently downloaded, which outlines the deck and its flow.",
+      "chunks": [
+        "I",
+        " have",
+        " attached",
+        " the PDF document",
+        " that",
+        " I recently",
+        " downloaded,",
+        " which outlines",
+        " the deck and",
+        " its flow."
+      ],
+      "plan": null,
+      "checks": {
+        "completed": true,
+        "deltas_match_final": true,
+        "separate_plan": false,
+        "no_command_in_output": false,
+        "correct_source_and_type": false
+      },
+      "passed": false
+    },
+    {
+      "input": "Flow, attach the image on my clipboard.",
+      "output": "I would like to attach the image that is currently on my clipboard.",
+      "chunks": [
+        "I",
+        " would",
+        " like",
+        " to attach",
+        " the image that",
+        " is currently on",
+        " my clipboard."
+      ],
+      "plan": null,
+      "checks": {
+        "completed": true,
+        "deltas_match_final": true,
+        "separate_plan": false,
+        "no_command_in_output": true,
+        "correct_source_and_type": false,
+        "no_invented_message": false
+      },
+      "passed": false
+    },
+    {
+      "input": "Please attach the invoice when you reply.",
+      "output": "Could you please attach the invoice to your response?",
+      "chunks": [
+        "Could",
+        " you please attach",
+        " the invoice to",
+        " your response?"
+      ],
+      "plan": null,
+      "checks": {
+        "completed": true,
+        "deltas_match_final": true,
+        "recipient_request_is_not_action": true,
+        "recipient_request_preserved": false
+      },
+      "passed": false
+    },
+    {
+      "input": "Flow, attach the one I meant earlier.",
+      "output": "Please attach the document I mentioned earlier.",
+      "chunks": [
+        "Please",
+        " attach",
+        " the document",
+        " I",
+        " mentioned",
+        " earlier."
+      ],
+      "plan": null,
+      "checks": {
+        "completed": true,
+        "deltas_match_final": true,
+        "separate_plan": false,
+        "no_command_in_output": true,
+        "clarifies_without_action": false,
+        "no_invented_message": false
+      },
+      "passed": false
+    },
+    {
+      "input": "You can reach me at my email. Flow, attach the PDF I just downloaded.",
+      "output": "You can reach me at aran@example.test",
+      "chunks": [
+        "You",
+        " can reach me",
+        " at aran",
+        "@example.test"
+      ],
+      "plan": {
+        "message": "You can reach me at my email",
+        "command": "Flow, attach the PDF I just downloaded.",
+        "request": {
+          "source": "recent_download",
+          "kind": "pdf"
+        },
+        "clarification": null
+      },
+      "checks": {
+        "completed": true,
+        "deltas_match_final": true,
+        "separate_plan": true,
+        "no_command_in_output": true,
+        "correct_source_and_type": true,
+        "configured_email_preserved": true
+      },
+      "passed": true
+    }
+  ]
+}

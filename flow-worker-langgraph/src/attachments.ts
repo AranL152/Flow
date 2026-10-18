@@ -12,13 +12,14 @@ export interface AttachmentPlan {
 
 /** V1 contract: one terminal "Flow, attach …" instruction, after the message. */
 export function parseAttachmentCommand(text: string): AttachmentPlan | undefined {
-  const cue = /\b(?:hey\s+)?flow\s*[,;:]?\s+attach\b/iu.exec(text);
+  const cue = /\b(?:hey\s+)?flow\s*[,;:.!?]*\s+attach\b/iu.exec(text);
   if (!cue) return;
   const prefix = text.slice(0, cue.index);
   // Reported/quoted speech is recipient content. Apostrophes in "here's" aren't quotes.
   const quoted = (prefix.match(/"/gu)?.length ?? 0) % 2 !== 0 ||
-    ((prefix.match(/“/gu)?.length ?? 0) > (prefix.match(/”/gu)?.length ?? 0));
-  if (quoted || /\b(?:said|says|say|told|tell|quote|quoted|phrase|tutorial|example|type|write|don't|do\s+not|never)\b[^.!?]*$/iu.test(prefix)) return;
+    ((prefix.match(/“/gu)?.length ?? 0) > (prefix.match(/”/gu)?.length ?? 0)) ||
+    /(?:^|[\s([{])['‘][^'’]*$/u.test(prefix);
+  if (quoted || /\b(?:said|says|say|told|tell|quote|quoted|phrase|tutorial|example|type|write|don['’]t|do\s+not|never)\b[^.!?]*$/iu.test(prefix)) return;
   const message = prefix.trim().replace(/[,;:]\s*$/u, "").trim();
   const command = text.slice(cue.index).trim();
   const object = text.slice(cue.index + cue[0].length).trim().replace(/[.!?]+$/u, "").trim();
