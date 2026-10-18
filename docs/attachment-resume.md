@@ -254,3 +254,14 @@ now moves with the highlight, with up to 2 points of displacement and the slower
 subtle strength.
 The build and seven native preview checks passed again; the regenerated active
 frame was visually reviewed, and the updated Replay preview is open.
+
+## Faster pass with a finishing glow (October 18)
+
+The user requested a faster ripple and a finish after it settles. The single
+left-to-right crest now takes 700 ms. After the displacement ends, a soft purple
+glow blooms once over 400 ms and fades, without further movement of the letters.
+Reduce Motion still keeps all effects static. The native preview captures the
+finishing glow separately before the fully settled frame.
+The build and all eight native preview checks passed. The glow and settled
+frames were visually compared, and the refreshed Replay preview remains open.
+No model API calls, microphone recording or Messages writes were involved.

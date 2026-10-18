@@ -53,8 +53,11 @@ final class RipplePreview: ObservableObject {
             state.isRecording = false; state.isProcessing = true
             // A stale audio sample must not show a microphone waveform in this phase.
             state.smoothedAudioLevel = 0.9
-            try await Task.sleep(for: .milliseconds(450)); savePNG("command-ripple-active.png")
-            try await Task.sleep(for: .seconds(LiquidCommandText.rippleDuration - 0.45 + 0.1)); savePNG("command-ripple-settled.png")
+            try await Task.sleep(for: .milliseconds(250)); savePNG("command-ripple-active.png")
+            try await Task.sleep(for: .seconds(LiquidCommandText.rippleDuration + LiquidCommandText.settleDuration / 2 - 0.25))
+            savePNG("command-ripple-settling.png")
+            checks["settling_glow_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-settling.png").path)
+            try await Task.sleep(for: .seconds(LiquidCommandText.settleDuration / 2 + 0.1)); savePNG("command-ripple-settled.png")
             let plan = try JSONDecoder().decode(AttachmentPlan.self, from: Data(#"{"message":"Here's the issue.","command":"Flow, find the screenshot showing payment error.","request":{"source":"file_search","kind":"image","query":"showing payment error"}}"#.utf8))
             attachments.receive(plan)
             checks["badge_uses_real_search_state"] = attachments.searching
@@ -87,7 +90,7 @@ final class RipplePreview: ObservableObject {
             status = "Preview complete · Replay to watch again"
         } catch { status = error.localizedDescription }
         let report: [String: Any] = ["scope": "Native production caption/ripple views with labelled simulated captions and real local OCR. No microphone recording, cloud API calls or Messages changes. Still images and GIF require visual review.",
-            "checks": checks, "frames": frames.count, "frame_interval_ms_target": 50, "status": checks.count == 7 && checks.values.allSatisfy { $0 } ? "ready" : "failed"]
+            "checks": checks, "frames": frames.count, "frame_interval_ms_target": 50, "status": checks.count == 8 && checks.values.allSatisfy { $0 } ? "ready" : "failed"]
         try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: output.appendingPathComponent("command-ripple-verification.json"))
         running = false
     }

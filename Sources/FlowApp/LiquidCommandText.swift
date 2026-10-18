@@ -4,7 +4,9 @@ import SwiftUI
 /// when its text/width changes; animation never relays out or moves message text.
 @MainActor
 struct LiquidCommandText: View {
-    static let rippleDuration: TimeInterval = 1.1
+    static let rippleDuration: TimeInterval = 0.7
+    static let settleDuration: TimeInterval = 0.4
+    static let animationDuration = rippleDuration + settleDuration
     let command: String
     let width: CGFloat
     let rippleStart: Date?
@@ -38,8 +40,12 @@ struct LiquidCommandText: View {
             .overlay(alignment: .topLeading) {
                 if let raster, renderedKey == key {
                     TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !animating || reduceMotion)) { timeline in
-                        let elapsed = rippleStart.map { timeline.date.timeIntervalSince($0) } ?? Self.rippleDuration
+                        let elapsed = rippleStart.map { timeline.date.timeIntervalSince($0) } ?? Self.animationDuration
                         let progress = animating && !reduceMotion ? min(1, max(0, elapsed / Self.rippleDuration)) : 1
+                        let rippling = animating && !reduceMotion && elapsed >= 0 && elapsed < Self.rippleDuration
+                        let settling = (elapsed - Self.rippleDuration) / Self.settleDuration
+                        let settleGlow = animating && !reduceMotion && settling > 0 && settling < 1
+                            ? sin(settling * .pi) : 0
                         Canvas { context, size in
                             var image = context.resolve(Image(decorative: raster, scale: displayScale))
                             let bounds = CGRect(origin: .zero, size: size)
@@ -71,7 +77,8 @@ struct LiquidCommandText: View {
                                 }
                             }
                         }
-                        .shadow(color: FlowCommandBadge.ink.opacity(animating && !reduceMotion ? 0.48 : 0.18), radius: animating && !reduceMotion ? 5 : 2)
+                        .shadow(color: FlowCommandBadge.ink.opacity(0.18 + (rippling ? 0.30 : 0) + 0.45 * settleGlow),
+                                radius: 2 + (rippling ? 3 : 0) + 4.5 * settleGlow)
                     }
                     .allowsHitTesting(false).accessibilityHidden(true)
                 }

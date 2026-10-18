@@ -9,10 +9,12 @@ This classifier only styles captions; the worker's authoritative command parser,
 message insertion and attachment safeguards are unchanged.
 
 During recording the command has a soft purple glow. When recording ends, a
-single 1.1-second highlight and one smooth crest sweep from left to right,
+single 700 ms highlight and one smooth crest sweep from left to right,
 with up to 2 points of letter displacement. A Gaussian crest follows the highlight
 without oscillation or trailing ripples, with a gentle fade at either end.
-The timing is shared by rendering and animation cleanup.
+Once the crest has settled, a soft purple glow blooms once over 400 ms and
+fades to the static highlight. The letters stay still during this finish.
+The full timing is shared by rendering and animation cleanup.
 There is no replay on each partial recognition update. The glyph alpha image is
 cached per text/width/scale and drawn through narrow Canvas strips, so only the
 command letters distort. Recipient text is outside that layer. Canvas's animation
@@ -47,12 +49,12 @@ existing signed app bundle and permissions are preserved; this is a separate
 review helper using the updated app components.
 
 The preview exports [a GIF](../review/command-ripple.gif), stills for listening,
-mid-ripple, settled, ordinary mentions, reduced motion and long commands, and
+mid-ripple, settling glow, settled, ordinary mentions, reduced motion and long commands, and
 [a scoped report](../review/command-ripple-verification.json). Its frame interval
 is a capture target, not a measured production frame-rate guarantee.
 
 33 Swift tests passed, including new cue-boundary, quotation, negation, Unicode
-and full-context guards. Seven native preview checks passed. The exported stills
+and full-context guards. Eight native preview checks passed after the timing/glow adjustment. The exported stills
 were visually reviewed: command motion/glow, unchanged recipient text, no
 microphone waveform during processing, readable long commands and static reduced
 motion. A pixel comparison between active/settled fixtures also found no changes
