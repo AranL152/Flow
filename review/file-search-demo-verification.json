@@ -1,0 +1,402 @@
+{
+  "attachment_command": "Flow, find the Orion Review PDF.",
+  "attachment_filename": "",
+  "attachment_source": "",
+  "edited_examples": 1,
+  "error": "",
+  "events": [
+    {
+      "event": "caption_partial",
+      "seconds": 0.6321229934692383,
+      "text": "Can"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 0.8654470443725586,
+      "text": "Can you"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 1.0980340242385864,
+      "text": "Can you check"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 1.3315520286560059,
+      "text": "Can you check the"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 1.5651930570602417,
+      "text": "Can you check the slide"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 1.835165023803711,
+      "text": "Can you check the slides"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 1.8446950912475586,
+      "text": "Can you check the slides tomorrow"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 2.7684680223464966,
+      "text": "Can you check the slides tomorrow flow"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 3.5038779973983765,
+      "text": "Can you check the slides tomorrow flow find"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 3.7345000505447388,
+      "text": "Can you check the slides tomorrow flow find the"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 3.746142029762268,
+      "text": "Can you check the slides tomorrow flow find the or"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 3.970110058784485,
+      "text": "Can you check the slides tomorrow flow find the Orion"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 4.46907103061676,
+      "text": "Can you check the slides tomorrow flow find the Orion review"
+    },
+    {
+      "event": "audio_finished",
+      "seconds": 4.636273980140686,
+      "text": "first"
+    },
+    {
+      "event": "composer_before_model",
+      "seconds": 4.6362820863723755,
+      "text": ""
+    },
+    {
+      "event": "saved_examples_available",
+      "seconds": 4.636287093162537,
+      "text": "0"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 4.652554988861084,
+      "text": "Can you check the slides tomorrow flow find the Orion review P"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 4.662271976470947,
+      "text": "Can you check the slides tomorrow flow find the Orion review PD"
+    },
+    {
+      "event": "caption_final",
+      "seconds": 4.667800068855286,
+      "text": "Can you check the slides tomorrow flow find the Orion review PDF"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 6.639572024345398,
+      "text": "Could"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 6.6399030685424805,
+      "text": "Could"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 6.639909029006958,
+      "text": "Could"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 6.680235028266907,
+      "text": " you please check"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 6.8322120904922485,
+      "text": " you please check"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 6.832228064537048,
+      "text": "Could you please check"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 6.87451708316803,
+      "text": " the slides tomorrow"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 6.874559998512268,
+      "text": "?"
+    },
+    {
+      "event": "attachment_request",
+      "seconds": 6.87532103061676,
+      "text": "Flow, find the Orion Review PDF."
+    },
+    {
+      "event": "model_complete_received",
+      "seconds": 6.8753520250320435,
+      "text": "Could you please check the slides tomorrow?"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 7.02477502822876,
+      "text": " the slides tomorrow"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 7.024798035621643,
+      "text": "Could you please check the slides tomorrow"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 7.216821074485779,
+      "text": "?"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 7.216840028762817,
+      "text": "Could you please check the slides tomorrow?"
+    },
+    {
+      "event": "model_complete_presented",
+      "seconds": 7.420413017272949,
+      "text": "Could you please check the slides tomorrow?"
+    },
+    {
+      "event": "simulated_edit",
+      "seconds": 9.058068037033081,
+      "text": "yo can u check the deck tomorrow?"
+    },
+    {
+      "event": "learning_saved",
+      "seconds": 10.65866506099701,
+      "text": "yo can u check the deck tomorrow?"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 12.864580988883972,
+      "text": "Can"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 13.093654990196228,
+      "text": "Can you"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 13.330908060073853,
+      "text": "Can you check"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 13.56461501121521,
+      "text": "Can you check the"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 13.79794704914093,
+      "text": "Can you check the slide"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 14.06716799736023,
+      "text": "Can you check the slides on"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 14.30095899105072,
+      "text": "Can you check the slides on Friday"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 15.267246007919312,
+      "text": "Can you check the slides on Friday flow"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 15.734197974205017,
+      "text": "Can you check the slides on Friday flow find"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 15.967759013175964,
+      "text": "Can you check the slides on Friday flow find the"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 16.20133900642395,
+      "text": "Can you check the slides on Friday flow find the or"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 16.4675030708313,
+      "text": "Can you check the slides on Friday flow find the Orion"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 16.700452089309692,
+      "text": "Can you check the slides on Friday flow find the Orion review"
+    },
+    {
+      "event": "audio_finished",
+      "seconds": 17.03620707988739,
+      "text": "second"
+    },
+    {
+      "event": "composer_before_model",
+      "seconds": 17.036213994026184,
+      "text": ""
+    },
+    {
+      "event": "saved_examples_available",
+      "seconds": 17.036219000816345,
+      "text": "1"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 17.051509976387024,
+      "text": "Can you check the slides on Friday flow find the Orion review P"
+    },
+    {
+      "event": "caption_partial",
+      "seconds": 17.06200897693634,
+      "text": "Can you check the slides on Friday flow find the Orion review PD"
+    },
+    {
+      "event": "caption_final",
+      "seconds": 17.06848108768463,
+      "text": "Can you check the slides on Friday flow find the Orion review PDF"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 19.53156304359436,
+      "text": "yo"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 19.531895995140076,
+      "text": "yo"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 19.531902074813843,
+      "text": "yo"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 19.566715002059937,
+      "text": " can"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 19.600027084350586,
+      "text": " u check the"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 19.600067019462585,
+      "text": " deck on Friday"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 19.717302083969116,
+      "text": " can"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 19.71732199192047,
+      "text": "yo can"
+    },
+    {
+      "event": "model_delta_received",
+      "seconds": 19.743824005126953,
+      "text": "?"
+    },
+    {
+      "event": "attachment_request",
+      "seconds": 19.743861079216003,
+      "text": "Flow, find the Orion Review PDF."
+    },
+    {
+      "event": "model_complete_received",
+      "seconds": 19.743892073631287,
+      "text": "yo can u check the deck on Friday?"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 19.899954080581665,
+      "text": " u check the"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 19.89997398853302,
+      "text": "yo can u check the"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 20.09242606163025,
+      "text": " deck on Friday"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 20.09244203567505,
+      "text": "yo can u check the deck on Friday"
+    },
+    {
+      "event": "model_delta_presented",
+      "seconds": 20.282281041145325,
+      "text": "?"
+    },
+    {
+      "event": "model_draft_presented",
+      "seconds": 20.282296061515808,
+      "text": "yo can u check the deck on Friday?"
+    },
+    {
+      "event": "model_complete_presented",
+      "seconds": 20.509496092796326,
+      "text": "yo can u check the deck on Friday?"
+    }
+  ],
+  "final_draft": "yo can u check the deck on Friday?",
+  "presentation_delay_per_chunk_ms": 180,
+  "readable_playback": true,
+  "requested_after_latest_edit": true,
+  "saved_edits": [
+    {
+      "after": "yo can u check the deck tomorrow?",
+      "before": "Could you please check the slides tomorrow?",
+      "contact": "Alex",
+      "scripted": true
+    }
+  ],
+  "saved_examples_available": 1,
+  "scope": "isolated native simulation; generated speech; scripted edit and local send; actual Rust/cloud pipeline; no Messages AX insertion",
+  "status": "passed",
+  "used_learned_word": true,
+  "verification_checks": {
+    "completed": true,
+    "live_captions_work": true,
+    "composer_starts_empty": true,
+    "genuine_model_stream": true,
+    "contact_edit_saved": true,
+    "learned_word_used": true,
+    "search_command_separate": true
+  },
+  "caption_updates": 32,
+  "model_chunks": 9,
+  "verification_passed": true
+}

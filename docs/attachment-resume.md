@@ -31,6 +31,14 @@ reopened at `.build/Flow Attachments.app`; the older simulation bundle was left
 unchanged. Caption authorization still requires the user's explicit Settings
 action. No new Messages paste or Send was performed during the search checks.
 
+The user enabled captions and requested a simulation. `simulate-voice.py
+--file-search` reuses the exact signed normal bundle (no rebuild/re-sign), with
+indexed synthetic Orion review PDFs and real speech/formatting/learning. Launching
+through launchd still reported speech access as not requested; launching directly
+under the native app's host context worked without any prompt, producing 32 live
+caption updates and nine model chunks. The older attachment simulation was
+closed; the normal app and the new isolated file-search replay remain open.
+
 ## Completed
 
 - Explicit voice command parsing before formatting, with separate inert source

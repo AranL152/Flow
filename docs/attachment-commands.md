@@ -162,6 +162,20 @@ refinement, explicit selection for a single result, rendering and cancellation.
 This verification does not paste a search result into a real Messages draft;
 the search path uses the same guarded staging method verified below.
 
+For a visible replay using the already signed native app:
+
+```sh
+python3 scripts/simulate-voice.py --file-search
+```
+
+This adds two synthetic Orion review PDFs under `~/Flow Simulation Files`, indexes
+them, then plays two voice fixtures through live captions, cloud model streaming,
+contact learning and filename search. The window stays open with Replay and file
+selection available. It preserves the native app's signature and launches under
+the same host context as that app; the first launchd replay did not inherit the
+new speech grant, while the direct launch produced live captions without another
+permission request. No actual Messages draft is changed.
+
 After the restart, the prepared GUI demo was reopened without rebuilding or
 re-signing. It passed, presented five real model chunks and selected the matching
 synthetic PDF. Live captions were unavailable; the app did not request access.
