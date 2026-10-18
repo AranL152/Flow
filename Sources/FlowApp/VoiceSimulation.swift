@@ -47,7 +47,7 @@ final class VoiceSimulationModel: ObservableObject {
                 draft = correction
                 note("simulated_edit", text: correction)
                 try await Task.sleep(for: .seconds(1.5))
-                state.engine.recordFinalText(correction)
+                guard state.engine.recordFinalTextForContact(correction, contactName: "Alex") >= 0 else { throw failure("The contact-specific edit could not be saved") }
                 canSend = false
                 guard state.engine.styleStats?.edited == 1 else { throw failure("The edited example was not saved") }
                 sent = correction; draft = ""
@@ -70,9 +70,32 @@ final class VoiceSimulationModel: ObservableObject {
 
     func stop() { task?.cancel(); captions.cancel(); player?.stop(); indicator?.hide(); state.engine.discardPendingDictation() }
 
+    func dictateAgain() {
+        guard !running else { return }
+        running = true; error = nil; finished = false
+        task = Task {
+            do {
+                state.engine.discardPendingDictation()
+                stage = "Dictating again with your saved edits for Alex"
+                try await take(name: "second")
+                finished = true
+                stage = "Ready · edit and send to refine Alex’s next response"
+                saveReport(status: "passed")
+            } catch {
+                if !Task.isCancelled { self.error = error.localizedDescription; saveReport(status: "failed") }
+            }
+            captions.cancel(); player?.stop(); indicator?.hide()
+            state.isRecording = false; state.isProcessing = false; state.isStreamingOutput = false
+            running = false
+        }
+    }
+
     func simulatedSend() {
         guard !running, canSend, !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        state.engine.recordFinalText(draft)
+        guard state.engine.recordFinalTextForContact(draft, contactName: "Alex") >= 0 else {
+            error = "This draft no longer has a completed baseline for Alex. Dictate again."
+            return
+        }
         canSend = false
         sent = draft; draft = ""
         memory = "Saved \(state.engine.styleStats?.examples ?? 0) examples for Alex"
@@ -88,11 +111,10 @@ final class VoiceSimulationModel: ObservableObject {
         let pcm = try Data(contentsOf: pcmURL)
         let file = try AVAudioFile(forReading: audioURL)
         let rate = file.processingFormat.sampleRate
-        draft = ""; draftPhase = "Live speech preview"; canSend = false; chunkCount = 0; state.liveTranscript = ""; state.streamedOutput = ""; state.isStreamingOutput = false
+        draft = ""; draftPhase = "Listening · waiting for LLM output"; canSend = false; chunkCount = 0; state.liveTranscript = ""; state.streamedOutput = ""; state.isStreamingOutput = false
         state.isRecording = true; state.isProcessing = false; state.recordingDuration = 0
         captions.onText = { [weak self] text, final in
             self?.state.liveTranscript = text
-            if self?.state.isRecording == true { self?.draft = text; self?.note("speech_preview_presented", text: text) }
             self?.note(final ? "caption_final" : "caption_partial", text: text)
         }
         captions.onStatus = { [weak self] status in self?.state.liveCaptionStatus = status }
@@ -119,7 +141,8 @@ final class VoiceSimulationModel: ObservableObject {
         captions.finish()
         state.isRecording = false; state.audioLevel = 0; state.smoothedAudioLevel = 0; state.isProcessing = true
         note("audio_finished", text: name)
-        draftPhase = "Speech preview · waiting for the model"
+        draftPhase = "Waiting for LLM output"
+        note("composer_before_model", text: draft)
         var gotCompletion = false
         // Receive independently from presentation, so recorded receipt times
         // retain actual model latency when readable playback is enabled.
@@ -187,7 +210,7 @@ struct VoiceSimulationView: View {
                         .font(.caption).foregroundStyle(FW.textSecondary)
                 }
                 Spacer()
-                Button(model.running ? "Running…" : "Replay simulation") { model.start() }.disabled(model.running)
+                Button(model.running ? "Running…" : "Reset and replay") { model.start() }.disabled(model.running)
             }.padding(18).background(FW.surface)
             Divider()
             HStack(spacing: 0) {
@@ -220,7 +243,14 @@ struct VoiceSimulationView: View {
                     }.font(.caption).foregroundStyle(FW.textMuted)
                     TextEditor(text: $model.draft).font(.body).frame(height: 100).disabled(model.running)
                         .padding(8).fwSection()
-                    Button("Simulated Send") { model.simulatedSend() }.disabled(model.running || !model.canSend || model.draft.isEmpty)
+                    if !model.running && model.canSend && model.draft != model.state.lastTranscription {
+                        Text("Your edit will be remembered for Alex when you send.")
+                            .font(.caption).foregroundStyle(FW.accent)
+                    }
+                    HStack {
+                        Button("Simulated Send") { model.simulatedSend() }.disabled(model.running || !model.canSend || model.draft.isEmpty)
+                        Button("Dictate again") { model.dictateAgain() }.disabled(model.running)
+                    }
                     Text("The first correction is scripted and labelled. No real messages are sent. Replay resets this isolated memory.")
                         .font(.caption2).foregroundStyle(FW.textMuted)
                 }.padding(24).frame(width: 360)
