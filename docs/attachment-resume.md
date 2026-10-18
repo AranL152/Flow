@@ -311,3 +311,19 @@ spinner uses a dark appearance so it is visible against the pill in light-mode
 previews too. The build and eight local native preview checks passed, and the
 updated processing pill was visually reviewed. The same native recording view
 already drives the Messages demo and production recording indicator.
+
+## Approved effect shown in the full Messages demo (October 18)
+
+The Messages runner now builds the current source before linking, preventing a
+stale demo binary after UI edits. It uses the shared production recording view
+and the actual attachment session, and closes the separate ripple preview helper.
+A new check confirms that real generated-speech captions contain an explicit
+Flow cue, so the approved effect is exercised through the actual caption path.
+
+Ran the screenshot case in Messages: all ten checks passed. There were 16
+on-device caption updates, six real model chunks and 23 paced native text writes
+over about 1.05 seconds. The top-ranked synthetic screenshot was appended and
+confirmed, with an alternative available. Existing text and native attachments
+were preserved; the draft and candidate picker remain open, and nothing was sent.
+This full run used the configured cloud pipeline, unlike local-only UI checks.
+The existing installed app bundle and permissions were preserved.

@@ -211,6 +211,7 @@ final class FullMessagesDemo {
                 }
                 var checks: [String: Bool] = [
                     "live_captions": captionUpdates > 0,
+                    "command_effect_detected": FlowCommandCaption.detect(in: state.liveTranscript) != nil,
                     "real_llm_chunks_inserted": rawChunks > 1 && writer.writes == chunks && rawOutput == output,
                     "paced_display_frames": chunks > 1 && (lastFrame?.timeIntervalSince(firstFrame ?? Date()) ?? 0) >= 0.2,
                     "original_draft_preserved": original != nil && textNow.map { canonicalQuotes($0).hasPrefix(canonicalQuotes(original!)) } == true,

@@ -65,3 +65,24 @@ microphone waveform during processing, readable long commands and static reduced
 motion. A pixel comparison between active/settled fixtures also found no changes
 in the recipient-message region while command-region pixels changed. This was
 not a new voice-to-Messages or microphone integration run.
+
+## Full Messages demo
+
+```sh
+python3 scripts/simulate-imessage-full.py --kind screenshot
+```
+
+This runner builds the current production components before linking and uses the
+same recording indicator, command effect and attachment session as the native
+preview. It closes its prior preview helper to keep the recording view clear.
+Generated speech feeds the real on-device recognizer and waveform, then the
+configured cloud pipeline streams only rewritten text into the existing Messages
+draft and appends a synthetic screenshot. It never sends. Unlike the isolated
+visual preview, this path makes real ASR/LLM requests. Existing text and files
+remain intact, and the installed permissioned app bundle is not replaced.
+
+The October 18 run passed ten checks: 16 live-caption updates detected the real
+Flow cue, six model chunks were paced into 23 native writes over about 1.05
+seconds, and the screenshot was confirmed with an alternative candidate.
+See review/imessage-full-demo-verification.json. The processing label is now
+centered with balanced spinner space and a visible spinner on the dark pill.

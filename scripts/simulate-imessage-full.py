@@ -34,7 +34,9 @@ def main():
     work = ROOT / '.build/messages-full-demo'
     work.mkdir(parents=True, exist_ok=True)
     executable = work / 'FlowMessagesFullDemo'
+    subprocess.run(['swift', 'build'], cwd=ROOT, check=True)
     stop_previous(work, executable)
+    stop_previous(ROOT / '.build/command-ripple-preview', ROOT / '.build/command-ripple-preview/FlowCommandRipplePreview')
     stop_previous(ROOT / '.build/messages-ocr-check', ROOT / '.build/messages-ocr-check/FlowMessagesOCRCheck')
     stop_previous(ROOT / '.build/messages-popup-simulation', ROOT / '.build/messages-popup-simulation/FlowMessagesPopup')
     # The existing app's signature/grants stay untouched. The CLI embeds usage

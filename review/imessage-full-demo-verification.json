@@ -1,42 +1,6 @@
 {
   "cases": [
     {
-      "attached_filename": "Orion-review.pdf",
-      "candidates": [
-        "Orion-review.pdf",
-        "Orion-review-notes.pdf",
-        "Orion-review-deck.pdf"
-      ],
-      "caption_updates": 15,
-      "checks": {
-        "alternative_replacement": true,
-        "alternatives_available": true,
-        "best_filename_selected": true,
-        "command_excluded_from_message": true,
-        "live_captions": true,
-        "native_attachment_confirmed": true,
-        "original_attachments_plus_one": true,
-        "original_draft_preserved": true,
-        "paced_display_frames": true,
-        "real_llm_chunks_inserted": true
-      },
-      "command": "Flow, find the Orion Review PDF.",
-      "display_frames": 19,
-      "display_reveal_seconds": 0.8584690093994141,
-      "generated_message": "I've got the Orion Review right here",
-      "kind": "file",
-      "llm_chunks": 7,
-      "native_text_writes": 19,
-      "passed": true,
-      "replacement": {
-        "alternative_confirmed": true,
-        "alternative_selected": true,
-        "count_preserved": true,
-        "status": "Attachment replaced. You send the message.",
-        "text_preserved": true
-      }
-    },
-    {
       "attached_filename": "Orion-dashboard.png",
       "candidates": [
         "Orion-dashboard.png",
@@ -44,9 +8,9 @@
       ],
       "caption_updates": 16,
       "checks": {
-        "alternative_replacement": true,
         "alternatives_available": true,
         "best_filename_selected": true,
+        "command_effect_detected": true,
         "command_excluded_from_message": true,
         "live_captions": true,
         "native_attachment_confirmed": true,
@@ -57,22 +21,16 @@
       },
       "command": "Flow, find the Orion dashboard image.",
       "display_frames": 23,
-      "display_reveal_seconds": 1.0390430688858032,
+      "display_reveal_seconds": 1.0502959489822388,
       "generated_message": "I've got the dashboard screenshot right here",
       "kind": "screenshot",
       "llm_chunks": 6,
       "native_text_writes": 23,
       "passed": true,
-      "replacement": {
-        "alternative_confirmed": true,
-        "alternative_selected": true,
-        "count_preserved": true,
-        "status": "Attachment replaced. You send the message.",
-        "text_preserved": true
-      }
+      "replacement": {}
     }
   ],
   "scope": "Generated speech; actual on-device captions and waveform; real cloud LLM chunks typed into actual Messages; production ranking and automatic attachment append followed by candidate popup. No Send event. Screenshot selection uses filenames, not OCR.",
-  "seconds": 30.832490921020508,
+  "seconds": 14.432976007461548,
   "status": "ready"
 }
