@@ -27,6 +27,14 @@ final class AppState: ObservableObject {
     @Published var isInitializingModel = false
     @Published var audioLevel: Float = 0.0
     @Published var smoothedAudioLevel: Float = 0.0
+    @Published var liveTranscript = ""
+    @Published var liveCaptionStatus = "Listening…"
+    private let speechCaptions = LiveSpeechCaptions()
+    private var captionTask: Task<Void, Never>?
+    var liveCaptionsEnabled: Bool {
+        if ProcessInfo.processInfo.arguments.contains("--recording-preview") { return true }
+        return UserDefaults.standard.object(forKey: "liveCaptionsEnabled") as? Bool ?? true
+    }
 
     /// Last transcribed text
     @Published var lastTranscription: String?
@@ -90,6 +98,7 @@ final class AppState: ObservableObject {
 
     init() {
         let demoOnly = ProcessInfo.processInfo.arguments.contains("--demo")
+            || ProcessInfo.processInfo.arguments.contains("--recording-preview")
         self.engine = Flow(dbPath: demoOnly ? ":memory:" : nil)
         self.isConfigured = engine.isConfigured
         self.hotkey = Hotkey.load()
@@ -116,6 +125,8 @@ final class AppState: ObservableObject {
     }
 
     func cleanup() {
+        captionTask?.cancel()
+        speechCaptions.cancel()
         if let observer = workspaceObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
             workspaceObserver = nil
@@ -460,6 +471,7 @@ final class AppState: ObservableObject {
     }
 
     func startRecording() {
+        guard !isRecording, !isProcessing else { return }
         let totalStart = CFAbsoluteTimeGetCurrent()
 
         // Refresh accessibility status before recording
@@ -479,6 +491,8 @@ final class AppState: ObservableObject {
         }
 
         targetApplication = NSWorkspace.shared.frontmostApplication
+        liveTranscript = ""
+        liveCaptionStatus = liveCaptionsEnabled ? "Listening…" : "Live captions are off"
 
         log("🎤 [RECORDING] Starting recording - App: \(currentApp), Mode: \(currentMode.displayName)")
 
@@ -494,7 +508,7 @@ final class AppState: ObservableObject {
 
         // Start engine and setup timers in a task so UI can update first
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let self, self.isRecording else { return }
 
             let t = CFAbsoluteTimeGetCurrent()
             self.volumeManager.muteForRecording()
@@ -502,6 +516,7 @@ final class AppState: ObservableObject {
 
             let engineStart = CFAbsoluteTimeGetCurrent()
             if self.engine.startRecording() {
+                self.startLiveCaptions()
                 self.log("⏱️ [TIMING] engine.startRecording: \(Int((CFAbsoluteTimeGetCurrent() - engineStart) * 1000))ms")
                 self.log("⏱️ [TIMING] TOTAL: \(Int((CFAbsoluteTimeGetCurrent() - totalStart) * 1000))ms")
 
@@ -531,6 +546,7 @@ final class AppState: ObservableObject {
                         self.audioLevel = newLevel
                         let smoothingFactor: Float = 0.8
                         self.smoothedAudioLevel = self.smoothedAudioLevel * (1 - smoothingFactor) + newLevel * smoothingFactor
+                        self.speechCaptions.feed(from: self.engine)
                     }
                 }
             } else {
@@ -558,6 +574,9 @@ final class AppState: ObservableObject {
         smoothedAudioLevel = 0.0
 
         let duration = engine.stopRecording()
+        captionTask?.cancel()
+        if duration > 0 { speechCaptions.finish(from: engine) }
+        else { speechCaptions.cancel() }
         isRecording = false
 
         // Restore volume immediately (was muted to prevent feedback)
@@ -575,9 +594,7 @@ final class AppState: ObservableObject {
 
     private func transcribe() {
         let appName = currentApp
-        let appCategory = currentCategory
         let mode = currentMode
-        let duration = recordingDuration
 
         log("🔄 [TRANSCRIBE] Starting transcription - App: \(appName), Mode: \(mode.displayName)")
 
@@ -616,6 +633,26 @@ final class AppState: ObservableObject {
                     self.finishProcessing()
                 }
             }
+        }
+    }
+
+    func updateLiveCaptions(enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "liveCaptionsEnabled")
+        captionTask?.cancel(); speechCaptions.cancel()
+        if enabled && isRecording { startLiveCaptions() }
+        else if !enabled { liveTranscript = ""; liveCaptionStatus = "Live captions are off" }
+    }
+
+    private func startLiveCaptions() {
+        captionTask?.cancel(); speechCaptions.cancel()
+        guard liveCaptionsEnabled else { return }
+        speechCaptions.onText = { [weak self] text, _ in self?.liveTranscript = text }
+        speechCaptions.onStatus = { [weak self] status in self?.liveCaptionStatus = status }
+        captionTask = Task { [weak self] in
+            guard let self else { return }
+            await self.speechCaptions.start()
+            guard !Task.isCancelled, self.isRecording else { return }
+            self.speechCaptions.feed(from: self.engine)
         }
     }
 
