@@ -661,6 +661,7 @@ fn transcribe_with_audio(
     audio_data: crate::AudioData,
     sample_rate: u32,
     app_name: Option<String>,
+    on_delta: Option<crate::providers::DictationDelta>,
 ) -> crate::error::Result<String> {
     let captured = handle.captured_contact.lock().clone();
     let (mode, recipient) = resolve_recipient(handle, app_name.as_deref(), captured.as_deref());
@@ -710,7 +711,11 @@ fn transcribe_with_audio(
         if let Some(params) = completion_params {
             request = request.with_completion(params);
         }
-        transcription_provider.transcribe(request).await
+        if let Some(callback) = on_delta.clone() {
+            transcription_provider.transcribe_stream(request, callback).await
+        } else {
+            transcription_provider.transcribe(request).await
+        }
     })?;
 
     // Process shortcuts (always applied) and corrections (only if auto-rewriting enabled)
@@ -780,6 +785,11 @@ fn transcribe_with_audio(
 
     // Suppress unused warning for triggered shortcuts (used by worker)
     let _ = triggered;
+
+    // Cancellation never promotes a partial response into history or learning.
+    if on_delta.as_ref().is_some_and(|callback| !callback("")) {
+        return Err(crate::error::Error::Transcription("Dictation cancelled".into()));
+    }
 
     let mut record = Transcription::new(
         transcription.text,
@@ -939,6 +949,33 @@ fn personalization_for(
 /// Processed text (caller must free with flow_free_string), or NULL on failure
 #[unsafe(no_mangle)]
 pub extern "C" fn flow_transcribe(handle: *mut FlowHandle, app_name: *const c_char) -> *mut c_char {
+    transcribe_pending(handle, app_name, None)
+}
+
+/// Receives real completion deltas on the transcription thread. Copy strings
+/// before returning; return false to cancel. Empty strings check cancellation.
+pub type DictationCallback = extern "C" fn(delta: *const c_char, context: *mut c_void) -> bool;
+
+/// Stream formatting output for recorded audio. The returned completed string
+/// is owned by the caller and must be released with flow_free_string. Failed or
+/// cancelled streams return null and cannot become personalization evidence.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_transcribe_stream(
+    handle: *mut FlowHandle,
+    app_name: *const c_char,
+    callback: extern "C" fn(delta: *const c_char, context: *mut c_void) -> bool,
+    context: *mut c_void,
+) -> *mut c_char {
+    let context_address = context as usize;
+    let on_delta = Some(Arc::new(move |delta: &str| {
+        let Ok(delta) = CString::new(delta) else { return false; };
+        callback(delta.as_ptr(), context_address as *mut c_void)
+    }) as crate::providers::DictationDelta);
+    transcribe_pending(handle, app_name, on_delta)
+}
+
+fn transcribe_pending(handle: *mut FlowHandle, app_name: *const c_char, on_delta: Option<crate::providers::DictationDelta>) -> *mut c_char {
+    if handle.is_null() { return ptr::null_mut(); }
     let handle = unsafe { &*handle };
 
     // Get cached audio data (don't touch handle.audio at all)
@@ -977,7 +1014,7 @@ pub extern "C" fn flow_transcribe(handle: *mut FlowHandle, app_name: *const c_ch
     let duration_ms = estimate_duration_ms(audio_data.len(), sample_rate);
     *handle.last_audio.lock() = Some(audio_data.clone());
     *handle.last_audio_sample_rate.lock() = Some(sample_rate);
-    let result = transcribe_with_audio(handle, audio_data, sample_rate, app);
+    let result = transcribe_with_audio(handle, audio_data, sample_rate, app, on_delta);
 
     // Clear the captured contact after transcription (whether success or failure)
     *handle.captured_contact.lock() = None;
@@ -1036,7 +1073,7 @@ pub extern "C" fn flow_retry_last_transcription(
     };
 
     let duration_ms = estimate_duration_ms(audio_data.len(), sample_rate);
-    let result = transcribe_with_audio(handle, audio_data, sample_rate, app);
+    let result = transcribe_with_audio(handle, audio_data, sample_rate, app, None);
 
     match result {
         Ok(text) => {

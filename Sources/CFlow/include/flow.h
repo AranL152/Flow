@@ -130,6 +130,16 @@ float flow_get_audio_level(struct FlowHandle *handle);
 char *flow_transcribe(struct FlowHandle *handle, const char *app_name);
 
 /**
+ * Stream formatting output for recorded audio. The returned completed string
+ * is owned by the caller and must be released with flow_free_string. Failed or
+ * cancelled streams return null and cannot become personalization evidence.
+ */
+char *flow_transcribe_stream(struct FlowHandle *handle,
+                             const char *app_name,
+                             bool (*callback)(const char *delta, void *context),
+                             void *context);
+
+/**
  * Retry the last transcription using cached audio
  * Returns processed text (caller must free with flow_free_string), or null on failure
  */

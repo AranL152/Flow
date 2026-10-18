@@ -260,6 +260,36 @@ public final class Flow: @unchecked Sendable {
 
     // MARK: - Transcription
 
+    /// Ordered real provider deltas, followed by one validated completed result.
+    /// Providers without streaming support emit only the completed result.
+    public func transcribeStream(appName: String? = nil) -> AsyncThrowingStream<DictationStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let receiver = DictationStreamReceiver(continuation: continuation)
+            continuation.onTermination = { [weak receiver] _ in receiver?.cancel() }
+            Task.detached { [self] in
+                guard let handle = self.handle else {
+                    continuation.finish(throwing: NSError(domain: "Flow.Stream", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "Flow could not initialize"]))
+                    return
+                }
+                let context = Unmanaged.passRetained(receiver).toOpaque()
+                defer { Unmanaged<DictationStreamReceiver>.fromOpaque(context).release() }
+                let result = self.withOptionalCString(appName) {
+                    flow_transcribe_stream(handle, $0, nativeDictationDelta, context)
+                }
+                defer { if let result { flow_free_string(result) } }
+                if receiver.isCancelled { continuation.finish(throwing: CancellationError()); return }
+                guard let result else {
+                    continuation.finish(throwing: NSError(domain: "Flow.Stream", code: 2,
+                        userInfo: [NSLocalizedDescriptionKey: self.lastError ?? "Dictation streaming failed"]))
+                    return
+                }
+                continuation.yield(.completed(String(cString: result)))
+                continuation.finish()
+            }
+        }
+    }
+
     /// Transcribe the recorded audio and process it
     /// - Parameter appName: Optional name of the current app for mode selection
     /// - Returns: Processed text, or nil on failure
