@@ -11,6 +11,7 @@
 import { Hono } from "hono";
 import { formatStream } from "./streaming.js";
 import { dictationStream } from "./dictation-stream.js";
+import { speechStream } from "./speech-stream.js";
 import type {
   Env,
   CombinedResponse,
@@ -38,6 +39,8 @@ function statusForGraphError(message: string): 500 | 502 {
 }
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+app.get("/speech-stream", (c) => speechStream(c.req.raw, c.env));
 
 app.post("/transcribe-stream", async (c) => {
   let body: unknown;
