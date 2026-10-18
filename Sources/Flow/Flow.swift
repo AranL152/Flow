@@ -263,6 +263,17 @@ public final class Flow: @unchecked Sendable {
     /// Ordered real provider deltas, followed by one validated completed result.
     /// Providers without streaming support emit only the completed result.
     public func transcribeStream(appName: String? = nil) -> AsyncThrowingStream<DictationStreamEvent, Error> {
+        dictationStream(appName: appName)
+    }
+
+    /// Imported/simulated mono signed little-endian PCM16. Uses the same Rust
+    /// provider, streaming callback, history and send-learning path as recording.
+    /// Serialize transcription calls on one engine.
+    public func transcribeAudioStream(pcm16: Data, sampleRate: UInt32, appName: String?, contactName: String? = nil) -> AsyncThrowingStream<DictationStreamEvent, Error> {
+        dictationStream(appName: appName, pcm16: pcm16, sampleRate: sampleRate, contactName: contactName)
+    }
+
+    private func dictationStream(appName: String?, pcm16: Data? = nil, sampleRate: UInt32 = 0, contactName: String? = nil) -> AsyncThrowingStream<DictationStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let receiver = DictationStreamReceiver(continuation: continuation)
             continuation.onTermination = { [weak receiver] _ in receiver?.cancel() }
@@ -274,8 +285,16 @@ public final class Flow: @unchecked Sendable {
                 }
                 let context = Unmanaged.passRetained(receiver).toOpaque()
                 defer { Unmanaged<DictationStreamReceiver>.fromOpaque(context).release() }
-                let result = self.withOptionalCString(appName) {
-                    flow_transcribe_stream(handle, $0, nativeDictationDelta, context)
+                let result = self.withOptionalCString(appName) { app in
+                    if let pcm16 {
+                        return self.withOptionalCString(contactName) { contact in
+                            pcm16.withUnsafeBytes { bytes in
+                                flow_transcribe_audio_stream(handle, bytes.bindMemory(to: UInt8.self).baseAddress,
+                                    pcm16.count, sampleRate, app, contact, nativeDictationDelta, context)
+                            }
+                        }
+                    }
+                    return flow_transcribe_stream(handle, app, nativeDictationDelta, context)
                 }
                 defer { if let result { flow_free_string(result) } }
                 if receiver.isCancelled { continuation.finish(throwing: CancellationError()); return }

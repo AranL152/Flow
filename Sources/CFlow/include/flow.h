@@ -140,6 +140,20 @@ char *flow_transcribe_stream(struct FlowHandle *handle,
                              void *context);
 
 /**
+ * Process supplied mono signed PCM16 through the normal streaming pipeline.
+ * The host must serialize transcription calls for this handle. Audio is copied
+ * before processing. This supports imported recordings and isolated simulations.
+ */
+char *flow_transcribe_audio_stream(struct FlowHandle *handle,
+                                   const uint8_t *pcm,
+                                   size_t byte_count,
+                                   uint32_t sample_rate,
+                                   const char *app_name,
+                                   const char *contact_name,
+                                   bool (*callback)(const char *delta, void *context),
+                                   void *context);
+
+/**
  * Retry the last transcription using cached audio
  * Returns processed text (caller must free with flow_free_string), or null on failure
  */

@@ -974,6 +974,37 @@ pub extern "C" fn flow_transcribe_stream(
     transcribe_pending(handle, app_name, on_delta)
 }
 
+/// Process supplied mono signed PCM16 through the normal streaming pipeline.
+/// The host must serialize transcription calls for this handle. Audio is copied
+/// before processing. This supports imported recordings and isolated simulations.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_transcribe_audio_stream(
+    handle: *mut FlowHandle,
+    pcm: *const u8,
+    byte_count: usize,
+    sample_rate: u32,
+    app_name: *const c_char,
+    contact_name: *const c_char,
+    callback: extern "C" fn(delta: *const c_char, context: *mut c_void) -> bool,
+    context: *mut c_void,
+) -> *mut c_char {
+    if handle.is_null() { return ptr::null_mut(); }
+    let engine = unsafe { &*handle };
+    if pcm.is_null() || byte_count == 0 || byte_count % 2 != 0 ||
+       !(8000..=192000).contains(&sample_rate) || byte_count > sample_rate as usize * 2 * 300 {
+        set_last_error(engine, "Expected up to five minutes of mono PCM16 audio at 8–192 kHz");
+        return ptr::null_mut();
+    }
+    if engine.audio.lock().is_some() {
+        set_last_error(engine, "Stop microphone recording before processing supplied audio");
+        return ptr::null_mut();
+    }
+    *engine.pending_audio.lock() = Some(unsafe { std::slice::from_raw_parts(pcm, byte_count) }.to_vec());
+    *engine.pending_sample_rate.lock() = Some(sample_rate);
+    *engine.captured_contact.lock() = c_str(contact_name).map(str::to_owned);
+    flow_transcribe_stream(handle, app_name, callback, context)
+}
+
 fn transcribe_pending(handle: *mut FlowHandle, app_name: *const c_char, on_delta: Option<crate::providers::DictationDelta>) -> *mut c_char {
     if handle.is_null() { return ptr::null_mut(); }
     let handle = unsafe { &*handle };
@@ -3278,4 +3309,29 @@ mod dictation_stream_tests {
     fn ffi_delivers_tokens_and_preserves_raw_speech_for_send_learning() { run(false); }
     #[test]
     fn ffi_cancellation_cannot_create_a_learnable_partial_draft() { run(true); }
+    #[test]
+    fn supplied_audio_uses_real_streaming_and_contact_scoped_send_learning() {
+        let db = CString::new(":memory:").unwrap();
+        let handle = flow_init(db.as_ptr());
+        let engine = unsafe { &mut *handle };
+        engine.transcription = Arc::new(StreamFixture);
+        let pcm = vec![0; 32000];
+        let app = CString::new("Messages").unwrap();
+        let contact = CString::new("Alex").unwrap();
+        let mut state = CallbackState { chunks: vec![], cancel: false };
+        let result = flow_transcribe_audio_stream(handle, pcm.as_ptr(), pcm.len(), 16000, app.as_ptr(), contact.as_ptr(), receive, &mut state as *mut _ as *mut c_void);
+        assert!(!result.is_null());
+        assert_eq!(state.chunks.len(), 2);
+        assert_eq!(engine.pending_dictation.lock().as_ref().unwrap().contact_key, style::contact_key("Alex"));
+        let edited = CString::new("yo can u check the deck").unwrap();
+        assert_eq!(flow_record_final_text(handle, edited.as_ptr()), 0);
+        assert!(engine.pending_dictation.lock().is_none());
+        let examples = engine.storage.get_style_examples(10).unwrap();
+        assert_eq!(examples.len(), 1);
+        assert!(examples[0].edited);
+        assert_eq!(examples[0].contact_key, style::contact_key("Alex"));
+        flow_free_string(result);
+        flow_destroy(handle);
+    }
+
 }
