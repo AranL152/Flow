@@ -96,14 +96,14 @@ struct LiquidCommandText: View {
                 raster = image; renderedKey = currentKey
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Flow command: \(command)")
+            .accessibilityLabel("Attachment request: \(command)")
             .accessibilityIdentifier("flow-command-text")
     }
 }
 
 struct FlowCommandBadge: View {
     static let ink = Color(red: 0.76, green: 0.61, blue: 1)
-    var title = "Flow command"
+    var title = "Command"
     var onDarkSurface = false
     @Environment(\.colorScheme) private var colorScheme
     private var ink: Color { onDarkSurface || colorScheme == .dark ? Self.ink : FW.accentMuted }

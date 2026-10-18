@@ -2,7 +2,9 @@
 
 Explicit “Flow, attach/find/search…” instructions appear on a separate purple,
 semibold line in the existing live-caption card. Recipient text remains white.
-A plain purple status label identifies the command without a capsule or pill.
+A plain purple label shows attachment progress without a capsule or pill. There
+is no generic “Flow command” label; the pending state says Transcribing… and a
+successful search retains Attachment found. The approved animation is unchanged.
 Ordinary mentions, quoted/reported instructions, negated cues and bare incomplete
 forms such as “Flow, attach” remain normal caption text. Saying “Flow” alone is
 not a command. The reserved pattern is “Flow, attach/find/search…” followed by an
@@ -32,7 +34,8 @@ command letters distort. Recipient text is outside that layer. Canvas's animatio
 timeline pauses after the pass. The final words stay purple. Long commands wrap
 to two lines and preserve the beginning/end when truncated.
 
-The plain purple label follows actual attachment state: Finding screenshot/image/file… while
+The plain purple label follows actual attachment state: Attachment found after
+matches arrive, Finding screenshot/image/file… while
 searching, Adding attachment… during insertion, Added to draft after confirmation,
 and Needs detail for a clarification. The attachment picker repeats the Command
 badge. The full Messages runner passes its own attachment session into the HUD,
@@ -73,7 +76,7 @@ is a capture target, not a measured production frame-rate guarantee.
 
 35 Swift tests passed, including recording-phase gating, incomplete commands,
 quotation, negation, Unicode and full-context guards. Thirteen native preview
-checks passed after the stable-bar/listening-dot adjustment. The exported stills
+checks passed after removing the generic command label. The exported stills
 were visually reviewed: command motion/glow, unchanged recipient text, no
 microphone waveform during processing, readable long commands and static reduced
 motion. A pixel comparison between active/settled fixtures also found no changes

@@ -180,7 +180,7 @@ struct RipplePreviewView: View {
     @ObservedObject var model: RipplePreview
     var body: some View {
         VStack(spacing: 10) {
-            Text("Flow command effect").font(.headline)
+            Text("Flow voice preview").font(.headline)
             Text("Simulated captions · no microphone or API calls").font(.caption).foregroundStyle(.secondary)
             RecordingIndicatorView(attachmentSession: model.attachments).environmentObject(model.state)
                 .environment(\.flowReduceMotion, model.reduceMotion)
@@ -207,7 +207,7 @@ struct RipplePreviewRunner {
         let host = NSHostingView(rootView: RipplePreviewView(model: model))
         host.frame = NSRect(x: 0, y: 0, width: 552, height: 350)
         let window = NSWindow(contentRect: host.frame, styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "Flow · Command effect preview"; window.contentView = host; window.isReleasedWhenClosed = false
+        window.title = "Flow · Voice preview"; window.contentView = host; window.isReleasedWhenClosed = false
         window.level = .floating; window.center(); window.orderFrontRegardless(); Self.window = window
         model.capture = { [weak host] in
             guard let host, let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return nil }

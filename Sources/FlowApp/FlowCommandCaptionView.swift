@@ -14,8 +14,8 @@ struct FlowCommandCaptionView: View {
     @State private var played = false
 
     private var parts: FlowCommandCaption? { FlowCommandCaption.detect(in: transcript, isRecording: isRecording) }
-    private var commandStatus: String {
-        guard let plan = attachments.plan else { return "Flow command" }
+    private var commandStatus: String? {
+        guard let plan = attachments.plan else { return nil }
         if plan.clarification != nil { return "Needs detail" }
         if attachments.attachmentConfirmed { return "Added to draft" }
         if attachments.busy { return "Adding attachment…" }
@@ -26,7 +26,7 @@ struct FlowCommandCaptionView: View {
             return "Finding file…"
         }
         if !attachments.candidates.isEmpty { return "Attachment found" }
-        return "Flow command"
+        return nil
     }
 
     var body: some View {
@@ -35,7 +35,7 @@ struct FlowCommandCaptionView: View {
                 Image(systemName: "mic.fill")
                 if isRecording {
                     ListeningStatusLabel()
-                } else if parts != nil {
+                } else if parts != nil, let commandStatus {
                     Text(commandStatus)
                         .foregroundStyle(FlowCommandBadge.ink)
                         .accessibilityIdentifier("flow-command-status")
