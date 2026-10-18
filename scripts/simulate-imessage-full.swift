@@ -264,6 +264,12 @@ final class FullMessagesDemo {
                 if args.contains("--verify-replacement") { checks["alternative_replacement"] = replacementVerified }
                 state.isProcessing = false; state.isStreamingOutput = false; indicator?.hide()
                 preview?.show(candidateCount: session.candidates.count, isSearch: true)
+                try await Task.sleep(for: .milliseconds(200))
+                if let view = NSApplication.shared.windows.first(where: { $0.title == "Flow · Attachment" })?.contentView,
+                   let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                    view.cacheDisplay(in: view.bounds, to: bitmap)
+                    try bitmap.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("attachment-popup.png"))
+                }
                 results.append(["kind": kind, "generated_message": output, "command": plan.command,
                     "caption_updates": captionUpdates, "llm_chunks": rawChunks, "display_frames": chunks, "native_text_writes": writer.writes,
                     "display_reveal_seconds": revealSeconds, "largest_display_chunk": largestDisplayChunk, "largest_native_write": writer.largestWrite,

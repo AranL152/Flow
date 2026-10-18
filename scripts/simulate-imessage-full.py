@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import plistlib
 import signal
+import shutil
 import subprocess
 import tempfile
 import time
@@ -72,6 +73,7 @@ def main():
             (folder / f'{kind}.pcm').write_bytes(audio.readframes(audio.getnframes()))
     report = folder / 'report.json'
     report.unlink(missing_ok=True)
+    (folder / 'attachment-popup.png').unlink(missing_ok=True)
     subprocess.run(['open', '-a', 'Messages'], check=True)
     with (folder / 'stdout.log').open('w') as out, (folder / 'stderr.log').open('w') as err:
         command = [str(executable), '--voice-simulation', '--folder', str(folder), '--fixtures', str(fixtures),
@@ -85,6 +87,8 @@ def main():
             result = json.loads(report.read_text())
             if result['status'] != 'running':
                 (ROOT / 'review/imessage-full-demo-verification.json').write_text(json.dumps(result, indent=2) + '\n')
+                if result['status'] == 'ready' and (folder / 'attachment-popup.png').exists():
+                    shutil.copyfile(folder / 'attachment-popup.png', ROOT / 'review/imessage-other-matches.png')
                 print(json.dumps(result, indent=2))
                 if result['status'] != 'ready': raise SystemExit(1)
                 print('Full demo finished. Attachments and candidate popup remain in Messages; nothing was sent.')

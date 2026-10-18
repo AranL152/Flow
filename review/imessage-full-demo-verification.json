@@ -8,6 +8,7 @@
       ],
       "caption_updates": 16,
       "checks": {
+        "alternative_replacement": true,
         "alternatives_available": true,
         "best_filename_selected": true,
         "command_effect_detected": true,
@@ -23,7 +24,7 @@
       },
       "command": "Flow, find the Orion dashboard image.",
       "display_frames": 44,
-      "display_reveal_seconds": 1.8084700107574463,
+      "display_reveal_seconds": 2.072348952293396,
       "generated_message": "I've got the dashboard screenshot right here",
       "kind": "screenshot",
       "largest_display_chunk": 1,
@@ -31,10 +32,16 @@
       "llm_chunks": 6,
       "native_text_writes": 22,
       "passed": true,
-      "replacement": {}
+      "replacement": {
+        "alternative_confirmed": true,
+        "alternative_selected": true,
+        "count_preserved": true,
+        "status": "Attachment replaced. You send the message.",
+        "text_preserved": true
+      }
     }
   ],
   "scope": "Generated speech; actual on-device captions and waveform; real cloud LLM chunks typed into actual Messages; production ranking and automatic attachment append followed by candidate popup. No Send event. Screenshot selection uses filenames, not OCR.",
-  "seconds": 11.740348935127258,
+  "seconds": 13.544412016868591,
   "status": "ready"
 }

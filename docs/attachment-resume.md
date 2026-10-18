@@ -399,3 +399,28 @@ comparison verified changing dots, unchanged white live-message pixels across
 dot frames and the same caption border position before/after recording. The
 review GIF and stills are updated. These checks used synthetic captions and real
 local OCR without microphone, cloud requests or Messages writes.
+
+## Make attachment alternatives explicit (October 18)
+
+The user wanted the popup to explain that the best match is already attached
+and the list contains other choices, using concise language. After confirmation,
+the picker now says Other matches and filters out Flow's currently attached file.
+The count reflects the remaining choices. Select one to replace guides the next
+action, and choosing a candidate changes the button to Replace. Done dismisses
+without changing the file. Initial selection and single-file confirmation retain
+their existing labels. Keyboard selection uses the visible list, including an
+empty-list guard. During an active replacement, the alternative list stays stable.
+
+The 15 real local Spotlight/picker checks passed with even margins in the original
+selected/unselected states. A full generated-speech Messages run with replacement
+verification passed all 13 checks: 16 live-caption updates, six model chunks,
+44 display frames and 22 native writes over 2.07 seconds. The best screenshot was
+added, an alternative was swapped in and the original restored, preserving text
+and all unrelated objects. One earlier take stopped before typing because the
+original draft changed during playback; its edit was retained.
+
+The actual final popup was captured through its native view without screen-
+recording access and visually reviewed: Other matches, one alternative, Select
+one to replace and Done, with the already-attached file absent. See
+review/imessage-other-matches.png and the updated full-demo report. The latest
+Messages draft and picker remain open. No Send event was generated.

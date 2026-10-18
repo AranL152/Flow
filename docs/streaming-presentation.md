@@ -33,8 +33,9 @@ the slower reveal for short messages, a four-grapheme limit on display chunks
 and a two-grapheme limit on native writes. Replays reuse existing screenshot
 fixtures instead of rewriting source files that may already be attached.
 
-The latest real Messages screenshot run passed all 12 checks: six genuine model
-chunks became 44 single-grapheme display frames and 22 native writes over about
-1.82 seconds, compared with 1.17 seconds in the prior replay. Final text and
-existing native attachments were preserved; nothing was sent. See
+The latest real Messages screenshot run passed all 13 checks, including swapping
+an alternative file in and back: six genuine model chunks became 44 single-
+grapheme display frames and 22 native writes over about 2.07 seconds. The prior
+replay was 1.17 seconds. Final text and existing native attachments were preserved;
+nothing was sent. See
 [the scoped report](../review/imessage-full-demo-verification.json).

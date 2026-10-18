@@ -95,9 +95,11 @@ draft and appends a synthetic screenshot. It never sends. Unlike the isolated
 visual preview, this path makes real ASR/LLM requests. Existing text and files
 remain intact, and the installed permissioned app bundle is not replaced.
 
-The latest October 18 run passed 12 checks: 16 live-caption updates detected the
+The latest October 18 run passed 13 checks: 16 live-caption updates detected the
 real Flow cue, six model chunks became 44 small display frames and 22 native
-writes over about 1.82 seconds, and the screenshot was confirmed with an
-alternative candidate. The reveal is paced more slowly for readability.
+writes over about 2.07 seconds, and an alternative screenshot was safely swapped
+in and back. The popup says Other matches and lists only alternatives to the
+file already attached; selecting one offers Replace. See
+[the actual picker](../review/imessage-other-matches.png).
 See review/imessage-full-demo-verification.json. The processing label is now
 centered with balanced spinner space and a visible spinner on the dark pill.

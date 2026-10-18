@@ -11,6 +11,21 @@ struct AttachmentCard: View {
     @State private var previewID: UUID?
     @State private var showSearch = false
 
+    private var showingAlternatives: Bool {
+        session.attachedID != nil && (session.attachmentConfirmed || session.busy) &&
+            session.candidates.contains { $0.id != session.attachedID }
+    }
+
+    private var visibleCandidates: [AttachmentCandidate] {
+        showingAlternatives ? session.candidates.filter { $0.id != session.attachedID } : session.candidates
+    }
+
+    private var footerHint: String {
+        if showingAlternatives && session.selectedID == session.attachedID { return "Select one to replace" }
+        if session.attachedID != nil && session.selectedID != session.attachedID { return "Replaces Flow’s file only" }
+        return "You review and send"
+    }
+
     var body: some View {
         if let plan = session.plan {
             VStack(alignment: .leading, spacing: 12) {
@@ -46,27 +61,27 @@ struct AttachmentCard: View {
                     }.disabled(session.busy || session.pasteRequested)
                 }
                 HStack {
-                    Text(session.attachmentConfirmed ? "Added to your draft" : session.searching ? "Finding files…" : "Choose an attachment")
+                    Text(showingAlternatives ? "Other matches" : session.attachmentConfirmed ? "Added to your draft" : session.searching ? "Finding files…" : "Choose an attachment")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(FW.textSecondary)
                     Spacer()
-                    if !session.candidates.isEmpty {
-                        Text("\(session.candidates.count) \(session.candidates.count == 1 ? "match" : "matches")")
+                    if !visibleCandidates.isEmpty {
+                        Text("\(visibleCandidates.count) \(visibleCandidates.count == 1 ? "match" : "matches")")
                             .font(.system(size: 10)).foregroundStyle(FW.textMuted)
                     }
                 }
-                if !session.candidates.isEmpty {
+                if !visibleCandidates.isEmpty {
                     ScrollView {
                         LazyVStack(spacing: 4) {
-                            ForEach(session.candidates) { candidate in row(candidate) }
+                            ForEach(visibleCandidates) { candidate in row(candidate) }
                         }
                     }
-                    .frame(height: CGFloat(min(session.candidates.count, 3)) * 58 - 4)
+                    .frame(height: CGFloat(min(visibleCandidates.count, 3)) * 58 - 4)
                     .focusable().focusEffectDisabled()
                     .onMoveCommand { direction in
-                        guard !session.busy, direction == .up || direction == .down else { return }
-                        let current = session.candidates.firstIndex { $0.id == session.selectedID } ?? -1
-                        let next = min(session.candidates.count - 1, max(0, current + (direction == .down ? 1 : -1)))
-                        session.choose(session.candidates[next].id)
+                        guard !session.busy, !visibleCandidates.isEmpty, direction == .up || direction == .down else { return }
+                        let current = visibleCandidates.firstIndex { $0.id == session.selectedID } ?? -1
+                        let next = min(visibleCandidates.count - 1, max(0, current + (direction == .down ? 1 : -1)))
+                        session.choose(visibleCandidates[next].id)
                     }
                 }
                 // Keep errors visible, while successful state is communicated in the row.
@@ -75,7 +90,7 @@ struct AttachmentCard: View {
                         .fixedSize(horizontal: false, vertical: true).lineLimit(3)
                 }
                 HStack(spacing: 8) {
-                    Text(session.attachedID != nil && session.selectedID != session.attachedID ? "Replaces Flow’s file only" : "You review and send")
+                    Text(footerHint)
                         .font(.system(size: 10)).foregroundStyle(FW.textMuted)
                     Spacer(minLength: 2)
                     Button(actionTitle) {
@@ -99,7 +114,7 @@ struct AttachmentCard: View {
     private var actionTitle: String {
         if needsManualCopy { return "Copy file" }
         if session.selectedID == session.attachedID, session.attachedID != nil { return "Done" }
-        return session.attachedID == nil ? "Add file" : "Use this file"
+        return session.attachedID == nil ? "Add file" : "Replace"
     }
 
     private func row(_ candidate: AttachmentCandidate) -> some View {

@@ -145,7 +145,7 @@ final class AttachmentSession: ObservableObject {
         guard !busy, candidates.contains(where: { $0.id == id }) else { return }
         selectedID = id; needsChoice = false; hasIssue = false
         status = id == attachedID ? "Already in your Messages draft. You send the message."
-            : attachedID == nil ? "Selected for review. You send the message." : "Choose Use this file to replace only the attachment Flow added."
+            : attachedID == nil ? "Selected for review. You send the message." : "Choose Replace to change only the attachment Flow added."
     }
 
     func automaticallyStage(engine: Flow, insertionUnchanged: Bool) async {
