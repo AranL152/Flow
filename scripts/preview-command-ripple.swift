@@ -26,7 +26,7 @@ final class RipplePreview: ObservableObject {
 
     func run() async {
         guard !running else { return }
-        running = true; frames = []; reduceMotion = false; attachments.dismiss(); results?.hide()
+        running = true; status = "Playing preview…"; frames = []; reduceMotion = false; attachments.dismiss(); results?.hide()
         state.isRecording = false; state.isProcessing = false; state.liveTranscript = ""
         var checks: [String: Bool] = [:]
         do {
@@ -49,7 +49,10 @@ final class RipplePreview: ObservableObject {
                 try await Task.sleep(for: .milliseconds(150))
             }
             savePNG("command-ripple-listening.png")
-            checks["recording_cue_stays_plain"] = FlowCommandCaption.detect(in: state.liveTranscript, isRecording: true) == nil
+            try await Task.sleep(for: .milliseconds(200))
+            savePNG("command-ripple-listening-dots.png")
+            checks["listening_dots_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-listening-dots.png").path)
+            checks["recording_cue_has_no_command_highlight"] = FlowCommandCaption.detect(in: state.liveTranscript, isRecording: true) == nil
             checks["explicit_cue_detected"] = FlowCommandCaption.detect(in: state.liveTranscript)?.command == "Flow, find the screenshot showing payment error."
             state.isRecording = false; state.isProcessing = true
             // A stale audio sample must not show a microphone waveform in this phase.
@@ -61,29 +64,15 @@ final class RipplePreview: ObservableObject {
             try await Task.sleep(for: .seconds(LiquidCommandText.settleDuration / 2 + 0.1)); savePNG("command-ripple-settled.png")
             let plan = try JSONDecoder().decode(AttachmentPlan.self, from: Data(#"{"message":"Here's the issue.","command":"Flow, find the screenshot showing payment error.","request":{"source":"file_search","kind":"image","query":"showing payment error"}}"#.utf8))
             attachments.receive(plan)
-            checks["badge_uses_real_search_state"] = attachments.searching
+            checks["status_uses_real_search_state"] = attachments.searching
             for _ in 0..<60 where attachments.searching { try await Task.sleep(for: .milliseconds(50)) }
             checks["real_local_ocr_produces_handoff_candidates"] = attachments.candidates.count == 2 && attachments.candidates.allSatisfy { $0.matchedImageText == ["payment", "error"] }
             try await Task.sleep(for: .milliseconds(150)); savePNG("command-ripple-found.png")
             recording.cancel()
             writeGIF()
-            attachments.dismiss()
-            reduceMotion = true
-            state.isRecording = true; state.isProcessing = false; state.liveTranscript = sentence
-            try await Task.sleep(for: .milliseconds(100)); state.isRecording = false; state.isProcessing = true
-            try await Task.sleep(for: .milliseconds(250)); savePNG("command-ripple-reduced-motion.png")
-            checks["reduced_motion_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-reduced-motion.png").path)
-            state.isRecording = true; state.isProcessing = false; state.liveTranscript = "I use Flow every day."
-            try await Task.sleep(for: .milliseconds(150)); savePNG("command-ripple-ordinary-mention.png")
-            checks["ordinary_mention_is_not_a_command"] = FlowCommandCaption.detect(in: state.liveTranscript) == nil
-            state.isRecording = false; state.isProcessing = true
-            state.liveTranscript = "Here's the issue. Flow, find the screenshot showing " + String(repeating: "payment error details ", count: 12)
-            try await Task.sleep(for: .milliseconds(150)); savePNG("command-ripple-long-command.png")
-            checks["long_command_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-long-command.png").path)
-            state.liveTranscript = sentence
-            reduceMotion = false
-            attachments.receive(plan)
-            for _ in 0..<60 where attachments.searching { try await Task.sleep(for: .milliseconds(50)) }
+            // Alternate test fixtures must never change the visible demo state.
+            checks.merge(await verifyHiddenVariants()) { _, new in new }
+            checks.merge(await verifyWindowVisibility()) { _, new in new }
             results = AttachmentPreviewWindow(session: attachments, engine: state.engine)
             attachments.onDismiss = { [weak self] in self?.results?.hide() }
             results?.show(candidateCount: attachments.candidates.count, isSearch: true)
@@ -91,9 +80,74 @@ final class RipplePreview: ObservableObject {
             status = "Preview complete · Replay to watch again"
         } catch { status = error.localizedDescription }
         let report: [String: Any] = ["scope": "Native production caption/ripple views with labelled simulated captions and real local OCR. No microphone recording, cloud API calls or Messages changes. Still images and GIF require visual review.",
-            "checks": checks, "frames": frames.count, "frame_interval_ms_target": 50, "status": checks.count == 9 && checks.values.allSatisfy { $0 } ? "ready" : "failed"]
+            "checks": checks, "frames": frames.count, "frame_interval_ms_target": 50, "status": checks.count == 13 && checks.values.allSatisfy { $0 } ? "ready" : "failed"]
         try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: output.appendingPathComponent("command-ripple-verification.json"))
         running = false
+    }
+
+    private func verifyHiddenVariants() async -> [String: Bool] {
+        let variant = RipplePreview(folder: folder, output: output)
+        variant.status = "Offscreen verification"
+        let host = NSHostingView(rootView: RipplePreviewView(model: variant)
+            .frame(maxWidth: .infinity, maxHeight: .infinity).background(FW.background))
+        host.sizingOptions = []
+        host.frame = NSRect(x: 0, y: 0, width: 520, height: 350)
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        variant.capture = { [weak host] in
+            guard let host, let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return nil }
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            return bitmap.cgImage
+        }
+        var checks: [String: Bool] = [:]
+        variant.reduceMotion = true
+        variant.state.isRecording = false; variant.state.isProcessing = true; variant.state.liveTranscript = sentence
+        try? await Task.sleep(for: .milliseconds(250))
+        variant.savePNG("command-ripple-reduced-motion.png")
+        checks["reduced_motion_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-reduced-motion.png").path)
+        variant.state.isRecording = true; variant.state.isProcessing = false; variant.state.liveTranscript = "I use Flow every day."
+        try? await Task.sleep(for: .milliseconds(150))
+        variant.savePNG("command-ripple-ordinary-mention.png")
+        checks["ordinary_mention_is_not_a_command"] = FlowCommandCaption.detect(in: variant.state.liveTranscript) == nil
+        variant.state.isRecording = false; variant.state.isProcessing = true
+        variant.state.liveTranscript = "Here's the issue. Flow, find the screenshot showing " + String(repeating: "payment error details ", count: 12)
+        try? await Task.sleep(for: .milliseconds(150))
+        variant.savePNG("command-ripple-long-command.png")
+        checks["long_command_preview_rendered"] = FileManager.default.fileExists(atPath: output.appendingPathComponent("command-ripple-long-command.png").path)
+        return checks
+    }
+
+    private func verifyWindowVisibility() async -> [String: Bool] {
+        let existing = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let indicator = RecordingIndicatorWindow(appState: state, attachments: attachments)
+        guard let window = NSApplication.shared.windows.first(where: { $0.title == "Flow · Recording" && !existing.contains(ObjectIdentifier($0)) }) else { return [:] }
+        // Exercise real AppKit visibility offscreen, beneath the desktop, so
+        // regression checks cannot flash a second indicator over the live demo.
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
+        indicator.show()
+        try? await Task.sleep(for: .milliseconds(450))
+        let frame = window.frame
+        var opaque = window.alphaValue >= 0.98, stable = true
+        for _ in 0..<4 {
+            indicator.show()
+            opaque = opaque && window.alphaValue >= 0.98
+            stable = stable && window.frame == frame
+            try? await Task.sleep(for: .milliseconds(40))
+        }
+        indicator.hide()
+        try? await Task.sleep(for: .milliseconds(100))
+        indicator.show()
+        try? await Task.sleep(for: .milliseconds(500))
+        let latestRequestWins = window.isVisible && window.alphaValue >= 0.98
+        indicator.hide()
+        try? await Task.sleep(for: .milliseconds(450))
+        window.isReleasedWhenClosed = false
+        window.close()
+        return ["repeated_show_keeps_indicator_opaque": opaque,
+                "repeated_show_keeps_indicator_position": stable,
+                "hide_then_show_preserves_latest_visibility": latestRequestWins]
     }
 
     private func savePNG(_ name: String) {

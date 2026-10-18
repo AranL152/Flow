@@ -2,7 +2,7 @@
 
 Explicit “Flow, attach/find/search…” instructions appear on a separate purple,
 semibold line in the existing live-caption card. Recipient text remains white.
-A Flow command badge makes the distinction visible without relying on color.
+A plain purple status label identifies the command without a capsule or pill.
 Ordinary mentions, quoted/reported instructions, negated cues and bare incomplete
 forms such as “Flow, attach” remain normal caption text. Saying “Flow” alone is
 not a command. The reserved pattern is “Flow, attach/find/search…” followed by an
@@ -11,7 +11,10 @@ Detection runs on the complete transcript before display cropping.
 This classifier only styles captions; the worker's authoritative command parser,
 message insertion and attachment safeguards are unchanged.
 
-During recording all live captions remain plain white, with no command badge.
+During recording all spoken words remain white. Only the Listening label and
+its three dots are purple; the dots pulse in a small left-to-right wave while
+audio is being captured, and remain static with Reduce Motion. There is no
+command highlight until recording stops.
 After recording stops, an explicit command with an object turns purple and a
 single 700 ms highlight and one smooth crest sweep from left to right,
 with up to 2 points of letter displacement. A Gaussian crest follows the highlight
@@ -29,14 +32,14 @@ command letters distort. Recipient text is outside that layer. Canvas's animatio
 timeline pauses after the pass. The final words stay purple. Long commands wrap
 to two lines and preserve the beginning/end when truncated.
 
-The badge follows actual attachment state: Finding screenshot/image/file… while
+The plain purple label follows actual attachment state: Finding screenshot/image/file… while
 searching, Adding attachment… during insertion, Added to draft after confirmation,
 and Needs detail for a clarification. The attachment picker repeats the Command
 badge. The full Messages runner passes its own attachment session into the HUD,
 so it observes the same real search as the popup.
 
-Reduce Motion disables the ripple, sweeping highlight and finishing flash while retaining static
-purple text, weight and the badge. A preview may request reduced motion but can
+Reduce Motion disables the ripple, sweeping highlight, finishing flash and
+listening-dot motion while retaining static purple text, weight and status. A preview may request reduced motion but can
 never override the system preference to enable motion. No model calls, new
 packages or separately compiled shader resources are involved. The implementation
 uses native [ImageRenderer](https://developer.apple.com/documentation/swiftui/imagerenderer)
@@ -52,6 +55,12 @@ python3 scripts/preview-command-ripple.py
 This builds production components and opens a labelled synthetic-caption preview
 with Replay and Reduce Motion controls. It also runs real local screenshot OCR
 in its dedicated synthetic folder, then displays the production attachment picker.
+Alternate visual fixtures run in a separate hidden host, so Replay never cycles
+the visible bar through test scenes. Native show/hide regressions run below the
+desktop, verifying that repeated show requests retain opacity and position and
+that the latest visibility request wins. The caption reserves consistent space
+and the lower pill keeps its height between phases; repeated production show
+requests no longer restart its fade-in.
 It never records microphone audio, invokes ASR/LLM APIs, or changes Messages. The
 existing signed app bundle and permissions are preserved; this is a separate
 review helper using the updated app components.
@@ -63,8 +72,8 @@ and long commands, and
 is a capture target, not a measured production frame-rate guarantee.
 
 35 Swift tests passed, including recording-phase gating, incomplete commands,
-quotation, negation, Unicode and full-context guards. Nine native preview checks
-passed after the post-recording recognition adjustment. The exported stills
+quotation, negation, Unicode and full-context guards. Thirteen native preview
+checks passed after the stable-bar/listening-dot adjustment. The exported stills
 were visually reviewed: command motion/glow, unchanged recipient text, no
 microphone waveform during processing, readable long commands and static reduced
 motion. A pixel comparison between active/settled fixtures also found no changes

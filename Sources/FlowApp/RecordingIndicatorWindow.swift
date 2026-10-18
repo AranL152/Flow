@@ -12,11 +12,13 @@ import SwiftUI
 final class RecordingIndicatorWindow {
     private let window: NSPanel
     private var visibility = UUID()
+    private var wantsVisible = false
 
     init(appState: AppState, attachments: AttachmentSession? = nil) {
         let view = RecordingIndicatorView(attachmentSession: attachments)
             .environmentObject(appState)
         let hosting = NSHostingController(rootView: view)
+        hosting.sizingOptions = []
 
         let panel = NSPanel(contentViewController: hosting)
         panel.title = "Flow · Recording"
@@ -36,9 +38,13 @@ final class RecordingIndicatorWindow {
     }
 
     func show() {
+        // Recording/loading/processing can each request the same visible panel.
+        // Do not restart its fade or move it on those phase updates.
+        guard !wantsVisible else { return }
+        wantsVisible = true
         visibility = UUID()
         let session = visibility
-        window.alphaValue = 0
+        if !window.isVisible { window.alphaValue = 0 }
         positionWindow()
         window.orderFrontRegardless()
 
@@ -56,6 +62,8 @@ final class RecordingIndicatorWindow {
     }
 
     func hide() {
+        guard wantsVisible else { return }
+        wantsVisible = false
         visibility = UUID()
         let session = visibility
         NSAnimationContext.runAnimationGroup { context in
@@ -113,9 +121,13 @@ struct RecordingIndicatorView: View {
                 if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {
                     CompactWaveformView(isRecording: true, audioLevel: appState.smoothedAudioLevel)
                 }
-                Text(appState.isInitializingModel ? "Loading model…" : (appState.isRecording && !appState.isProcessing ? "Listening" : "Transcribing…"))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
+                if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {
+                    ListeningStatusLabel(fontSize: 11, weight: .medium)
+                } else {
+                    Text(appState.isInitializingModel ? "Loading model…" : "Transcribing…")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
                 if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {
                     Text(String(format: "%d:%02d", appState.recordingDuration / 60000, appState.recordingDuration / 1000 % 60))
                         .font(.system(size: 10, design: .monospaced))
@@ -125,6 +137,7 @@ struct RecordingIndicatorView: View {
                     Color.clear.frame(width: 14, height: 14).accessibilityHidden(true)
                 }
             }
+            .frame(height: 20)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Capsule().fill(Color.black.opacity(0.9)))

@@ -33,13 +33,21 @@ struct FlowCommandCaptionView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 Image(systemName: "mic.fill")
-                Text(isRecording ? "YOU’RE SAYING" : "YOU SAID")
-                if parts != nil { FlowCommandBadge(title: commandStatus, onDarkSurface: true) }
+                if isRecording {
+                    ListeningStatusLabel()
+                } else if parts != nil {
+                    Text(commandStatus)
+                        .foregroundStyle(FlowCommandBadge.ink)
+                        .accessibilityIdentifier("flow-command-status")
+                } else {
+                    Text("Transcribing…")
+                }
                 Spacer(minLength: 2)
                 if isRecording { Text("LIVE").foregroundStyle(FW.recording) }
             }
             .font(.system(size: 9, weight: .semibold)).tracking(1)
             .foregroundStyle(.white.opacity(0.5))
+            .frame(height: 14)
             Group {
                 if let parts {
                     VStack(alignment: .leading, spacing: 2) {
@@ -57,7 +65,7 @@ struct FlowCommandCaptionView: View {
                         .lineLimit(2).contentTransition(.opacity)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
             .accessibilityIdentifier("recording-live-transcript")
         }
         .padding(.horizontal, FlowCaptionMetrics.inset).padding(.vertical, 12)

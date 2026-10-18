@@ -374,3 +374,28 @@ preview is open. Its launcher stops its checked previous Messages demo helper
 to avoid duplicate candidate popups, preserving the unsent draft and installed
 permissioned app. This verification used simulated captions and real local OCR,
 without microphone recording, new cloud requests or Messages writes.
+
+## Steady bar, plain status and animated Listening dots (October 18)
+
+The user reported flicker after the command appeared, requested Listening instead
+of You said, and wanted Attachment found as plain purple text rather than a pill.
+The preview was cycling its visible state through reduced-motion, ordinary-text
+and long-command test fixtures. Those now render in a separate hidden host,
+leaving the main demo untouched. Native indicator show calls are idempotent and
+no longer reset alpha to zero on phase updates. Hosting auto-sizing is disabled
+for its fixed panel; caption/header space and lower-pill height are steadier.
+
+The user then clarified that the purple listening effect should not color the
+recipient message. All live words, including Here's the issue, remain white.
+Only Listening and three small purple dots indicate capture; the dots pulse left
+to right, like typing, and stop when recording ends. Reduce Motion keeps the
+dots static. After Stop, the command-only ripple and synchronized fill/halo are
+unchanged. The header shows plain purple command/search status after detection,
+including Attachment found, with no status capsule. No You said label remains.
+
+All 13 native preview checks passed, including repeated-show opacity/position and
+hide/show interleaving. Listening and found frames were visually reviewed. Pixel
+comparison verified changing dots, unchanged white live-message pixels across
+dot frames and the same caption border position before/after recording. The
+review GIF and stills are updated. These checks used synthetic captions and real
+local OCR without microphone, cloud requests or Messages writes.
