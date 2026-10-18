@@ -14,6 +14,9 @@ private final class AttachmentPasteTarget {
         guard AXIsProcessTrusted(), let app, app.bundleIdentifier == "com.apple.MobileSMS",
               let contact, !contact.isEmpty,
               let element = AXEditMonitorService.getFocusedTextElement(pid: app.processIdentifier) else { return nil }
+        var role: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role) == .success,
+              let role = role as? String, ["AXTextArea", "AXTextView"].contains(role) else { return nil }
         self.app = app; self.element = element; self.contact = contact
     }
 
@@ -48,10 +51,11 @@ final class AttachmentSession: ObservableObject {
 
     init(downloads: AttachmentDownloads = AttachmentDownloads()) { self.downloads = downloads }
 
-    func startObservingDownloads() {
-        guard timer == nil else { return }
+    @discardableResult
+    func startObservingDownloads() -> Bool {
+        guard timer == nil else { return true }
         do { try downloads.observe() }
-        catch { status = error.localizedDescription; return }
+        catch { status = error.localizedDescription; return false }
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -59,6 +63,7 @@ final class AttachmentSession: ObservableObject {
                 catch { self.stopObservingDownloads() }
             }
         }
+        return true
     }
 
     func stopObservingDownloads() { timer?.invalidate(); timer = nil }
@@ -79,7 +84,7 @@ final class AttachmentSession: ObservableObject {
         if plan.request?.source == .recentDownload && timer == nil {
             // Access Downloads only after an explicit voice command. Never
             // trigger file-access dialogs during app launch or ordinary speech.
-            startObservingDownloads()
+            guard startObservingDownloads() else { return }
             let session = sessionID
             status = "Checking the newest matching download…"
             Task { [weak self] in

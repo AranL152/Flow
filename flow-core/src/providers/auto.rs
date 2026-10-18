@@ -352,7 +352,11 @@ impl TranscriptionProvider for AutoTranscriptionProvider {
             }
         };
         let duration_ms = (request.audio.len() as u64 / 2 * 1000) / u64::from(request.sample_rate);
-        super::dictation_stream::consume_with_attachments(response, duration_ms, on_delta, body.completion.attachment_commands_enabled).await
+        if body.completion.attachment_commands_enabled {
+            super::dictation_stream::consume_with_attachments(response, duration_ms, on_delta, true).await
+        } else {
+            super::dictation_stream::consume(response, duration_ms, on_delta).await
+        }
     }
 }
 

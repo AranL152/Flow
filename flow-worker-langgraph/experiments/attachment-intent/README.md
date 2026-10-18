@@ -39,10 +39,10 @@ The native probe uses a private pasteboard and temporary files only. Its seven
 checks passed. Directory arrival order is represented by a synthetic observation
 log, not actual browser download history.
 
-The email probe reproduces a current integration gap: configured expansion works
-for typed formatting but **fails in Auto audio streaming**. It uses generated
-speech, an in-memory user and `aran@example.test`. Its nonzero exit is intentional
-until the production pipeline is fixed.
+The original email probe exposed a gap in Auto audio streaming. The production
+pipeline now expands configured snippets after ASR, and the updated email report
+passes both paths. It uses generated speech, an in-memory user and
+`aran@example.test`; the verifier still exits nonzero if either path fails.
 
 See [the implementation plan](../../../docs/attachment-assistant-plan.md) and
 [recorded results](../../../review/attachment-intent-verification.json).

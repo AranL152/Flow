@@ -1,5 +1,9 @@
 # Voice composition with clipboard images and file references
 
+Implementation update: clipboard/recent-download commands and native previews
+are now integrated. See [supported commands and current verification](attachment-commands.md).
+The proposal and initial research below are retained as the original design record.
+
 ## Decision and scope
 
 Build toward a voice instruction that produces a reviewable message plus the

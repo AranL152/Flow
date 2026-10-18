@@ -16,6 +16,11 @@ final class AttachmentTests: XCTestCase {
         XCTAssertThrowsError(try snapshot.resolve(kind: .pdf))
         try candidate.write(to: board)
         XCTAssertFalse(board.readObjects(forClasses: [NSImage.self])?.isEmpty ?? true)
+        let composer = NSTextView(frame: .zero)
+        composer.isRichText = true; composer.importsGraphics = true
+        XCTAssertTrue(composer.readSelection(from: board))
+        XCTAssertGreaterThan(composer.textStorage?.length ?? 0, 0)
+        XCTAssertNotNil(composer.textStorage?.attribute(.attachment, at: 0, effectiveRange: nil))
     }
 
     func testDownloadsUseObservedArrivalFilterTypesAndRejectChanges() throws {

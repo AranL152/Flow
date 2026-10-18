@@ -3388,6 +3388,49 @@ mod dictation_stream_tests {
     }
 
     #[test]
+    fn attachment_instructions_are_not_learned_as_contact_wording() {
+        struct AttachmentFixture;
+        #[async_trait::async_trait]
+        impl TranscriptionProvider for AttachmentFixture {
+            fn name(&self) -> &'static str { "attachment fixture" }
+            fn is_configured(&self) -> bool { true }
+            async fn transcribe(&self, _: TranscriptionRequest) -> crate::error::Result<TranscriptionResponse> { unreachable!() }
+            async fn transcribe_stream(&self, _: TranscriptionRequest, callback: DictationDelta) -> crate::error::Result<TranscriptionResponse> {
+                assert!(callback("here's the slides"));
+                Ok(TranscriptionResponse {
+                    text: "Here's the slides. Flow attach the PDF I just downloaded".into(),
+                    completed_text: Some("here's the slides".into()),
+                    attachment: Some(serde_json::from_value(serde_json::json!({
+                        "message": "Here's the slides.", "command": "Flow attach the PDF I just downloaded",
+                        "request": { "source": "recent_download", "kind": "pdf" }
+                    })).unwrap()), confidence: None, language: None, duration_ms: 1000, segments: None,
+                })
+            }
+        }
+        let db = CString::new(":memory:").unwrap();
+        let handle = flow_init(db.as_ptr());
+        let engine = unsafe { &mut *handle };
+        engine.transcription = Arc::new(AttachmentFixture);
+        let pcm = vec![0; 32000];
+        let app = CString::new("Messages").unwrap();
+        let contact = CString::new("Alex").unwrap();
+        let mut state = CallbackState { chunks: vec![], cancel: false };
+        let result = flow_transcribe_audio_stream(handle, pcm.as_ptr(), pcm.len(), 16000, app.as_ptr(), contact.as_ptr(), receive, &mut state as *mut _ as *mut c_void);
+        assert!(!result.is_null());
+        assert_eq!(state.chunks, ["here's the slides"]);
+        assert_eq!(engine.pending_dictation.lock().as_ref().unwrap().said, "Here's the slides.");
+        assert!(engine.pending_attachment.lock().is_some());
+        let sent = CString::new("here's the deck").unwrap();
+        assert_eq!(flow_record_final_text_for_contact(handle, sent.as_ptr(), contact.as_ptr()), 0);
+        let examples = engine.storage.get_style_examples(10).unwrap();
+        assert_eq!(examples[0].said, "Here's the slides.");
+        assert_eq!(examples[0].sent, "here's the deck");
+        assert_eq!(examples[0].contact_key, style::contact_key("Alex"));
+        flow_free_string(result);
+        flow_destroy(handle);
+    }
+
+    #[test]
     fn changed_contact_at_send_discards_the_pending_learning_baseline() {
         let db = CString::new(":memory:").unwrap();
         let handle = flow_init(db.as_ptr());
