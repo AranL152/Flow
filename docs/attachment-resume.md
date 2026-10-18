@@ -197,3 +197,39 @@ a local UI preview, without microphone recording, API calls or Messages changes.
 Command effects are proposals only: purple command highlighting/chip, a subtle
 recognition pulse, and a visual handoff into the attachment picker. They have not
 been implemented or chosen yet.
+
+## Liquid command effect implemented (October 18)
+
+The user approved the liquid/ripple proposal. It is now implemented in native
+caption views: an explicit Flow attach/find/search cue splits the white recipient
+message from a purple semibold command line with a Flow command badge. A single
+650 ms ripple/glint plays after recording stops, then settles. Full-transcript
+styling guards block quoted, reported and negated speech; they do not execute
+commands or replace worker parsing. Reduce Motion keeps a static highlight.
+The actual attachment session drives Finding screenshot/image/file… and other
+status labels, and the picker repeats the Command badge. The full voice demo
+passes its session into the HUD for that connection.
+
+33 Swift tests and seven local native-preview checks passed. Native stills were
+visually reviewed for motion, ordinary mentions, reduced motion and long wrapping.
+See docs/command-ripple.md, review/command-ripple.gif and the scoped JSON report.
+Run python3 scripts/preview-command-ripple.py for the open Replay preview. Captions
+there are explicitly simulated, OCR is real and local, and no microphone, model
+API or Messages write occurs. The previous OCR verification helper was stopped
+by checked PID; the normal signed app and unsent Messages draft are preserved.
+The installed app bundle still needs rebuilding for the normal hotkey workflow.
+
+## Attachment popup margins corrected (October 18)
+
+The user found the unselected picker header almost touching the top edge. The
+card already had uniform 14-point padding, but the panel's estimated height
+clipped it when the selection hint appeared. The panel now measures the native
+SwiftUI content directly, outside its layout pass, and refits after session or
+search-control changes. Its lower edge stays anchored as content height changes.
+
+The native two-candidate panel measured 264 points without a selection and 238
+after selection. Both actual panel snapshots were visually reviewed for even
+14-point outer margins. All 33 Swift tests and 15 real local Spotlight/picker
+checks passed. See review/file-search-unselected.png, file-search-preview.png
+and file-search-verification.json. No microphone, model API, Messages paste,
+permission prompts or installed-bundle replacement was involved.

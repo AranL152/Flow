@@ -20,7 +20,10 @@ struct FlowCommandCaptionView: View {
         if attachments.attachmentConfirmed { return "Added to draft" }
         if attachments.busy { return "Adding attachment…" }
         if attachments.searching {
-            return plan.request?.kind == .image ? "Finding screenshot…" : "Finding file…"
+            if plan.request?.kind == .image {
+                return plan.command.range(of: "screenshot", options: .caseInsensitive) != nil ? "Finding screenshot…" : "Finding image…"
+            }
+            return "Finding file…"
         }
         if !attachments.candidates.isEmpty { return "Attachment found" }
         return "Flow command"

@@ -1,0 +1,15 @@
+{
+  "checks" : {
+    "animation_exported" : true,
+    "badge_uses_real_search_state" : true,
+    "explicit_cue_detected" : true,
+    "long_command_preview_rendered" : true,
+    "ordinary_mention_is_not_a_command" : true,
+    "real_local_ocr_produces_handoff_candidates" : true,
+    "reduced_motion_preview_rendered" : true
+  },
+  "frame_interval_ms_target" : 50,
+  "frames" : 40,
+  "scope" : "Native production caption\/ripple views with labelled simulated captions and real local OCR. No microphone recording, cloud API calls or Messages changes. Still images and GIF require visual review.",
+  "status" : "ready"
+}
