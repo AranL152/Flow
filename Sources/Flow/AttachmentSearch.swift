@@ -17,6 +17,7 @@ public final class AttachmentSearch {
 
     public func search(_ text: String, kind: AttachmentRequest.Kind) async throws -> [AttachmentCandidate] {
         let terms = try AttachmentFileSearch.terms(for: text)
+        let documentTerms = Set((try? AttachmentDocumentText.terms(text)) ?? terms)
         var filenameMatches: [AttachmentCandidate] = []
         var filenameError: Error?
         do { filenameMatches = try await filenames.search(text, kind: kind, scopes: scopes) }
@@ -59,7 +60,12 @@ public final class AttachmentSearch {
                 guard let url = candidate.fileURL else { return 0 }
                 let name = AttachmentFileSearch.filenameScore(url, terms: terms)
                 if filenameURLs.contains(url.standardizedFileURL), name >= 1000 { return 2000 }
-                if !candidate.matchedImageText.isEmpty || !candidate.matchedDocumentText.isEmpty { return 1000 }
+                if !candidate.matchedDocumentText.isEmpty {
+                    // Rank by verified query coverage rather than download order.
+                    // An exact quarter/year outranks another report on the same topic.
+                    return 1000 + candidate.matchedDocumentText.filter(documentTerms.contains).count * 40
+                }
+                if !candidate.matchedImageText.isEmpty { return 1000 }
                 return name
             }
             let ranked = ordered.enumerated().sorted {

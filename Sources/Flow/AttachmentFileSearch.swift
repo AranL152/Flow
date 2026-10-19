@@ -53,7 +53,7 @@ public final class AttachmentFileSearch {
     /// Spotlight searches importer-provided text without exposing the full text.
     /// Keynote and legacy PowerPoint rely on the installed Spotlight importer.
     public func documentContents(_ text: String, kind: AttachmentRequest.Kind, scopes: [URL]? = nil) async throws -> [AttachmentCandidate] {
-        let terms = try AttachmentDocumentText.terms(text)
+        let terms = AttachmentDocumentText.requiredTerms(try AttachmentDocumentText.terms(text))
         let metadata = NSMetadataQuery()
         let predicates = terms.map { NSPredicate(format: "%K ==[cd] %@", "kMDItemTextContent", $0) }
         metadata.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [Self.documentTypes(kind)] + predicates)

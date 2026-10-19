@@ -38,6 +38,7 @@ because it used “add” instead of “attach”.
 | Flow, find my robotics presentation. | Ranked local filename matches; top match appended in Messages |
 | Here's the deck. Flow, find the presentation mentioning quarterly revenue. | Local slide text and indexed presentation content |
 | Here's the report. Flow, find the PDF containing quarterly revenue. | Local PDF text, with OCR for image-only pages |
+| Here's the report. Flow, find the PDF of the quarterly report from Q2 2026. | Requested period ranks first; other periods remain alternatives |
 | Here's the image. Flow, find the beach trip photo. | Image filename matches and matching visible screenshot words |
 | Here's the issue. Flow, find the screenshot showing payment error. | Local OCR finds recent screenshots containing those words |
 
@@ -61,6 +62,11 @@ Say part of the filename after the message: “Here's the file. Flow, find my
 robotics presentation.” Flow searches the local Spotlight index in your home
 directory, filters by the requested file type, and ranks up to 12 matches.
 Exact filename stems beat longer partial names; recency breaks equal-name ties.
+For document content, the topic still has to match. Quarter/year terms improve
+ranking rather than hiding reports from other periods. “Q2”, “Q two”, and
+“second quarter” are equivalent. A period-only query remains exact. Match labels
+show only words actually found in each document, so an alternative never claims
+to contain the requested quarter when it does not.
 After the message completes, the top match is appended to the same unsent
 Messages composer, then the popup shows it alongside alternatives. Contact,
 focus and selection are checked before pasting. A changed query or target stops

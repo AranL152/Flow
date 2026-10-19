@@ -45,6 +45,7 @@ public actor AttachmentDocumentTextIndex {
 
     public func searchResult(_ query: String, urls: [URL], budget: TimeInterval = 8) async throws -> SearchResult {
         let terms = try AttachmentDocumentText.terms(query)
+        let required = AttachmentDocumentText.requiredTerms(terms)
         let deadline = Date().addingTimeInterval(max(0, min(budget, 15)))
         var matches: [AttachmentCandidate] = []
         var seen = Set<URL>()
@@ -77,12 +78,13 @@ public actor AttachmentDocumentTextIndex {
             }
             checked.insert(url.standardizedFileURL)
             let allWords = Set(AttachmentDocumentText.words(units.map(\.text).joined(separator: " ")))
-            guard terms.allSatisfy(allWords.contains) else { continue }
+            guard required.allSatisfy(allWords.contains) else { continue }
+            let matched = terms.filter(allWords.contains)
             let location = units.first { unit in
                 let words = Set(AttachmentDocumentText.words(unit.text))
-                return terms.allSatisfy(words.contains)
+                return matched.allSatisfy(words.contains)
             }?.location
-            if let candidate = try? AttachmentDocumentText.candidate(url, terms: terms, location: location) { matches.append(candidate) }
+            if let candidate = try? AttachmentDocumentText.candidate(url, terms: matched, location: location) { matches.append(candidate) }
         }
         try Task.checkCancellation()
         return SearchResult(matches: matches, checkedURLs: checked)
