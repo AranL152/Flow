@@ -18,6 +18,11 @@
     "spotlight_discovers_five_generic_documents": true
   },
   "cold_direct_seconds": 0.35813701152801514,
+  "limitations": [
+    "Synthetic documents and generated speech; human voice accuracy not benchmarked.",
+    "Native Keynote and legacy PPT content depend on Spotlight importers and were not independently fixture-tested.",
+    "Direct extraction and OCR are bounded; see docs/document-content-search.md."
+  ],
   "matches": [
     {
       "filename": "Presentation 02.pptx",
@@ -36,7 +41,75 @@
       "reason": "Matches: \"cobalt nebula\" \u00b7 Page 2"
     }
   ],
+  "native_voice_verification": {
+    "existing_privacy_grants": {
+      "Accessibility": {
+        "authorized": true,
+        "installed_signature_satisfies_saved_grant": true
+      },
+      "Microphone": {
+        "authorized": true,
+        "installed_signature_satisfies_saved_grant": true
+      },
+      "SpeechRecognition": {
+        "authorized": true,
+        "installed_signature_satisfies_saved_grant": true
+      },
+      "SystemPolicyDesktopFolder": {
+        "authorized": true,
+        "installed_signature_satisfies_saved_grant": true
+      }
+    },
+    "installed_build": "3c3eaa024780fb392cec22169c4fd4af221e3a08",
+    "runs": [
+      {
+        "caption_updates_before_stop": 24,
+        "checks": {
+          "captions_while_speaking": true,
+          "genuine_final_asr_handoff": true,
+          "message_populated": true,
+          "model_streamed_while_speaking": true,
+          "native_attachment_present": true,
+          "nothing_sent": true,
+          "processing_completed": true
+        },
+        "final_asr_source": "on_device",
+        "first_caption_after_speech_seconds": 1.1057753203201295,
+        "kind": "pdf",
+        "model_updates_before_stop": 10,
+        "native_attachment_count": 1,
+        "stop_to_completion_seconds": 2.8459839820861816
+      },
+      {
+        "caption_updates_before_stop": 27,
+        "checks": {
+          "captions_while_speaking": true,
+          "genuine_final_asr_handoff": true,
+          "message_populated": true,
+          "model_streamed_while_speaking": true,
+          "native_attachment_present": true,
+          "nothing_sent": true,
+          "processing_completed": true
+        },
+        "final_asr_source": "cloud",
+        "first_caption_after_speech_seconds": 1.140392303703491,
+        "kind": "presentation",
+        "model_updates_before_stop": 11,
+        "native_attachment_count": 1,
+        "stop_to_completion_seconds": 2.8937530517578125
+      }
+    ],
+    "scope": "Installed certificate-signed native app; actual helper Fn events, generated Samantha voice through speakers into the physical microphone, genuine cloud inference, local document search and actual Messages attachment objects. Two separate synthetic example.invalid drafts; no Send or user draft clearing. Private screen recordings and screenshots visually reviewed locally.",
+    "visual_checks": {
+      "pptx_attached_with_other_deck_candidate_and_slide_reason": true,
+      "scanned_pdf_attached_with_matching_words_and_page": true
+    }
+  },
   "passed": true,
   "scope": "Synthetic, generically named PDF and PPTX files; real local Spotlight discovery, PDF text, scanned PDF OCR, slide XML and embedded slide-image OCR, persistent cache and the production attachment picker. No API calls, audio, permission requests or Messages writes.",
+  "swift_tests": {
+    "executed": 76,
+    "failures": 0
+  },
   "warm_direct_seconds": 0.0010489225387573242
 }

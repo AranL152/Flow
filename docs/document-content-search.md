@@ -80,3 +80,14 @@ AttachmentSession and native picker rendering. It makes no API calls or Messages
 writes and removes its fixtures. Its screenshot/logs stay private under
 `.build/document-content-review/`.
 See [recorded synthetic verification](../review/document-content-verification.json).
+
+The installed, persistently signed native app also passed two recorded voice
+checks: generated speech through the physical microphone and actual Fn helper,
+live captions and model text writes, then a content-matched scanned PDF and PPTX
+in separate unsent Messages drafts. The PDF run completed 2.85 seconds after
+Stop; the deck run's actual timing is recorded in the report. Screenshots confirm
+the matching words/page and the alternative deck's slide reason. No Send event
+was generated. All four saved TCC grants remain authorized and their certificate
+requirements still accept the installed executable. Footage and native logs are
+kept private. These checks do not benchmark human voice accuracy or independently
+verify Keynote/legacy PPT importer behavior.
