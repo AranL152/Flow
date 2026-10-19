@@ -49,6 +49,7 @@ public final class LiveSpeechCaptions {
         request.requiresOnDeviceRecognition = true
         request.addsPunctuation = false
         request.taskHint = .dictation
+        request.contextualStrings = ["Flow", "Flow attach", "Flow find", "Hey Flow"]
         self.request = request
         isListening = true
         onStatus?("Listening…")
