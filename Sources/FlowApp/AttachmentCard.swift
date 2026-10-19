@@ -48,7 +48,8 @@ struct AttachmentCard: View {
                         }
                         Button("Copy selected file") { session.copySelected() }.disabled(session.selected == nil)
                     } label: { Image(systemName: "ellipsis") }
-                    .menuStyle(.borderlessButton).fixedSize().disabled(session.busy)
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().disabled(session.busy)
+                    .accessibilityLabel("Attachment options")
                     .help("Attachment options")
                     Button { session.dismiss() } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
                         .buttonStyle(.plain).foregroundStyle(FW.textMuted).disabled(session.busy)
@@ -136,7 +137,7 @@ struct AttachmentCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(candidate.filename).font(.system(size: 12, weight: .medium))
                             .lineLimit(1).truncationMode(.middle)
-                        Text(candidate.matchDescription ?? (attached ? "In draft" : candidate.approximateRecency ? "Confirm this file" : session.plan?.request?.source == .fileSearch && session.candidates.first?.id == candidate.id ? "Best filename match" : candidate.sourceLabel))
+                        matchLabel(candidate.matchDescription ?? (attached ? "In draft" : candidate.approximateRecency ? "Confirm this file" : session.plan?.request?.source == .fileSearch && session.candidates.first?.id == candidate.id ? "Best filename match" : candidate.sourceLabel))
                             .font(.system(size: 10)).foregroundStyle(attached ? FW.accent : FW.textMuted)
                             .lineLimit(1)
                     }
@@ -157,7 +158,7 @@ struct AttachmentCard: View {
                         AttachmentThumbnail(candidate: candidate, previewSize: 720).frame(width: 300, height: 230)
                         Text(candidate.filename).font(.system(size: 12, weight: .medium)).textSelection(.enabled)
                         if let reason = candidate.matchDescription {
-                            Text(reason).font(.caption).foregroundStyle(FW.accent)
+                            matchLabel(reason).font(.caption).foregroundStyle(FW.accent)
                         }
                         Text(candidate.sourceLabel).font(.caption).foregroundStyle(FW.textMuted)
                     }.padding(14).background(FW.background)
@@ -167,6 +168,16 @@ struct AttachmentCard: View {
         .background(selected ? FW.accent.opacity(0.08) : FW.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? FW.accent.opacity(0.35) : FW.border.opacity(0.65), lineWidth: 1))
+    }
+
+    private func matchLabel(_ description: String) -> Text {
+        var label = AttributedString(description)
+        if description.hasPrefix("Matches:"),
+           let opening = label.characters.firstIndex(of: "\""),
+           let closing = label.characters.lastIndex(of: "\""), opening < closing {
+            label[label.characters.index(after: opening)..<closing].inlinePresentationIntent = .stronglyEmphasized
+        }
+        return Text(label)
     }
 }
 
