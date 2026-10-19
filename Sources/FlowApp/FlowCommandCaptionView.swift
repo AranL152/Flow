@@ -65,40 +65,26 @@ struct FlowCommandCaptionView: View {
             .font(.system(size: 9, weight: .semibold)).tracking(1)
             .foregroundStyle(.white.opacity(0.5))
             .frame(height: 14)
-            Group {
-                if let parts {
-                    VStack(alignment: .leading, spacing: 2) {
-                        if !parts.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(String(parts.message.trimmingCharacters(in: .whitespacesAndNewlines).suffix(100)))
-                                .font(.system(size: 16, weight: .medium)).foregroundStyle(.white.opacity(0.95))
-                                .lineLimit(1).truncationMode(.head)
-                        }
-                        LiquidCommandText(command: displayCommand(parts.command), width: FlowCaptionMetrics.textWidth, rippleStart: rippleStart, animating: rippleActive, recognized: recognized)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // One text layout owns both ordinary speech and command
+                        // pixels. Recognition changes paint, never line wrapping.
+                        LiquidCommandText(command: parts?.command ?? (reveal.text.isEmpty ? emptyCaption : reveal.text),
+                            width: FlowCaptionMetrics.textWidth, rippleStart: rippleStart,
+                            animating: rippleActive, recognized: recognized && parts != nil,
+                            messagePrefix: parts?.message ?? "")
+                        Color.clear.frame(height: 1).id("latest-speech")
                     }
-                } else {
-                    ScrollViewReader { proxy in
-                        ScrollView(.vertical) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(reveal.text.isEmpty ? emptyCaption : reveal.text)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(.white.opacity(reveal.text.isEmpty ? 0.5 : 0.95))
-                                    .frame(width: FlowCaptionMetrics.textWidth, alignment: .leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Color.clear.frame(height: 1).id("latest-speech")
-                            }
-                        }
-                        .scrollIndicators(.hidden)
-                        .defaultScrollAnchor(.bottom)
-                        .frame(height: 40)
-                        .allowsHitTesting(false)
-                        .onChange(of: reveal.text) { _, _ in
-                            // Follow every rendered update immediately, without a
-                            // second scrolling animation falling behind speech.
-                            var transaction = Transaction()
-                            transaction.disablesAnimations = true
-                            withTransaction(transaction) { proxy.scrollTo("latest-speech", anchor: .bottom) }
-                        }
-                    }
+                }
+                .scrollIndicators(.hidden)
+                .defaultScrollAnchor(.bottom)
+                .frame(height: 62)
+                .allowsHitTesting(false)
+                .onChange(of: reveal.text) { _, _ in
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { proxy.scrollTo("latest-speech", anchor: .bottom) }
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
@@ -123,13 +109,8 @@ struct FlowCommandCaptionView: View {
         recognized = false; rippleActive = false; rippleStart = nil
         let finalCommand = !isRecording && isTranscriptFinal && FlowCommandCaption.detect(in: transcript) != nil
         onPresentationState?(finalCommand)
-        let target: String
-        if let full = FlowCommandCaption.detect(in: transcript) {
-            target = String(full.message.trimmingCharacters(in: .whitespacesAndNewlines).suffix(100))
-                + (full.message.isEmpty ? "" : " ") + displayCommand(full.command)
-        } else { target = String(transcript.suffix(512)) }
-        // While speaking, retain the raw white caption and follow its tail.
-        let caption = isRecording ? String(transcript.suffix(512)) : target
+        // Keep the same raw text and whitespace before and after recognition.
+        let caption = String(transcript.suffix(512))
         reveal.retarget(caption, maximumAnimatedCharacters: 12)
         do {
             while reveal.advance() {
@@ -152,10 +133,7 @@ struct FlowCommandCaptionView: View {
         } catch { /* A new ASR revision owns the next presentation task. */ }
     }
 
-    private func displayCommand(_ command: String) -> String {
-        guard command.count > 160 else { return command }
-        return String(command.prefix(32)) + "…" + String(command.suffix(120))
-    }
+
 }
 
 enum FlowCaptionMetrics {
