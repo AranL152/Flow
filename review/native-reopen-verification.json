@@ -1,0 +1,21 @@
+{
+  "scope": "Launch-only verification of the unchanged installed native app. Generated speech played through physical speakers into microphone; helper Fn events; no Send. Not an end-to-end streaming pass.",
+  "installed_build": "5a916f9236a737e41a5bf45ab6f33654110b0c0d",
+  "installed_executable_sha256": "c6548a91aef84985fdae435ea975381b5ab87042c125b9351c541569ebfdba43",
+  "installed_signature_unchanged_after_restart": true,
+  "helper_ready_after_restart": true,
+  "hotkey_started_and_stopped_recording": true,
+  "microphone_start_ms": 24,
+  "total_recording_start_ms": 175,
+  "live_cloud_caption_responses": 14,
+  "new_privacy_grant_requested": false,
+  "original_draft_preserved": true,
+  "send_generated": false,
+  "desktop_alias_created": true,
+  "limitations": [
+    "No signing certificate is installed: future ad-hoc signed updates can still invalidate grants.",
+    "The draft already contained an attachment. No new draft text appeared before Stop; formatted text and another synthetic attachment were added afterward.",
+    "Cloud speech finalization closed unexpectedly and used recorded-audio fallback.",
+    "This take could not save its screen recording because the destination already existed. Existing private recordings remain local; this report does not claim a new saved video."
+  ]
+}

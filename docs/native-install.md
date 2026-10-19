@@ -1,12 +1,23 @@
 # Update and launch the native Mac app
 
+For everyday use, open the **Flow Attachments** alias on the Desktop, or run:
+
+```sh
+python3 scripts/launch-native.py
+```
+
+This opens the existing bundle in place. It never compiles, replaces or signs
+the app, so reopening it does not change its permission identity. Do not run
+the installer just to open Flow. The Desktop alias targets this checkout's
+`.build/Flow Attachments.app`; keep that bundle in place.
+
 This is optional for everyday hotkey use, not a prerequisite for the website
 video. The user clarified on October 18: “isnt this just for the demo?” Keep
 demo work on `python3 scripts/simulate-imessage-full.py --kind screenshot`, which
 builds its own native production-component runner and uses generated speech.
 Do not require a normal app install or its permission setup to record that demo.
 
-From this checkout:
+Only when intentionally installing code changes, from this checkout:
 
 ```sh
 python3 scripts/install-native.py

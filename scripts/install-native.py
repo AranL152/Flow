@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Update the existing native app once, verify it, then launch. Never resets TCC."""
+"""Rebuild and replace Flow. For everyday launches, use scripts/launch-native.py."""
 import argparse
 import hashlib
 import os
@@ -49,6 +49,8 @@ def main():
     parser.add_argument('--no-launch', action='store_true')
     args = parser.parse_args()
     app = args.app.resolve()
+    print('This command rebuilds and replaces the app. Ad-hoc signed updates can require new privacy grants.', flush=True)
+    print('To open the existing app without changing its identity: python3 scripts/launch-native.py', flush=True)
     run('cargo', 'build', '--manifest-path', str(ROOT / 'flow-core/Cargo.toml'), '--quiet', cwd=ROOT)
     binary_dir = Path(subprocess.check_output(['swift', 'build', '--show-bin-path'], cwd=ROOT, text=True).strip())
     # SwiftPM doesn't track the external Rust archive; force a fresh final link.
