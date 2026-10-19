@@ -14,7 +14,6 @@ private final class DemoMessageStream {
     private let originalLength: Int
     private let attachmentCount: Int
     private var output = ""
-    private var pending = ""
     var insertedText: String { output }
     private(set) var largestWrite = 0
     private(set) var writes = 0
@@ -33,22 +32,9 @@ private final class DemoMessageStream {
 
     func append(_ delta: String) async throws {
         try Task.checkCancellation()
-        pending += delta
-        // Messages handles tiny Unicode packets more reliably than isolated
-        // keystrokes. Keep at most one grapheme waiting between display frames.
-        while pending.count >= 2 {
-            let frame = String(pending.prefix(2))
-            try await insert(frame)
-            pending.removeFirst(frame.count)
-        }
-        if pending.last.map({ ".,!?;:\n".contains($0) }) == true { try await finish() }
-    }
-
-    func finish() async throws {
-        try Task.checkCancellation()
-        guard !pending.isEmpty else { return }
-        try await insert(pending)
-        pending = ""
+        // Each presentation delta is one complete word. A single native event
+        // keeps that word together instead of carrying a letter into the next beat.
+        try await insert(delta)
     }
 
     private func insert(_ delta: String) async throws {
@@ -198,6 +184,7 @@ final class FullMessagesDemo {
                 let finalizationMs = Date().timeIntervalSince(stopped) * 1000
                 var output = "", chunks = 0, rawOutput = "", rawChunks = 0, largestDisplayChunk = 0
                 var firstFrame: Date?, lastFrame: Date?
+                var wordFrames: [String] = []
                 var plan: AttachmentPlan?
                 let queue = AsyncThrowingStream<DictationStreamEvent, Error>.makeStream()
                 let receiving = Task { @MainActor in
@@ -214,6 +201,7 @@ final class FullMessagesDemo {
                     switch event {
                     case .delta(let delta):
                         guard state.engine.activeMessagesContact == contact else { throw demoError("The conversation changed during streaming.") }
+                        wordFrames.append(delta)
                         chunks += 1; output += delta; largestDisplayChunk = max(largestDisplayChunk, delta.count)
                         if firstFrame == nil { firstFrame = Date() }; lastFrame = Date()
                         state.isStreamingOutput = true
@@ -225,7 +213,6 @@ final class FullMessagesDemo {
                         guard final == output.trimmingCharacters(in: .whitespacesAndNewlines) else { throw demoError("The model stream was not complete.") }
                     }
                 }
-                try await writer.finish()
                 guard let plan, plan.request?.source == .fileSearch else { throw demoError("The voice command did not resolve a filename search.") }
                 session.receive(plan)
                 await session.automaticallyStage(engine: state.engine, insertionUnchanged: true)
@@ -256,7 +243,7 @@ final class FullMessagesDemo {
                         && AXEditMonitorService.attachmentCount(in: composer) == after
                 }
                 let revealSeconds = lastFrame?.timeIntervalSince(firstFrame ?? Date()) ?? 0
-                let minimumRevealSeconds = output.count <= 240 ? Double(max(0, output.count - 1)) * 0.035 : 0.2
+                let minimumRevealSeconds = Double(max(0, chunks - 1)) * 0.16
                 for _ in 0..<400 where state.captionPresentationActive { try await Task.sleep(for: .milliseconds(20)) }
                 var checks: [String: Bool] = [
                     "final_caption_prepared": state.liveTranscriptFinalized,
@@ -265,8 +252,8 @@ final class FullMessagesDemo {
                     "command_effect_detected": FlowCommandCaption.detect(in: state.liveTranscript) != nil,
                     "real_llm_chunks_inserted": rawChunks > 1 && writer.writes > 1 && writer.insertedText == output && rawOutput == output,
                     "paced_display_frames": chunks > 1 && revealSeconds >= minimumRevealSeconds,
-                    "small_display_chunks": largestDisplayChunk <= 4,
-                    "small_native_writes": writer.largestWrite <= 2,
+                    "one_word_per_display_frame": wordFrames.allSatisfy { $0.split(whereSeparator: \.isWhitespace).count <= 1 },
+                    "one_native_write_per_word": writer.writes == chunks,
                     "original_draft_preserved": original != nil && textNow.map { canonicalQuotes($0).hasPrefix(canonicalQuotes(original!)) } == true,
                     "original_attachments_plus_one": before != nil && after == before! + 1,
                     "best_filename_selected": session.selected?.filename == expectedFile,
@@ -286,7 +273,7 @@ final class FullMessagesDemo {
                     "used_realtime_cloud_asr": realtimeTranscript != nil, "asr_finalization_ms": finalizationMs,
                     "stop_to_first_display_ms": firstFrame.map { $0.timeIntervalSince(stopped) * 1000 } ?? -1,
                     "caption_updates": captionUpdates, "llm_chunks": rawChunks, "display_frames": chunks, "native_text_writes": writer.writes,
-                    "display_reveal_seconds": revealSeconds, "largest_display_chunk": largestDisplayChunk, "largest_native_write": writer.largestWrite,
+                    "display_reveal_seconds": revealSeconds, "display_words": wordFrames, "largest_display_chunk": largestDisplayChunk, "largest_native_write": writer.largestWrite,
                     "attached_filename": session.selected?.filename ?? "", "candidates": session.candidates.map(\.filename),
                     "replacement": replacementDetails, "checks": checks, "passed": checks.values.allSatisfy { $0 }])
                 save("running")

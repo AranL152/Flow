@@ -2,7 +2,7 @@ import XCTest
 @testable import Flow
 
 final class DictationPresentationTests: XCTestCase {
-    func testBurstsRevealInSmallUnicodeSafeFramesBeforeCompletion() async throws {
+    func testBurstsRevealWholeUnicodeSafeWordsBeforeCompletion() async throws {
         let text = "Hi 👩🏽‍💻 Alex! Cafe\u{301} ❤️ let's meet."
         let source = AsyncThrowingStream<DictationStreamEvent, Error> { c in
             c.yield(.delta(text)); c.yield(.completed(text)); c.finish()
@@ -13,7 +13,7 @@ final class DictationPresentationTests: XCTestCase {
             switch event {
             case .delta(let frame):
                 XCTAssertFalse(completed)
-                XCTAssertEqual(frame.count, 1)
+                XCTAssertEqual(frame.split(whereSeparator: \.isWhitespace).count, 1)
                 frames.append(frame)
             case .completed(let final):
                 completed = true
@@ -22,6 +22,7 @@ final class DictationPresentationTests: XCTestCase {
             }
         }
         XCTAssertTrue(completed)
+        XCTAssertEqual(frames, ["Hi", " 👩🏽‍💻", " Alex!", " Cafe\u{301}", " ❤️", " let's", " meet."])
         XCTAssertEqual(frames.joined(), text)
         XCTAssertTrue(frames.joined().contains("👩🏽‍💻"))
     }
@@ -63,21 +64,21 @@ final class DictationPresentationTests: XCTestCase {
 
     func testFastProviderBurstStillHasSteadyPresentationTime() async throws {
         let source = AsyncThrowingStream<DictationStreamEvent, Error> { c in
-            c.yield(.delta("abcdefgh")); c.yield(.completed("abcdefgh")); c.finish()
+            c.yield(.delta("one two three four")); c.yield(.completed("one two three four")); c.finish()
         }
         var times: [ContinuousClock.Instant] = []
         let clock = ContinuousClock()
         for try await event in DictationPresentation.smooth(source) {
             if case .delta = event { times.append(clock.now) }
         }
-        XCTAssertEqual(times.count, 8)
+        XCTAssertEqual(times.count, 4)
         for (before, after) in zip(times, times.dropFirst()) {
-            XCTAssertGreaterThanOrEqual(before.duration(to: after), .milliseconds(35))
+            XCTAssertGreaterThanOrEqual(before.duration(to: after), .milliseconds(170))
         }
     }
 
-    func testLongBurstsCatchUpWithoutLargeVisualJumps() async throws {
-        let text = String(repeating: "abcd", count: 300)
+    func testLongBurstsKeepOneWordPerFrame() async throws {
+        let text = String(repeating: "abcd ", count: 300)
         let source = AsyncThrowingStream<DictationStreamEvent, Error> { c in
             c.yield(.delta(text)); c.yield(.completed(text)); c.finish()
         }
@@ -90,7 +91,8 @@ final class DictationPresentationTests: XCTestCase {
                 XCTAssertFalse(completed)
                 XCTAssertFalse(frame.isEmpty)
                 largestFrame = max(largestFrame, frame.count)
-                XCTAssertLessThanOrEqual(frame.count, 4)
+                XCTAssertLessThanOrEqual(frame.split(whereSeparator: \.isWhitespace).count, 1)
+                XCTAssertLessThanOrEqual(frame.count, 5)
                 output += frame
             case .completed(let final):
                 completed = true
@@ -101,6 +103,37 @@ final class DictationPresentationTests: XCTestCase {
         XCTAssertTrue(completed)
         XCTAssertGreaterThan(largestFrame, 1)
         XCTAssertEqual(output, text)
+    }
+
+    func testProviderTokenFragmentsWaitForACompleteWord() async throws {
+        let source = AsyncThrowingStream<DictationStreamEvent, Error> { c in
+            Task {
+                for fragment in ["Hel", "lo", " ", "wor", "ld", "!"] {
+                    c.yield(.delta(fragment))
+                    try await Task.sleep(for: .milliseconds(20))
+                }
+                c.yield(.completed("Hello world!")); c.finish()
+            }
+        }
+        var frames: [String] = []
+        for try await event in DictationPresentation.smooth(source, interval: .zero) {
+            if case .delta(let text) = event { frames.append(text) }
+        }
+        XCTAssertEqual(frames, ["Hello", " world!"])
+    }
+
+    func testWhitespaceAndLongWordsArePreservedExactly() async throws {
+        let word = String(repeating: "x", count: 300)
+        let text = "  hi\t\n" + word + "  "
+        let source = AsyncThrowingStream<DictationStreamEvent, Error> { c in
+            c.yield(.delta(text)); c.yield(.completed(text)); c.finish()
+        }
+        var frames: [String] = []
+        for try await event in DictationPresentation.smooth(source, interval: .zero) {
+            if case .delta(let text) = event { frames.append(text) }
+        }
+        XCTAssertEqual(frames, ["  hi", "\t\n" + word, "  "])
+        XCTAssertEqual(frames.joined(), text)
     }
 
     func testUpstreamFailureDoesNotBecomeCompletion() async {

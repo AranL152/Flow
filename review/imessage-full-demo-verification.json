@@ -1,13 +1,13 @@
 {
   "cases": [
     {
-      "asr_finalization_ms": 75.1429796218872,
+      "asr_finalization_ms": 2139.0589475631714,
       "attached_filename": "Orion-dashboard.png",
       "candidates": [
         "Orion-dashboard.png",
         "Orion-dashboard-notes.png"
       ],
-      "caption_updates": 12,
+      "caption_updates": 7,
       "checks": {
         "alternatives_available": true,
         "best_filename_selected": true,
@@ -17,29 +17,38 @@
         "final_caption_prepared": true,
         "live_captions": true,
         "native_attachment_confirmed": true,
+        "one_native_write_per_word": true,
+        "one_word_per_display_frame": true,
         "original_attachments_plus_one": true,
         "original_draft_preserved": true,
         "paced_display_frames": true,
-        "real_llm_chunks_inserted": true,
-        "small_display_chunks": true,
-        "small_native_writes": true
+        "real_llm_chunks_inserted": true
       },
-      "command": "Flow. Find the Orion dashboard image.",
-      "display_frames": 44,
-      "display_reveal_seconds": 1.8095279932022095,
+      "command": "Flow, find the Orion dashboard image.",
+      "display_frames": 7,
+      "display_reveal_seconds": 1.125770926475525,
+      "display_words": [
+        "I've",
+        " got",
+        " the",
+        " dashboard",
+        " screenshot",
+        " right",
+        " here"
+      ],
       "generated_message": "I've got the dashboard screenshot right here",
       "kind": "screenshot",
-      "largest_display_chunk": 1,
-      "largest_native_write": 2,
+      "largest_display_chunk": 11,
+      "largest_native_write": 11,
       "llm_chunks": 6,
-      "native_text_writes": 22,
+      "native_text_writes": 7,
       "passed": true,
       "replacement": {},
-      "stop_to_first_display_ms": 403.2019376754761,
-      "used_realtime_cloud_asr": true
+      "stop_to_first_display_ms": 8873.821020126343,
+      "used_realtime_cloud_asr": false
     }
   ],
   "scope": "Generated speech; actual on-device/cloud captions and waveform; real streamed cloud rewriting typed into Messages; production attachment ranking and append followed by candidate popup. Real-time ASR can fall back to recorded audio; the case reports which path ran. No Send event.",
-  "seconds": 9.875563025474548,
+  "seconds": 17.816130995750427,
   "status": "ready"
 }

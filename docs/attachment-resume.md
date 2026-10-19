@@ -477,3 +477,19 @@ finishing frames were visually reviewed. The full generated-speech Messages demo
 passed 14 checks in 9.88 seconds, with real cloud ASR/LLM streaming, screenshot
 append and alternatives. Existing draft content was retained; nothing was sent.
 The updated demo helper remains open; the installed app bundle was not replaced.
+
+## Whole-word streaming (October 18)
+
+The user requested one word at a time. Live captions now reveal complete words
+110 ms apart, preserving word counts during recognition revisions. Rewritten
+output uses complete words 180 ms apart with punctuation pauses. Provider token
+fragments wait for a word boundary or completion; network receipt runs at full
+speed. Text, whitespace and Unicode remain exact. The complete white caption
+still precedes the purple command ripple. The Messages helper inserts each word
+in one checked native Unicode event, with no carried-over single character.
+
+All 48 Swift tests and 14 native caption checks passed. The full Messages run
+passed 14 checks: seven display words and seven native writes over 1.13 seconds,
+with preserved draft/attachments, screenshot append and alternative candidates.
+This take used ASR fallback and took 17.82 seconds total. Nothing was sent; the
+updated helper is open. The installed app bundle was not replaced.

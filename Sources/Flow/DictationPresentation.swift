@@ -4,7 +4,7 @@ import Foundation
 /// genuine model deltas are revealed, and completion waits for their display.
 public enum DictationPresentation {
     public static func smooth(_ source: AsyncThrowingStream<DictationStreamEvent, Error>) -> AsyncThrowingStream<DictationStreamEvent, Error> {
-        smooth(source, interval: .milliseconds(40))
+        smooth(source, interval: .milliseconds(180))
     }
 
     static func smooth(_ source: AsyncThrowingStream<DictationStreamEvent, Error>, interval: Duration) -> AsyncThrowingStream<DictationStreamEvent, Error> {
@@ -76,25 +76,36 @@ private actor PresentationBuffer {
     }
 
     func next() async throws -> DictationStreamEvent? {
-        while events.isEmpty && !ended {
+        while true {
+            if let error { throw error }
+            if let event = events.first {
+                if case .delta(let text) = event {
+                    // Hold unfinished provider tokens until a word boundary or
+                    // metadata/end proves that the last word is complete.
+                    if let end = nextWordEnd(in: text, final: ended || events.count > 1) {
+                        let frame = String(text[..<end])
+                        if end == text.endIndex { events.removeFirst() }
+                        else { events[0] = .delta(String(text[end...])) }
+                        return .delta(frame)
+                    }
+                } else {
+                    events.removeFirst()
+                    return event
+                }
+            } else if ended { return nil }
             await withCheckedContinuation { waiter = $0 }
         }
-        if let error { throw error }
-        guard let event = events.first else { return nil }
-        if case .delta(let text) = event {
-            // Reveal ordinary messages one grapheme at a time. Bound catch-up
-            // to four graphemes so long provider bursts never become big jumps.
-            let count = min(4, max(1, (text.count + 239) / 240))
-            var end = text.index(text.startIndex, offsetBy: min(count, text.count))
-            if let punctuation = text[..<end].firstIndex(where: { ".,!?;:\n".contains($0) }) {
-                end = text.index(after: punctuation)
-            }
-            let frame = String(text[..<end])
-            if end == text.endIndex { events.removeFirst() }
-            else { events[0] = .delta(String(text[end...])) }
-            return .delta(frame)
-        }
-        events.removeFirst()
-        return event
     }
+}
+
+/// Whitespace travels with the following word, preserving the exact provider
+/// spelling, punctuation, newlines and Unicode without exposing partial tokens.
+func nextWordEnd(in text: String, final: Bool) -> String.Index? {
+    var sawWord = false
+    for index in text.indices {
+        if text[index].isWhitespace {
+            if sawWord { return index }
+        } else { sawWord = true }
+    }
+    return final ? text.endIndex : nil
 }

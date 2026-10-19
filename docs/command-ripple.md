@@ -17,7 +17,7 @@ During recording all spoken words remain white. Only the Listening label and
 its three dots are purple; the dots pulse in a small left-to-right wave while
 audio is being captured, and remain static with Reduce Motion. There is no
 command highlight until the transcript is finalized and completely visible.
-Late final words reveal in 18 ms Unicode grapheme steps. The complete white
+Late final words reveal in complete-word steps 110 ms apart. The complete white
 command holds for 220 ms before turning purple in the same layout. Fast model
 responses cannot hide the HUD before this recognition animation finishes.
 A single 700 ms highlight and one smooth crest sweep from left to right,
@@ -76,7 +76,7 @@ and long commands, and
 [a scoped report](../review/command-ripple-verification.json). Its frame interval
 is a capture target, not a measured production frame-rate guarantee.
 
-46 Swift tests passed, including late final-caption reveal, Unicode revisions,
+48 Swift tests passed, including late final-caption reveal, Unicode revisions,
 command context guards and popup lifetime. Fourteen native preview checks passed.
 The complete-white, active and finishing stills were visually reviewed: the full
 sentence appears white before the command changes color, in the same position.
@@ -99,12 +99,12 @@ draft and appends a synthetic screenshot. It never sends. Unlike the isolated
 visual preview, this path makes real ASR/LLM requests. Existing text and files
 remain intact, and the installed permissioned app bundle is not replaced.
 
-The latest October 18 run passed 14 checks in 9.88 seconds: 12 live-caption
-updates, finalized speech before recognition, and completed command presentation
-before hiding the HUD. Six genuine model chunks became 44 small display frames
-and 22 native writes over 1.81 seconds. Cloud real-time ASR finalized in 75 ms;
-the first rewritten display frame arrived 403 ms after Stop. These are one-run
-measurements, not latency guarantees. The screenshot was appended with another
-match available, preserving the original draft and attachments. Nothing was sent.
-See [the actual picker](../review/imessage-other-matches.png) and
-[the run report](../review/imessage-full-demo-verification.json).
+The latest October 18 run passed 14 checks, including complete white captions
+before recognition and finishing command presentation before hiding the HUD.
+Six genuine model chunks became seven complete-word display frames and seven
+native writes over 1.13 seconds. The screenshot was appended with an alternative
+available, preserving the original draft and attachments. This take used the
+recorded-audio ASR fallback: 17.82 seconds total, with the first rewritten word
+8.87 seconds after Stop. Word pacing does not guarantee cloud inference latency.
+Nothing was sent. See [the actual picker](../review/imessage-other-matches.png)
+and [the run report](../review/imessage-full-demo-verification.json).
