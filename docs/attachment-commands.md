@@ -337,3 +337,27 @@ Messages drafts without sending or changing existing draft contents.
 The regression run verified actual image autopaste into a new Messages draft,
 preservation of the existing draft and native attachment, and replacement of
 only Flow's newly added file with another candidate. No message was sent.
+
+## Caption placement beside the Messages composer
+
+The recording panel reads the captured Messages composer's position and size
+through the existing Accessibility grant. It prefers an 18-point gap above the
+field, then uses space below or beside it when needed. Placement uses the screen
+containing the composer, respects the menu bar and Dock, and avoids the attachment
+picker where there is room. The selected side stays stable until it no longer fits.
+
+Geometry refreshes every 100 ms only while the panel is showing, so moving or
+resizing Messages and a growing multiline draft move the captions too. Geometry
+updates do not restart the panel's opacity animation. A briefly missing AX frame
+retains the last known position. The anchor reads geometry and identifiers only;
+it does not read conversation history, change focus or request new permissions.
+Each new recording captures its own composer, including a quick restart while
+the previous caption is fading.
+
+If space is limited, the panel uses a smaller free strip. If the composer occupies
+essentially the whole display, it chooses the corner with the least overlap;
+keeping two full-sized views separate is then geometrically impossible. Other
+apps and unavailable Messages geometry retain the existing bottom-screen fallback.
+
+This change was compiled but has not been exercised in a live demo or tests:
+those were deferred at the user's request while they were in class.

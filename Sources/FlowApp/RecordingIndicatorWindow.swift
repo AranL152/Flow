@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import Flow
 import SwiftUI
 
 @MainActor
@@ -13,6 +14,12 @@ final class RecordingIndicatorWindow {
     private let window: NSPanel
     private var visibility = UUID()
     private var wantsVisible = false
+    private var anchor: RecordingComposerAnchor?
+    private var lastComposerFrame: CGRect?
+    private var targetPrepared = false
+    private var tracking: Timer?
+    private var placementSide: DictationOverlayPlacement.Side?
+    private let preferredSize = CGSize(width: 500, height: 190)
 
     init(appState: AppState, attachments: AttachmentSession? = nil) {
         let view = RecordingIndicatorView(attachmentSession: attachments)
@@ -37,16 +44,34 @@ final class RecordingIndicatorWindow {
         positionWindow()
     }
 
-    func show() {
+    /// A new recording can start while the previous command's caption is fading.
+    /// Refresh the target once here; phase updates must keep the same anchor.
+    func prepare(near application: NSRunningApplication?) {
+        anchor = RecordingComposerAnchor(app: application)
+        lastComposerFrame = anchor?.frame
+        placementSide = nil
+        targetPrepared = true
+        if wantsVisible { positionWindow() }
+    }
+
+    func show(near application: NSRunningApplication? = nil) {
         // Recording/loading/processing can each request the same visible panel.
         // Do not restart its fade or move it on those phase updates.
         guard !wantsVisible else { return }
         wantsVisible = true
+        if !targetPrepared { prepare(near: application ?? NSWorkspace.shared.frontmostApplication) }
         visibility = UUID()
         let session = visibility
         if !window.isVisible { window.alphaValue = 0 }
         positionWindow()
         window.orderFrontRegardless()
+        tracking = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.wantsVisible else { return }
+                self.positionWindow()
+            }
+        }
+        if let tracking { RunLoop.main.add(tracking, forMode: .common) }
 
         // Small delay to ensure layout is settled before animating
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { [weak self] in
@@ -64,6 +89,8 @@ final class RecordingIndicatorWindow {
     func hide() {
         guard wantsVisible else { return }
         wantsVisible = false
+        tracking?.invalidate(); tracking = nil
+        anchor = nil; lastComposerFrame = nil; placementSide = nil; targetPrepared = false
         visibility = UUID()
         let session = visibility
         NSAnimationContext.runAnimationGroup { context in
@@ -86,15 +113,19 @@ final class RecordingIndicatorWindow {
     }
 
     private func positionWindow() {
-        guard let screen = NSScreen.main else { return }
-        let screenFrame = screen.visibleFrame
-        let size = window.frame.size
-        let padding: CGFloat = 12
-        let origin = CGPoint(
-            x: screenFrame.midX - size.width / 2,
-            y: screenFrame.minY + padding
-        )
-        window.setFrameOrigin(origin)
+        // Messages can briefly omit geometry while relaying out a growing draft.
+        // Retain the last good frame instead of jumping back over the composer.
+        if let frame = anchor?.frame { lastComposerFrame = frame }
+        let screens = NSScreen.screens.sorted { a, b in a == NSScreen.main && b != NSScreen.main }.map(\.visibleFrame)
+        let obstacles = NSApplication.shared.windows.filter { $0.isVisible && $0.title == "Flow · Attachment" }.map(\.frame)
+        let placement = DictationOverlayPlacement.place(size: preferredSize, composer: lastComposerFrame,
+            screens: screens, preferredSide: placementSide, avoiding: obstacles)
+        placementSide = placement.side
+        let current = window.frame, next = placement.frame
+        guard abs(current.minX - next.minX) > 0.5 || abs(current.minY - next.minY) > 0.5 || current.size != next.size else { return }
+        // No visibility/opacity animation on geometry updates: typing, processing
+        // and a growing composer must not restart the panel's reveal animation.
+        window.setFrame(next, display: true)
     }
 }
 

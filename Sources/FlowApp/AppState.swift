@@ -536,6 +536,8 @@ final class AppState: ObservableObject {
 
         EditLearningService.shared.cancelMonitoring()
         targetApplication = NSWorkspace.shared.frontmostApplication
+        ensureRecordingIndicator()
+        recordingIndicator?.prepare(near: targetApplication)
         attachmentPreview?.hide()
         attachments.begin(app: targetApplication, contact: engine.activeMessagesContact)
         stopStreamInputMonitor()
@@ -1129,7 +1131,7 @@ final class AppState: ObservableObject {
     private func updateRecordingIndicatorVisibility() {
         if isRecording || isProcessing || isInitializingModel || captionPresentationActive {
             ensureRecordingIndicator()
-            recordingIndicator?.show()
+            recordingIndicator?.show(near: targetApplication)
         } else {
             recordingIndicator?.hide()
         }
