@@ -1031,6 +1031,52 @@ pub extern "C" fn flow_transcribe_realtime_stream(
     transcribe_pending(handle, app_name, on_delta, transcript)
 }
 
+/// Speculative formatting only: does not stop capture, consume audio, save
+/// history, stage attachments or make a draft learnable. Final dictation must
+/// still validate the complete recording through the normal pipeline.
+#[unsafe(no_mangle)]
+pub extern "C" fn flow_preview_rewrite_stream(
+    handle: *mut FlowHandle,
+    text: *const c_char,
+    app_name: *const c_char,
+    callback: extern "C" fn(delta: *const c_char, context: *mut c_void) -> bool,
+    context: *mut c_void,
+) -> *mut c_char {
+    if handle.is_null() { return ptr::null_mut(); }
+    let engine = unsafe { &*handle };
+    let Some(text) = c_str(text).map(str::trim).filter(|s| !s.is_empty() && s.chars().count() <= 5000) else { return ptr::null_mut(); };
+    if !uses_worker(&engine.storage) || engine.storage.get_setting(SETTING_USE_LOCAL_TRANSCRIPTION).ok().flatten().as_deref() == Some("true") { return ptr::null_mut(); }
+    let app = c_str(app_name);
+    let captured = engine.captured_contact.lock().clone();
+    let recipient = if app.is_some_and(|s| s.to_lowercase().contains("messages") || s == "com.apple.MobileSMS") {
+        captured.as_ref().map(|name| engine.contact_classifier.classify(&ContactInput { name: name.clone(), organization: String::new() }))
+    } else { None };
+    let mode = recipient.map(|r| r.suggested_writing_mode()).unwrap_or_else(|| engine.modes.lock().get_mode_with_storage(app.unwrap_or(""), &engine.storage));
+    let category = style::category_key(recipient, Some(engine.app_tracker.current_category()));
+    let contact = recipient_contact_key(recipient, captured.as_deref());
+    let params = TranscriptionCompletionParams {
+        mode: mode.worker_name().into(), app_context: format_context(app, recipient),
+        shortcuts_triggered: Vec::new(),
+        shortcut_definitions: engine.shortcuts.get_all().into_iter().map(|s| crate::providers::ShortcutDefinition {
+            trigger: s.trigger, replacement: s.replacement, case_sensitive: s.case_sensitive,
+        }).collect(),
+        attachment_commands_enabled: true, voice_instruction: None,
+        personalization: personalization_for(engine, text, &category, &contact),
+        auto_rewriting_enabled: engine.storage.get_setting(SETTING_AUTO_REWRITING_ENABLED).ok().flatten().as_deref() != Some("false"),
+    };
+    let mut request = TranscriptionRequest::new(Vec::new(), 16000).with_completion(params);
+    request.final_transcript = Some(text.into()); // Typed preview; never promoted to final ASR.
+    let address = context as usize;
+    let on_delta = Arc::new(move |delta: &str| {
+        let Ok(delta) = CString::new(delta) else { return false; };
+        callback(delta.as_ptr(), address as *mut c_void)
+    }) as crate::providers::DictationDelta;
+    match engine.runtime.block_on(engine.transcription.transcribe_stream(request, on_delta)) {
+        Ok(response) => response.completed_text.map(into_c_string).unwrap_or(ptr::null_mut()),
+        Err(_) => ptr::null_mut(), // Preview failure must not overwrite final pipeline errors.
+    }
+}
+
 /// Process supplied mono signed PCM16 through the normal streaming pipeline.
 /// The host must serialize transcription calls for this handle. Audio is copied
 /// before processing. This supports imported recordings and isolated simulations.
@@ -3427,6 +3473,50 @@ mod dictation_stream_tests {
         let text = unsafe { CStr::from_ptr(delta) }.to_str().unwrap();
         if !text.is_empty() { state.chunks.push(text.into()); }
         !state.cancel
+    }
+
+    #[test]
+    fn live_preview_preserves_audio_history_and_send_learning() {
+        struct PreviewFixture;
+        #[async_trait::async_trait]
+        impl TranscriptionProvider for PreviewFixture {
+            fn name(&self) -> &'static str { "live preview fixture" }
+            fn is_configured(&self) -> bool { true }
+            async fn transcribe(&self, _: TranscriptionRequest) -> crate::error::Result<TranscriptionResponse> { panic!("buffered preview"); }
+            async fn transcribe_stream(&self, request: TranscriptionRequest, callback: DictationDelta) -> crate::error::Result<TranscriptionResponse> {
+                assert!(request.audio.is_empty(), "preview uploaded audio");
+                assert_eq!(request.final_transcript.as_deref(), Some("can you review the deck"));
+                let params = request.completion.unwrap();
+                assert!(params.attachment_commands_enabled);
+                assert!(params.app_context.unwrap().contains("writing to"));
+                if !callback("got a sec") { return Err(crate::error::Error::Transcription("cancelled".into())); }
+                Ok(TranscriptionResponse { text: "can you review the deck".into(), completed_text: Some("got a sec".into()),
+                    attachment: None, confidence: None, language: None, duration_ms: 0, segments: None })
+            }
+        }
+        let db = CString::new(":memory:").unwrap();
+        let handle = flow_init(db.as_ptr());
+        let engine = unsafe { &mut *handle };
+        engine.transcription = Arc::new(PreviewFixture);
+        *engine.captured_contact.lock() = Some("Alex".into());
+        *engine.pending_audio.lock() = Some(vec![7; 100]);
+        *engine.pending_dictation.lock() = Some(PendingDictation { said: "previous".into(), flow_output: "previous".into(), category: "acquaintance".into(), contact_key: style::contact_key("Alex") });
+        let text = CString::new("can you review the deck").unwrap();
+        let app = CString::new("Messages").unwrap();
+        let mut state = CallbackState { chunks: vec![], cancel: false };
+        let result = flow_preview_rewrite_stream(handle, text.as_ptr(), app.as_ptr(), receive, &mut state as *mut _ as *mut c_void);
+        assert!(!result.is_null());
+        assert_eq!(state.chunks, ["got a sec"]);
+        assert_eq!(*engine.pending_audio.lock(), Some(vec![7; 100]));
+        assert_eq!(engine.pending_dictation.lock().as_ref().unwrap().said, "previous");
+        assert!(engine.pending_attachment.lock().is_none());
+        assert!(engine.storage.get_recent_history(10).unwrap().is_empty());
+        assert!(engine.storage.get_style_examples(10).unwrap().is_empty());
+        state.cancel = true;
+        assert!(flow_preview_rewrite_stream(handle, text.as_ptr(), app.as_ptr(), receive, &mut state as *mut _ as *mut c_void).is_null());
+        assert_eq!(engine.pending_dictation.lock().as_ref().unwrap().said, "previous");
+        assert!(flow_preview_rewrite_stream(handle, ptr::null(), app.as_ptr(), receive, &mut state as *mut _ as *mut c_void).is_null());
+        flow_free_string(result); flow_destroy(handle);
     }
 
     fn run(cancel: bool) {

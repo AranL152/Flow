@@ -283,6 +283,34 @@ public final class Flow: @unchecked Sendable {
         dictationStream(appName: appName, pcm16: pcm16, sampleRate: sampleRate, contactName: contactName, finalTranscript: finalTranscript)
     }
 
+    /// Speculative LLM words while capture continues. No history, attachment
+    /// actions or learning state are committed until normal final dictation.
+    public func previewRewriteStream(text: String, appName: String?) -> AsyncThrowingStream<DictationStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let receiver = DictationStreamReceiver(continuation: continuation)
+            continuation.onTermination = { [weak receiver] _ in receiver?.cancel() }
+            Task.detached { [self] in
+                guard let handle else { continuation.finish(); return }
+                let context = Unmanaged.passRetained(receiver).toOpaque()
+                defer { Unmanaged<DictationStreamReceiver>.fromOpaque(context).release() }
+                let result = text.withCString { text in
+                    self.withOptionalCString(appName) { app in
+                        flow_preview_rewrite_stream(handle, text, app, nativeDictationDelta, context)
+                    }
+                }
+                defer { if let result { flow_free_string(result) } }
+                guard !receiver.isCancelled else { continuation.finish(throwing: CancellationError()); return }
+                guard let result else {
+                    continuation.finish(throwing: NSError(domain: "Flow.LiveRewrite", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "Live rewrite unavailable; final dictation will retry."]))
+                    return
+                }
+                continuation.yield(.completed(String(cString: result)))
+                continuation.finish()
+            }
+        }
+    }
+
     private func dictationStream(appName: String?, pcm16: Data? = nil, sampleRate: UInt32 = 0, contactName: String? = nil, finalTranscript: String? = nil) -> AsyncThrowingStream<DictationStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let receiver = DictationStreamReceiver(continuation: continuation)

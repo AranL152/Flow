@@ -41,3 +41,7 @@ with alternatives. This take used recorded-audio ASR fallback and took 17.82
 seconds overall; word pacing is not an inference-latency improvement. Nothing
 was sent. The updated demo helper remains open without replacing the installed
 app bundle or requesting new permissions.
+
+Cloud Auto microphone dictation now also starts speculative LLM rewriting during
+recording. It shares the word pacing above; final dictation reconciles the same
+owned range after Stop. See [the live rewrite implementation and checks](live-rewrite.md).

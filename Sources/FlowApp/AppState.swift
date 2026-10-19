@@ -35,6 +35,8 @@ final class AppState: ObservableObject {
     @Published var liveCaptionStatus = "Listening…"
     private let speechCaptions = LiveSpeechCaptions()
     private let cloudSpeech = CloudSpeechStream()
+    private var liveRewriteTask: Task<Void, Never>?
+    private var liveRewriteTranscript = ""
     private var recordingUsesCloudSpeech = false
     private var cloudHasTranscript = false
     private var captionTask: Task<Void, Never>?
@@ -150,6 +152,7 @@ final class AppState: ObservableObject {
         attachmentPreview?.hide()
         attachments.stopObservingDownloads()
         streamTask?.cancel()
+        liveRewriteTask?.cancel(); liveRewriteTask = nil
         stopStreamInputMonitor()
         streamedInsertion?.cancel(restoringOriginal: true)
         streamedInsertion = nil
@@ -545,12 +548,16 @@ final class AppState: ObservableObject {
                 Task { @MainActor in
                     self?.streamTargetUnchanged = false
                     self?.streamTask?.cancel()
+                    self?.liveRewriteTask?.cancel()
                 }
             }
             streamedInsertion = StreamedTextInsertion.capture(app: targetApplication, ignoredKeyCode: ignoredKeyCode)
-            streamedInsertion?.onInterrupted = { [weak self] in self?.streamTask?.cancel() }
+            streamedInsertion?.onInterrupted = { [weak self] in
+                self?.streamTask?.cancel(); self?.liveRewriteTask?.cancel()
+            }
         }
         liveTranscript = ""
+        liveRewriteTask?.cancel(); liveRewriteTranscript = ""
         liveTranscriptFinalized = false; captionPresentationActive = false
         cloudSpeech.cancel(); cloudHasTranscript = false
         recordingUsesCloudSpeech = false
@@ -584,11 +591,17 @@ final class AppState: ObservableObject {
                     self.cloudSpeech.onText = { [weak self] text in
                         guard let self, !self.liveTranscriptFinalized else { return }
                         self.cloudHasTranscript = true
+                        self.liveRewriteTranscript = text
                         if self.liveCaptionsEnabled { self.liveTranscript = text }
                     }
-                    self.cloudSpeech.onFailure = { [weak self] in self?.cloudHasTranscript = false }
+                    self.cloudSpeech.onFailure = { [weak self] in
+                        guard let self else { return }
+                        self.cloudHasTranscript = false
+                        self.log("⚠️ [CLOUD SPEECH] \(self.cloudSpeech.failureDescription ?? "Unavailable"); frames=\(self.cloudSpeech.sentFrames), responses=\(self.cloudSpeech.responseCount)")
+                    }
                     self.cloudSpeech.start()
                 }
+                if self.recordingUsesStreaming && self.engine.supportsRealtimeCloudSpeech { self.startLiveRewrite() }
                 self.log("⏱️ [TIMING] engine.startRecording: \(Int((CFAbsoluteTimeGetCurrent() - engineStart) * 1000))ms")
                 self.log("⏱️ [TIMING] TOTAL: \(Int((CFAbsoluteTimeGetCurrent() - totalStart) * 1000))ms")
 
@@ -604,14 +617,15 @@ final class AppState: ObservableObject {
                     }
                 }
 
-                self.recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                self.recordingTimer = Timer(timeInterval: 0.1, repeats: true) { _ in
                     Task { @MainActor [weak self] in
                         guard let self, self.isRecording else { return }
                         self.recordingDuration += 100
                     }
                 }
 
-                self.audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 1 / 30, repeats: true) { [weak self] _ in
+                if let timer = self.recordingTimer { RunLoop.main.add(timer, forMode: .common) }
+                self.audioLevelTimer = Timer(timeInterval: 1 / 30, repeats: true) { [weak self] _ in
                     Task { @MainActor [weak self] in
                         guard let self, self.isRecording else { return }
                         let newLevel = self.engine.audioLevel
@@ -622,6 +636,7 @@ final class AppState: ObservableObject {
                         if self.recordingUsesCloudSpeech { self.cloudSpeech.feed(from: self.engine) }
                     }
                 }
+                if let timer = self.audioLevelTimer { RunLoop.main.add(timer, forMode: .common) }
             } else {
                 // Revert UI state
                 self.isRecording = false
@@ -639,6 +654,7 @@ final class AppState: ObservableObject {
     func stopRecording() {
         log("⏹️ [RECORDING] Stopping recording - Duration: \(recordingDuration)ms")
 
+        liveRewriteTask?.cancel(); liveRewriteTask = nil
         // Play stop sound immediately so user gets instant feedback
         AudioFeedback.shared.playStop()
 
@@ -757,6 +773,7 @@ final class AppState: ObservableObject {
                 if let transcript { self.finalizeLiveTranscript(transcript) }
                 self.log("⏱️ [CLOUD SPEECH] Finalization: \(stopped.duration(to: .now)); real-time transcript: \(transcript != nil)")
                 var receivedFirstDelta = false
+                var finalOutput = ""
                 for try await event in DictationPresentation.smooth(self.engine.transcribeStream(appName: appName, finalTranscript: transcript)) {
                     try Task.checkCancellation()
                     switch event {
@@ -765,7 +782,9 @@ final class AppState: ObservableObject {
                             receivedFirstDelta = true
                             self.log("⏱️ [CLOUD SPEECH] Stop to first displayed LLM delta: \(stopped.duration(to: .now))")
                         }
-                        self.streamedOutput += delta
+                        finalOutput += delta
+                        guard LiveRewritePresentation.canDisplay(finalOutput, replacing: self.streamedOutput) else { continue }
+                        self.streamedOutput = finalOutput
                         self.isStreamingOutput = true
                         if let insertion, Date().timeIntervalSince(lastWrite) >= 0.04 {
                             guard insertion.apply(output: self.streamedOutput) else { throw CancellationError() }
@@ -778,7 +797,7 @@ final class AppState: ObservableObject {
                             userInfo: [NSLocalizedDescriptionKey: "The model returned an empty draft"]) }
                         self.stopStreamInputMonitor()
                         if text.isEmpty {
-                            insertion?.cancel(restoringOriginal: false)
+                            insertion?.cancel(restoringOriginal: true)
                         } else if let insertion {
                             guard insertion.finish(output: text) else { throw CancellationError() }
                             EditLearningService.shared.startMonitoring(originalText: text, targetApp: self.targetApplication)
@@ -824,6 +843,44 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func startLiveRewrite() {
+        liveRewriteTask?.cancel()
+        // One request at a time, independent of audio capture. Intermediate
+        // speech updates coalesce to the newest candidate while it is running.
+        liveRewriteTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var submitted = ""
+            while !Task.isCancelled && self.isRecording && self.streamTargetUnchanged {
+                do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
+                guard let candidate = LiveRewritePresentation.candidate(from: self.liveRewriteTranscript),
+                      candidate != submitted else { continue }
+                submitted = candidate
+                var output = ""
+                let began = ContinuousClock.now
+                do {
+                    for try await event in DictationPresentation.smooth(self.engine.previewRewriteStream(text: candidate,
+                            appName: self.targetApplication?.localizedName ?? self.currentApp)) {
+                        try Task.checkCancellation()
+                        guard self.isRecording, self.streamTargetUnchanged else { return }
+                        if case .delta(let delta) = event {
+                            output += delta
+                            guard LiveRewritePresentation.canDisplay(output, replacing: self.streamedOutput) else { continue }
+                            if self.streamedOutput.isEmpty { self.log("⏱️ [LIVE REWRITE] First LLM word while recording: \(began.duration(to: .now)) after request") }
+                            self.streamedOutput = output
+                            self.isStreamingOutput = true
+                            if let insertion = self.streamedInsertion, !insertion.apply(output: output) { return }
+                        }
+                        // A completed preview is still provisional: no attachment
+                        // staging, history or edit learning happens here.
+                    }
+                } catch {
+                    if Task.isCancelled { return }
+                    self.log("⚠️ [LIVE REWRITE] Preview unavailable; retaining final dictation fallback")
+                }
+            }
+        }
+    }
+
     private func stopStreamInputMonitor() {
         if let streamInputMonitor { NSEvent.removeMonitor(streamInputMonitor); self.streamInputMonitor = nil }
     }
@@ -850,10 +907,11 @@ final class AppState: ObservableObject {
 
     private func startLiveCaptions() {
         captionTask?.cancel(); speechCaptions.cancel()
-        guard liveCaptionsEnabled else { return }
+        guard liveCaptionsEnabled || recordingUsesStreaming else { return }
         speechCaptions.onText = { [weak self] text, final in
             guard let self, !self.cloudHasTranscript, !self.liveTranscriptFinalized else { return }
-            self.liveTranscript = text
+            self.liveRewriteTranscript = text
+            if self.liveCaptionsEnabled { self.liveTranscript = text }
             if final && !self.recordingUsesCloudSpeech { self.finalizeLiveTranscript(text) }
         }
         speechCaptions.onStatus = { [weak self] status in self?.liveCaptionStatus = status }

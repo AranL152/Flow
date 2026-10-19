@@ -493,3 +493,22 @@ passed 14 checks: seven display words and seven native writes over 1.13 seconds,
 with preserved draft/attachments, screenshot append and alternative candidates.
 This take used ASR fallback and took 17.82 seconds total. Nothing was sent; the
 updated helper is open. The installed app bundle was not replaced.
+
+## Rewriting before Stop (October 18)
+
+The user reported roughly five seconds of waiting and clarified that rewritten
+output should begin while speaking. The native Cloud Auto path now runs one
+speculative personalized rewrite at a time during capture. Live prefixes hold
+the newest ASR word and withhold incomplete/recognized Flow attachment cues.
+Only LLM words enter the composer. Stop cancels previews and uses the existing
+full-dictation validation, attachment handling and Send-only learning path.
+Final generation catches up to the visible preview without restarting it from
+one word or duplicating its text. Recording timers use main-run-loop common modes.
+
+All 52 Swift tests and the full Rust suite passed; a Rust fixture also confirmed
+that preview/cancellation preserve captured audio and pending learning state and
+create no history/style examples. The genuine cloud test passed five checks:
+first LLM word at 2.51 seconds while synthetic speech continued until 7.71 seconds.
+It used no microphone or Messages writes. A read-only inspection confirmed the
+current Messages composer exposes the production safe live writer. See
+live-rewrite.md and review/live-rewrite-verification.json for scope and limits.

@@ -1,0 +1,19 @@
+{
+  "asr_finalized" : true,
+  "checks" : {
+    "command_not_in_provisional_message" : true,
+    "llm_words_before_stop" : true,
+    "multiple_live_llm_frames" : true,
+    "no_stale_words_after_stop" : true,
+    "real_cloud_caption_updates" : true
+  },
+  "cloud_failure" : "",
+  "cloud_updates" : 9,
+  "display_frames" : 15,
+  "first_llm_word_after_speech_start_ms" : 2511.4970410000001,
+  "live_output" : "Hey Alex, can you review the dashboard screenshot when you get a minute today?",
+  "passed" : true,
+  "preview_requests" : 3,
+  "scope" : "Generated PCM paced in real time through production Cloudflare speech client and speculative Rust rewriting with genuine LLM tokens. No microphone, Messages writes or production database. One sample, not a latency guarantee; macOS physical recording is not verified here.",
+  "speech_stop_ms" : 7706.3649160000004
+}

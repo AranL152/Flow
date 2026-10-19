@@ -158,6 +158,17 @@ char *flow_transcribe_realtime_stream(struct FlowHandle *handle,
                                       void *context);
 
 /**
+ * Speculative formatting only: does not stop capture, consume audio, save
+ * history, stage attachments or make a draft learnable. Final dictation must
+ * still validate the complete recording through the normal pipeline.
+ */
+char *flow_preview_rewrite_stream(struct FlowHandle *handle,
+                                  const char *text,
+                                  const char *app_name,
+                                  bool (*callback)(const char *delta, void *context),
+                                  void *context);
+
+/**
  * Process supplied mono signed PCM16 through the normal streaming pipeline.
  * The host must serialize transcription calls for this handle. Audio is copied
  * before processing. This supports imported recordings and isolated simulations.
