@@ -927,7 +927,9 @@ final class AppState: ObservableObject {
             var retried = ""
             while !Task.isCancelled && self.isRecording && self.streamTargetUnchanged {
                 do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
-                guard let candidate = LiveRewritePresentation.nextSentence(from: self.liveRewriteTranscript, after: submitted) else { continue }
+                let settled = self.recordingUsesCloudSpeech && self.cloudSpeech.failureDescription == nil
+                    ? self.cloudSpeech.settledTranscript : self.liveRewriteTranscript
+                guard let candidate = LiveRewritePresentation.nextSentence(from: settled, after: submitted) else { continue }
                 let previousSource = submitted
                 let prefix = stableOutput.isEmpty ? "" : stableOutput + " "
                 let began = ContinuousClock.now

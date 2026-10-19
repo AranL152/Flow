@@ -13,6 +13,7 @@ final class CloudSpeechTests: XCTestCase {
         try speech.receive(result("Here's the", final: false), closing: false)
         try speech.receive(result("Here's the issue.", final: false), closing: false)
         XCTAssertEqual(speech.text, "Here's the issue.")
+        XCTAssertTrue(speech.settledText.isEmpty, "Interim punctuation must not trigger rewriting")
         try speech.receive(metadata, closing: true)
         XCTAssertNil(speech.finalText, "An unfinalized revision must use recorded-audio fallback")
     }
@@ -24,6 +25,7 @@ final class CloudSpeechTests: XCTestCase {
         try speech.receive(result("Here's the issue.", final: true), closing: false)
         try speech.receive(result("Here's the issue.", final: true), closing: false)
         try speech.receive(result("Flow find the screen", final: false, start: 1), closing: false)
+        XCTAssertEqual(speech.settledText, "Here's the issue.")
         try speech.receive(result("Flow find the screenshot.", final: true, start: 1), closing: true)
         XCTAssertNil(speech.finalText, "A pause is not the end of a recording")
         try speech.receive(metadata, closing: true)

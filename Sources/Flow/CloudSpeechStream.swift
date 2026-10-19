@@ -20,6 +20,7 @@ struct CloudSpeechTranscript {
     private(set) var minimumConfidence: Double = 1
     private(set) var closed = false
     var text: String { (segments.map(\.text) + [interim]).filter { !$0.isEmpty }.joined(separator: " ") }
+    var settledText: String { segments.map(\.text).joined(separator: " ") }
     var finalText: String? { closed && interim.isEmpty && !text.isEmpty && minimumConfidence >= 0.85 ? text : nil }
 
     mutating func receive(_ data: Data, closing: Bool) throws {
@@ -63,6 +64,9 @@ public final class CloudSpeechStream {
     public private(set) var serviceFailure: CloudSpeechServiceFailure?
     public var minimumConfidence: Double { transcript.minimumConfidence }
     public var currentTranscript: String { transcript.text }
+    /// Provider-finalized segments only; interim punctuation is not a sentence
+    /// completion signal for the live rewriting model.
+    public var settledTranscript: String { transcript.settledText }
     private let endpoint: URL
     private var socket: URLSessionWebSocketTask?
     private var outgoing: AsyncStream<Data>.Continuation?
