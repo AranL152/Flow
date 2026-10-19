@@ -51,6 +51,7 @@ final class AttachmentSession: ObservableObject {
     private var sessionID = UUID()
     private let fileSearch: AttachmentSearch
     private var searchTask: Task<Void, Never>?
+    private var resolutionTask: Task<Void, Never>?
     private var searchGeneration = UUID()
     var onDismiss: (() -> Void)?
 
@@ -116,7 +117,7 @@ final class AttachmentSession: ObservableObject {
             guard startObservingDownloads() else { return }
             let session = sessionID
             status = "Checking the newest matching download…"
-            Task { [weak self] in
+            resolutionTask = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(1100))
                 guard let self, self.sessionID == session, !Task.isCancelled else { return }
                 self.resolve()
@@ -167,12 +168,23 @@ final class AttachmentSession: ObservableObject {
     }
 
     func automaticallyStage(engine: Flow, insertionUnchanged: Bool) async {
-        guard insertionUnchanged, target?.matches(engine: engine) == true else { return }
         let session = sessionID, search = searchGeneration
+        await resolutionTask?.value
+        guard sessionID == session, !Task.isCancelled else { return }
         if plan?.request?.source == .fileSearch {
             await searchTask?.value
             guard sessionID == session, searchGeneration == search, !Task.isCancelled,
-                  searchText == plan?.request?.query, target?.matches(engine: engine) == true else { return }
+                  searchText == plan?.request?.query else { return }
+        }
+        guard plan?.request != nil else { return }
+        guard insertionUnchanged, let target, target.matches(engine: engine) else {
+            hasIssue = true
+            status = self.target == nil
+                ? "Click the Messages draft, then try the command again."
+                : "The draft or recipient changed. Nothing was added."
+            return
+        }
+        if plan?.request?.source == .fileSearch {
             if selectedID == nil, let best = candidates.first { choose(best.id) }
         }
         guard plan?.request?.source != .clipboard || !clipboardChanged,
@@ -372,6 +384,7 @@ final class AttachmentSession: ObservableObject {
     }
 
     func dismiss() {
+        resolutionTask?.cancel(); resolutionTask = nil
         searchTask?.cancel(); searchTask = nil; fileSearch.cancel(); searching = false; searchText = ""
         sessionID = UUID(); plan = nil; candidates = []; selectedID = nil
         clipboard = nil; target = nil; clipboardChanged = false

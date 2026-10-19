@@ -2,6 +2,26 @@ import XCTest
 @testable import Flow
 
 final class RecordingTests: XCTestCase {
+    func testCommittedRecipientsPinNewMessageDraftsWithoutReadingHistory() {
+        typealias Node = MessagesContext.HeaderNode
+        let to = Node(role: "AXTextField", identifier: "To:")
+        let chip = Node(role: "AXPopUpButton", description: "flow-demo@example.invalid, Not registered")
+        let draft = Node(children: [to, chip])
+        XCTAssertEqual(MessagesContext.contactFromHeader(draft), "flow-demo@example.invalid")
+        let serialized = Node(role: "AXTextField", identifier: "To:", description: "To:", value: "To:\u{FFFC}flow-demo@example.invalid")
+        XCTAssertEqual(MessagesContext.contactFromHeader(Node(children: [serialized, chip])), "flow-demo@example.invalid")
+        var editing = serialized
+        editing.value += " another@example.invalid"
+        XCTAssertNil(MessagesContext.contactFromHeader(Node(children: [editing, chip])))
+        XCTAssertEqual(MessagesContext.contactFromHeader(Node(children: [to, chip, Node(role: "AXPopUpButton", description: "Alex")])), "flow-demo@example.invalid, Alex")
+        XCTAssertNil(MessagesContext.contactFromHeader(Node(children: [Node(role: "AXTextField", identifier: "To:", value: "another recipient"), chip])))
+        XCTAssertNil(MessagesContext.contactFromHeader(Node(children: [to])))
+        for identifier in ["ConversationList", "TranscriptCollectionView", "MessageEntryView", "messageBodyField"] {
+            XCTAssertNil(MessagesContext.contactFromHeader(Node(identifier: identifier, children: [draft])))
+        }
+        XCTAssertEqual(MessagesContext.contactFromHeader(Node(identifier: "ConversationTitle", description: "Alex")), "Alex")
+    }
+
     func testContactTitlesExcludeSetupWindowsAndPreserveGroupNames() {
         XCTAssertNil(MessagesContext.normalizedContact(" Messages "))
         XCTAssertNil(MessagesContext.normalizedContact("New Message"))
