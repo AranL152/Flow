@@ -57,9 +57,15 @@ or sent to a cloud model. OCR has no API charges or additional API key.
   phrases preserve the spoken content terms in the existing protocol. No worker
   deployment or protocol change is required for this native feature.
 
-The normal app bundle's signature and grants are preserved; the open verification
-helper links the updated production modules. Rebuilding the installed app bundle
-is still needed for its normal hotkey workflow to use the new implementation.
+Those original helper checks preserved the installed bundle. Installed native
+build `5a916f9` subsequently passed an actual voice/OCR test with a user-provided
+Moby-Dick screenshot: “Flow, find the screenshot showing Call me Ishmael.” The
+picker showed **Text: call · me · ishmael**, and the screenshot was auto-appended
+to the unsent Messages draft. This was an attachment-only retry after repairing
+a stale Desktop grant and reopening the unchanged app. The separate full-page
+dictation take exposed a preview timeout and slow final reveal; it is not a
+single uninterrupted successful demo. See the
+[scoped real-image report](../review/moby-dick-native-verification.json).
 
 ## Model and billing clarification
 

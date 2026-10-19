@@ -104,3 +104,15 @@ uses its existing in-process hotkey handler as a fallback, requiring no extra
 helper grant. Helper-ready disables that fallback to avoid duplicate triggers.
 Both paths share the configured hotkey and recording activation mode. This path
 was compiled but still requires a physical-key test after macOS grants access.
+
+## Desktop grant after an ad-hoc update
+
+The real Moby-Dick screenshot test found that an enabled Desktop switch still
+referred to an older build's signing requirement, while microphone and
+Accessibility already matched the current app. Toggling Desktop off/on retained
+that stale requirement. A one-off reset of only Flow's Desktop grant, followed
+by the standard OS consent request and reopening the unchanged bundle, restored
+native screenshot OCR. No TCC database was edited; read-only, app-specific signing
+requirements confirmed the mismatch and repair. Do not add permission resets to
+the launch or install scripts. The successful retry and remaining long-dictation
+issues are recorded in the [native test report](../review/moby-dick-native-verification.json).

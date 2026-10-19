@@ -1,0 +1,48 @@
+{
+  "scope": "Actual installed native app; generated reading played through speakers into its real microphone; actual Fn helper, real cloud speech/rewriting, local OCR, native Messages draft. No transcript/model-output injection. User-provided screenshot, not a synthetic fixture.",
+  "installed_build": "5a916f9236a737e41a5bf45ab6f33654110b0c0d",
+  "installed_code_and_signature_unchanged": true,
+  "reading": {
+    "source": "Complete visible opening paragraph of Moby-Dick in the supplied screenshot",
+    "generated_audio_seconds": 66.896,
+    "microphone_start_ms": 20,
+    "first_draft_word_seconds_after_speech_start": 3.615,
+    "words_arrived_before_stop": true,
+    "draft_updates_in_recorded_interval": 178,
+    "live_preview_timeout_observed": true,
+    "final_cloud_transcript_used": true,
+    "stop_to_first_final_model_delta_seconds": 0.624,
+    "final_model_completed_about_seconds_after_stop": 3.5,
+    "paced_final_reveal_finished_about_seconds_after_stop": 40
+  },
+  "image_search": {
+    "spoken_command": "Flow, find the screenshot showing Call me Ishmael.",
+    "initial_native_search": "No match; saved Desktop permission requirement belonged to an older build.",
+    "permission_repair": "Refreshed only the stale Desktop grant through the standard macOS consent flow. Restarted the unchanged app afterward; microphone and Accessibility grants retained. No TCC database writes; only read-only identity verification.",
+    "native_ocr_retry_succeeded": true,
+    "matched_words": [
+      "call",
+      "me",
+      "ishmael"
+    ],
+    "matched_words_visible_in_native_picker": true,
+    "query_words_absent_from_screenshot_filename": true,
+    "requested_real_screenshot_present_in_native_ocr_cache": true,
+    "additional_screenshot_auto_appended_in_retry": true,
+    "dictated_text_preserved": true,
+    "setup_duplicate_removed_with_text_verified_unchanged": true
+  },
+  "private_local_recordings": [
+    ".build/moby-dick-voice-test/moby-dick-voice.mov",
+    ".build/moby-dick-voice-test/moby-dick-ocr-after-restart.mov"
+  ],
+  "send_generated": false,
+  "original_speaker_volume_restored": true,
+  "limitations": [
+    "Two separate recordings: full-page dictation and successful attachment-only OCR retry after permission repair. This is not a single uninterrupted successful run.",
+    "The reading recording ends before final paced reveal finishes. The OCR retry recording shows the actual matching attachment result.",
+    "Long-form live rewriting stalled once. Final model output arrived quickly after Stop, but whole-word reveal continued for about 40 seconds. Those issues remain unfixed in this installed build.",
+    "No claim of verbatim literary transcription accuracy or guaranteed cloud latency.",
+    "Recordings, OCR contents and personal conversation screenshots remain private and uncommitted."
+  ]
+}
