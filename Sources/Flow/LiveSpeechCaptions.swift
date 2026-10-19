@@ -9,6 +9,7 @@ public final class LiveSpeechCaptions {
     public var onText: ((String, Bool) -> Void)?
     public var onStatus: ((String) -> Void)?
     public private(set) var isListening = false
+    public private(set) var finalizedText: String?
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognition: SFSpeechRecognitionTask?
@@ -53,6 +54,7 @@ public final class LiveSpeechCaptions {
             let final = result?.isFinal ?? false
             Task { @MainActor in
                 guard let self, self.generation == session else { return }
+                if final { self.finalizedText = text }
                 if let text { self.onText?(text, final) }
                 if final {
                     self.isListening = false
@@ -129,6 +131,6 @@ public final class LiveSpeechCaptions {
         drain?.cancel(); drain = nil
         request?.endAudio(); recognition?.cancel()
         recognition = nil; request = nil; recognizer = nil
-        isListening = false; offset = 0
+        isListening = false; finalizedText = nil; offset = 0
     }
 }

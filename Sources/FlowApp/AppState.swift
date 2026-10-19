@@ -595,8 +595,16 @@ final class AppState: ObservableObject {
                     self.cloudSpeech.onText = { [weak self] text in
                         guard let self, !self.liveTranscriptFinalized else { return }
                         self.cloudHasTranscript = true
-                        self.liveRewriteTranscript = text
-                        if self.liveCaptionsEnabled { self.liveTranscript = text }
+                        // On-device recognition often leads the network. Keep
+                        // its continuous caption until the authoritative cloud
+                        // final arrives, instead of replacing newer words with
+                        // an older cloud prefix every time the sources differ.
+                        let preferOnDevice = !self.lastOnDeviceTranscript.isEmpty &&
+                            (!self.isRecording || self.speechCaptions.isListening || self.speechCaptions.finalizedText != nil)
+                        if !preferOnDevice {
+                            self.liveRewriteTranscript = text
+                            if self.liveCaptionsEnabled { self.liveTranscript = text }
+                        }
                         self.log("⏱️ [LIVE CAPTION] Cloud update: \(text.count) characters at \(self.recordingBegan.duration(to: .now))")
                     }
                     self.cloudSpeech.onFailure = { [weak self] in
@@ -961,7 +969,6 @@ final class AppState: ObservableObject {
         speechCaptions.onText = { [weak self] text, final in
             guard let self, !self.liveTranscriptFinalized else { return }
             self.lastOnDeviceTranscript = text
-            guard !self.cloudHasTranscript else { return }
             self.liveRewriteTranscript = text
             if self.liveCaptionsEnabled { self.liveTranscript = text }
             self.log("⏱️ [LIVE CAPTION] On-device update: \(text.count) characters at \(self.recordingBegan.duration(to: .now))")
