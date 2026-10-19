@@ -26,6 +26,7 @@ struct FlowCommandCaptionView: View {
     // The boundary may lay out in white while speaking, but never activates an
     // effect until the entire finalized caption has actually been displayed.
     private var parts: FlowCommandCaption? {
+        guard !isRecording else { return nil }
         guard FlowCommandCaption.detect(in: transcript) != nil else { return nil }
         return FlowCommandCaption.detect(in: reveal.text)
     }
@@ -74,10 +75,29 @@ struct FlowCommandCaptionView: View {
                         LiquidCommandText(command: displayCommand(parts.command), width: FlowCaptionMetrics.textWidth, rippleStart: rippleStart, animating: rippleActive, recognized: recognized)
                     }
                 } else {
-                    Text(reveal.text.isEmpty ? status : reveal.text)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(reveal.text.isEmpty ? 0.5 : 0.95))
-                        .lineLimit(2)
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(reveal.text.isEmpty ? status : reveal.text)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(.white.opacity(reveal.text.isEmpty ? 0.5 : 0.95))
+                                    .frame(width: FlowCaptionMetrics.textWidth, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Color.clear.frame(height: 1).id("latest-speech")
+                            }
+                        }
+                        .scrollIndicators(.hidden)
+                        .defaultScrollAnchor(.bottom)
+                        .frame(height: 40)
+                        .allowsHitTesting(false)
+                        .onChange(of: reveal.text) { _, _ in
+                            // Follow every rendered update immediately, without a
+                            // second scrolling animation falling behind speech.
+                            var transaction = Transaction()
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) { proxy.scrollTo("latest-speech", anchor: .bottom) }
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
@@ -100,8 +120,10 @@ struct FlowCommandCaptionView: View {
         if let full = FlowCommandCaption.detect(in: transcript) {
             target = String(full.message.trimmingCharacters(in: .whitespacesAndNewlines).suffix(100))
                 + (full.message.isEmpty ? "" : " ") + displayCommand(full.command)
-        } else { target = String(transcript.suffix(160)) }
-        reveal.retarget(target)
+        } else { target = String(transcript.suffix(512)) }
+        // While speaking, retain the raw white caption and follow its tail.
+        let caption = isRecording ? String(transcript.suffix(512)) : target
+        reveal.retarget(caption, maximumAnimatedCharacters: 12)
         do {
             while reveal.advance() {
                 if !reduceMotion { try await Task.sleep(for: TextRevealPacing.frameInterval) }
