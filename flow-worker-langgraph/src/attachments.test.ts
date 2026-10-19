@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { parseAttachmentCommand as parse } from "./attachments.js";
 
 describe("explicit attachment boundary", () => {
+  it.each(["Q2", "Q two", "second quarter", "quarter two"])
+    ("accepts %s as a calendar period, preserving the spoken boundary", period => {
+      const text = `Here's the report. Flow, find the PDF for the quarterly report from ${period} 2026.`;
+      expect(parse(text, true)).toMatchObject({
+        message: "Here's the report.", command: text.slice(text.indexOf("Flow")),
+        request: { source: "file_search", kind: "pdf", query: "quarterly report from Q2 2026" },
+      });
+      expect(parse("Flow, find the second PDF from downloads", true)?.request).toBeUndefined();
+      expect(parse(`Flow find the PDF from ${period} 2026 and send it`, true)?.request).toBeUndefined();
+    });
   it.each(["attach", "add", "include", "insert", "paste", "append", "enclose", "upload", "find", "locate", "fetch", "retrieve", "grab", "get", "select", "pick", "pick out", "search", "search for", "look for", "look up", "pull", "pull up", "pull in", "bring", "bring up", "bring in", "drop", "drop in", "put"])
     ("supports %s consistently for clipboard, downloads and search", verb => {
       expect(parse(`Here's the issue. Flow, ${verb} the image on my clipboard.`)).toMatchObject({message: "Here's the issue.", request: {source: "clipboard", kind: "image"}});

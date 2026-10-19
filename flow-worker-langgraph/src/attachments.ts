@@ -29,7 +29,15 @@ export function parseAttachmentCommand(text: string, fileSearchEnabled = false):
   const message = prefix.trim().replace(/[,;:]\s*$/u, "").trim();
   const command = text.slice(cue.index).trim();
   const object = text.slice(cue.index + cue[0].length).trim().replace(/[.!?]+$/u, "")
-    .replace(/\s+(?:to|into|in)\s+(?:(?:this|the|my)\s+)?(?:message|chat|draft)$/iu, "").trim();
+    .replace(/\s+(?:to|into|in)\s+(?:(?:this|the|my)\s+)?(?:message|chat|draft)$/iu, "").trim()
+    // A calendar quarter is an identifier, not an ambiguous "second file".
+    // Normalize before the ambiguity check; keep the original spoken command.
+    .replace(/\b(first|second|third|fourth)\s+quarter\b/giu, (_, ordinal: string) =>
+      `Q${["first", "second", "third", "fourth"].indexOf(ordinal.toLowerCase()) + 1}`)
+    .replace(/\bq[\s-]*(one|two|three|four|[1-4])\b/giu, (_, cardinal: string) =>
+      `Q${["one", "two", "three", "four"].indexOf(cardinal.toLowerCase()) + 1 || cardinal}`)
+    .replace(/\bquarter\s+(one|two|three|four|[1-4])\b/giu, (_, cardinal: string) =>
+      `Q${["one", "two", "three", "four"].indexOf(cardinal.toLowerCase()) + 1 || cardinal}`);
   const choose = (clarification: string): AttachmentPlan => ({ message, command, clarification });
   // Never guess across extra instructions, negation, versions or missing context.
   if (!object || /\b(?:and|then|except|instead|not|don't|without|yesterday|earlier|second|another|other|one\s+i\s+meant|flow)\b/iu.test(object)) {
