@@ -194,6 +194,16 @@ final class AttachmentSession: ObservableObject {
         }
         guard plan?.request?.source != .clipboard || !clipboardChanged,
               let selected, !selected.approximateRecency else { return }
+        // Let the visible "Attachment found" state read before native insertion.
+        // Any edit, search/selection change or focus change cancels this handoff.
+        let selectedID = selected.id
+        guard let before = MessagesAttachmentSnapshot.read(target.element) else { return }
+        do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+        guard sessionID == session, searchGeneration == search, !Task.isCancelled,
+              self.selectedID == selectedID, target.matches(engine: engine),
+              let after = MessagesAttachmentSnapshot.read(target.element),
+              after.text == before.text, after.items.count == before.items.count,
+              after.preservesObjects(in: before) else { return }
         await stage(engine: engine, activate: false)
     }
 

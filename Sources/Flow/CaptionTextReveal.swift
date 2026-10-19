@@ -4,10 +4,12 @@ import Foundation
 public struct CaptionTextReveal: Equatable, Sendable {
     public private(set) var text = ""
     public private(set) var target = ""
+    private var followsSpeech = false
     public var isComplete: Bool { text == target }
     public init() {}
 
     public mutating func retarget(_ target: String, maximumAnimatedCharacters: Int? = nil) {
+        followsSpeech = maximumAnimatedCharacters != nil
         if !target.hasPrefix(text) {
             text = String(target.prefix(text.count))
         }
@@ -24,7 +26,8 @@ public struct CaptionTextReveal: Equatable, Sendable {
     public mutating func advance() -> Bool {
         guard !isComplete else { return false }
         let remaining = String(target.dropFirst(text.count))
-        text += remaining.prefix(TextRevealPacing.charactersPerFrame(backlog: remaining.count))
+        let amount = TextRevealPacing.charactersPerFrame(backlog: remaining.count)
+        text += remaining.prefix(followsSpeech ? max(3, amount) : amount)
         return true
     }
 }

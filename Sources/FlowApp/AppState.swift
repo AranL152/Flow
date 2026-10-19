@@ -743,7 +743,7 @@ final class AppState: ObservableObject {
                             return
                         }
                         if text.isEmpty {
-                            Task { await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: true); self.showAttachmentPreview() }
+                            Task { await self.stageAutomaticAttachment(insertionUnchanged: true); self.showAttachmentPreview() }
                             self.refreshHistory(); self.finishProcessing()
                             return
                         }
@@ -755,7 +755,7 @@ final class AppState: ObservableObject {
                     self.activateTargetAppIfNeeded()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                         self?.pasteText()
-                        if let self { Task { await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: true); self.showAttachmentPreview() } }
+                        if let self { Task { await self.stageAutomaticAttachment(insertionUnchanged: true); self.showAttachmentPreview() } }
                         self?.finishProcessing()
                     }
                     self.refreshHistory()
@@ -818,7 +818,7 @@ final class AppState: ObservableObject {
                         guard !text.isEmpty else { continue }
                         self.streamedOutput = text
                         self.isStreamingOutput = true
-                        if let insertion, Date().timeIntervalSince(lastWrite) >= 0.025 {
+                        if let insertion, Date().timeIntervalSince(lastWrite) >= 0.015 {
                             guard insertion.apply(output: self.streamedOutput) else { throw CancellationError() }
                             lastWrite = Date()
                         }
@@ -854,7 +854,7 @@ final class AppState: ObservableObject {
                         self.errorMessage = nil
                         completed = true
                         self.log("⏱️ [PRESENTATION] Final text visible: \(stopped.duration(to: .now)) after Stop")
-                        await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: self.streamTargetUnchanged)
+                        await self.stageAutomaticAttachment(insertionUnchanged: self.streamTargetUnchanged)
                         self.showAttachmentPreview()
                         self.log("⏱️ [ATTACHMENT] Final staging finished: \(stopped.duration(to: .now)) after Stop")
                     }
@@ -923,26 +923,31 @@ final class AppState: ObservableObject {
         liveRewriteTask = Task { @MainActor [weak self] in
             guard let self else { return }
             var submitted = ""
+            var stableOutput = ""
             var retried = ""
             while !Task.isCancelled && self.isRecording && self.streamTargetUnchanged {
                 do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
-                guard let candidate = LiveRewritePresentation.candidate(from: self.liveRewriteTranscript),
-                      candidate != submitted else { continue }
-                submitted = candidate
+                guard let candidate = LiveRewritePresentation.nextSentence(from: self.liveRewriteTranscript, after: submitted) else { continue }
+                let previousSource = submitted
+                let prefix = stableOutput.isEmpty ? "" : stableOutput + " "
                 let began = ContinuousClock.now
                 do {
                     let source = self.engine.previewRewriteStream(text: candidate,
                             appName: self.targetApplication?.localizedName ?? self.currentApp)
                     let bounded = LiveRewritePresentation.bounded(source)
                     let measured = self.measuredStream(bounded, label: "LIVE MODEL", began: began)
-                    for try await event in DictationPresentation.reconcile(measured, replacing: self.streamedOutput) {
+                    for try await event in DictationPresentation.reconcile(measured) {
                         try Task.checkCancellation()
                         guard self.isRecording, self.streamTargetUnchanged else { return }
                         if case .text(let output) = event {
                             if self.streamedOutput.isEmpty { self.log("⏱️ [LIVE REWRITE] First LLM word while recording: \(began.duration(to: .now)) after request") }
-                            self.streamedOutput = output
+                            self.streamedOutput = prefix + output
                             self.isStreamingOutput = true
-                            if let insertion = self.streamedInsertion, !insertion.apply(output: output) { return }
+                            if let insertion = self.streamedInsertion, !insertion.apply(output: self.streamedOutput) { return }
+                        }
+                        if case .completed(let output) = event {
+                            stableOutput = prefix + output.trimmingCharacters(in: .whitespacesAndNewlines)
+                            submitted = previousSource.isEmpty ? candidate : previousSource + " " + candidate
                         }
                         // A completed preview is still provisional: no attachment
                         // staging, history or edit learning happens here.
@@ -952,7 +957,8 @@ final class AppState: ObservableObject {
                     self.log("⚠️ [LIVE REWRITE] Preview ended after \(began.duration(to: .now)): \(error.localizedDescription)")
                     // Retry an unchanged phrase once, including if the speaker
                     // pauses. New ASR text always gets a fresh request budget.
-                    if retried != candidate { retried = candidate; submitted = "" }
+                    if retried != candidate { retried = candidate }
+                    else { return }
                 }
             }
         }
@@ -999,6 +1005,16 @@ final class AppState: ObservableObject {
     private func showAttachmentPreview() {
         guard let plan = attachments.plan else { return }
         attachmentPreview?.show(candidateCount: attachments.candidates.count, isSearch: plan.request?.source == .fileSearch)
+    }
+
+    private func stageAutomaticAttachment(insertionUnchanged: Bool) async {
+        // The inline recognition ripple finishes before the separate found →
+        // insertion handoff. Never race an attachment against command recognition.
+        while captionPresentationActive && !Task.isCancelled {
+            do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
+        }
+        guard !Task.isCancelled else { return }
+        await attachments.automaticallyStage(engine: engine, insertionUnchanged: insertionUnchanged)
     }
 
     func updateLiveCaptions(enabled: Bool) {
