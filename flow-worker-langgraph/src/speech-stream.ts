@@ -1,4 +1,17 @@
 import type { Env } from "./types.js";
+import { aiFailure, boundedAI, speechFailureFrame } from "./ai-availability.js";
+
+function unavailable(error: unknown): Response {
+  // A failed HTTP upgrade hides the response body from URLSessionWebSocketTask.
+  // Complete the upgrade and deliver the actual failure through the protocol.
+  const failure = speechFailureFrame(error);
+  console.warn("Speech unavailable", failure.code);
+  const pair = new WebSocketPair();
+  pair[1].accept();
+  pair[1].send(JSON.stringify(failure));
+  pair[1].close(1013, failure.code);
+  return new Response(null, { status: 101, webSocket: pair[0] });
+}
 
 /** No client API key or second speech service: audio stays on Workers AI. */
 export async function speechStream(request: Request, env: Env): Promise<Response> {
@@ -16,11 +29,21 @@ export async function speechStream(request: Request, env: Env): Promise<Response
       language: "en", interim_results: "true", punctuate: "true",
       smart_format: "false", endpointing: "300", keyterm: "Flow",
     };
-    const response = await env.AI.run("@cf/deepgram/nova-3", input as unknown as Ai_Cf_Deepgram_Nova_3_Input, { websocket: true });
+    const connect = () => boundedAI(() => env.AI.run("@cf/deepgram/nova-3", input as unknown as Ai_Cf_Deepgram_Nova_3_Input, { websocket: true }), 3000,
+      response => response.webSocket?.close(1000, "Connection deadline exceeded"));
+    let response = await connect();
+    if (!response.webSocket) {
+      const failure = aiFailure(await response.text(), response.status);
+      // Retry only a transient startup failure, before any audio is accepted.
+      // Quota failures require billing/reset, not another billable attempt.
+      if (failure.code !== "quota_exhausted" && response.status >= 500) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+        response = await connect();
+      } else { return unavailable(failure); }
+    }
     const upstream = response.webSocket;
     if (!upstream) {
-      console.warn("Speech upgrade unavailable", response.status, (await response.text()).slice(0, 1000));
-      return Response.json({ error: "Real-time speech unavailable" }, { status: 502 });
+      return unavailable(aiFailure(await response.text(), response.status));
     }
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
@@ -61,7 +84,7 @@ export async function speechStream(request: Request, env: Env): Promise<Response
     upstream.addEventListener("error", () => close(1011, "Speech service interrupted"));
     server.addEventListener("error", () => close(1011, "Speech connection interrupted"));
     return new Response(null, { status: 101, webSocket: client });
-  } catch {
-    return Response.json({ error: "Real-time speech unavailable; use recorded transcription" }, { status: 502 });
+  } catch (error) {
+    return unavailable(error);
   }
 }

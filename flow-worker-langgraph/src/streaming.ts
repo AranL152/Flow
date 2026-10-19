@@ -1,6 +1,7 @@
 import type { Env } from "./types.js";
 import type { TranscriptionRequestInput } from "./requests.js";
 import { buildFormattingPrompt, buildInstructionPrompt } from "./prompts.js";
+import { aiFailure, boundedAI } from "./ai-availability.js";
 
 /** Normalize real provider tokens to a small, version-independent SSE contract. */
 export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: AbortSignal): ReadableStream<Uint8Array> {
@@ -25,7 +26,7 @@ export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: A
         const raw = data.join("\n"); data = [];
         if (raw === "[DONE]") { finished = true; return; }
         const value = JSON.parse(raw);
-        if (value.error) throw new Error("The model stream failed. Please retry.");
+        if (value.error) throw aiFailure(value.error);
         const choice = value.choices?.[0];
         if (choice?.finish_reason && choice.finish_reason !== "stop") throw new Error("The model stopped before finishing. Please retry with a shorter message.");
         const delta = value.response ?? choice?.delta?.content;
@@ -44,7 +45,7 @@ export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: A
       };
       try {
         while (!cancelled && !finished) {
-          const chunk = await reader.read();
+          const chunk = await boundedAI(() => reader.read(), 5000);
           if (chunk.done) break;
           buffer += decoder.decode(chunk.value, { stream: true });
           if (buffer.length > 50000) throw new Error("Invalid model stream");
@@ -87,7 +88,7 @@ export async function formatStream(env: Env, input: TranscriptionRequestInput, s
     } });
   }
   const model = (env.CHAT_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast") as "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-  const result = await env.AI.run(model, {
+  const result = await boundedAI(() => env.AI.run(model, {
     messages: [
       { role: "system", content: instruction ? buildInstructionPrompt(input.personalization, input.appContext) : buildFormattingPrompt(input.mode, input.appContext, input.shortcutsTriggered, input.personalization) },
       { role: "user", content: instruction ?? `<TRANSCRIPTION>\n${input.text}\n</TRANSCRIPTION>` },
@@ -95,7 +96,7 @@ export async function formatStream(env: Env, input: TranscriptionRequestInput, s
     stream: true,
     max_tokens: 700,
     temperature: 0.2,
-  });
+  }), 6000, late => { void (late as ReadableStream<Uint8Array>)?.cancel?.().catch(() => {}); });
   if (!result || typeof (result as ReadableStream).getReader !== "function") {
     throw new Error("The provider did not return a stream");
   }

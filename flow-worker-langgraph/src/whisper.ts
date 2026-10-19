@@ -4,6 +4,7 @@
 
 import { UpstreamError } from "./http.js";
 import type { Env } from "./types.js";
+import { boundedAI } from "./ai-availability.js";
 
 const MODEL = "@cf/openai/whisper-large-v3-turbo";
 
@@ -29,13 +30,13 @@ export async function transcribeAudio(
 
   let result: WhisperResult;
   try {
-    result = (await env.AI.run(MODEL, {
+    result = (await boundedAI(() => env.AI.run(MODEL, {
       audio: audioB64,
       language: language && language !== "auto" ? language : undefined,
       initial_prompt: prompt,
-    })) as WhisperResult;
+    }), 8000)) as WhisperResult;
   } catch (err) {
-    throw new UpstreamError("Workers AI", 502, err instanceof Error ? err.message : String(err));
+    throw err;
   }
   console.log(`whisper ${Date.now() - started}ms`);
 

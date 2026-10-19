@@ -12,6 +12,7 @@ import { Hono } from "hono";
 import { formatStream } from "./streaming.js";
 import { dictationStream } from "./dictation-stream.js";
 import { speechStream } from "./speech-stream.js";
+import { aiFailure } from "./ai-availability.js";
 import type {
   Env,
   CombinedResponse,
@@ -72,8 +73,9 @@ app.post("/format-stream", async (c) => {
       "Cache-Control": "no-cache, no-transform",
       "X-Content-Type-Options": "nosniff",
     } });
-  } catch {
-    return c.json({ error: "The streaming provider is unavailable. Please retry." }, 502);
+  } catch (error) {
+    const failure = aiFailure(error);
+    return c.json({ error: failure.message, code: failure.code }, failure.status === 429 ? 429 : 502);
   }
 });
 
