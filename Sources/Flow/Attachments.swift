@@ -38,7 +38,7 @@ public struct AttachmentCandidate: Identifiable {
     /// Query words found by local OCR; never the image's complete extracted text.
     public let matchedImageText: [String]
     public var matchDescription: String? {
-        matchedImageText.isEmpty ? nil : "Text: " + matchedImageText.prefix(4).joined(separator: " · ")
+        matchedImageText.isEmpty ? nil : "Matches: \"" + matchedImageText.joined(separator: " ") + "\""
     }
     private let fileSize: Int?
     private let modified: Date?

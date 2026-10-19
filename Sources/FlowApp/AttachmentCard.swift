@@ -127,7 +127,7 @@ struct AttachmentCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(candidate.filename).font(.system(size: 12, weight: .medium))
                             .lineLimit(1).truncationMode(.middle)
-                        Text(candidate.matchDescription.map { attached ? "In draft · " + $0 : $0 } ?? (attached ? "In draft" : candidate.approximateRecency ? "Confirm this file" : session.plan?.request?.source == .fileSearch && session.candidates.first?.id == candidate.id ? "Best filename match" : candidate.sourceLabel))
+                        Text(candidate.matchDescription ?? (attached ? "In draft" : candidate.approximateRecency ? "Confirm this file" : session.plan?.request?.source == .fileSearch && session.candidates.first?.id == candidate.id ? "Best filename match" : candidate.sourceLabel))
                             .font(.system(size: 10)).foregroundStyle(attached ? FW.accent : FW.textMuted)
                             .lineLimit(1)
                     }

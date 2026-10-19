@@ -36,7 +36,7 @@ final class AttachmentImageTextTests: XCTestCase {
         let found = try await index.search("showing payment error", urls: urls)
         XCTAssertEqual(found.map(\.filename), [correct.lastPathComponent])
         XCTAssertEqual(found.first?.matchedImageText, ["payment", "error"])
-        XCTAssertEqual(found.first?.matchDescription, "Text: payment · error")
+        XCTAssertEqual(found.first?.matchDescription, "Matches: \"payment error\"")
         XCTAssertFalse(correct.lastPathComponent.lowercased().contains("payment"))
         let cold = await index.statistics
         XCTAssertEqual(cold.recognitions, 3)
