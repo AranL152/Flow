@@ -46,6 +46,7 @@ public final class CloudSpeechStream {
     public var onFailure: (() -> Void)?
     public private(set) var sentFrames = 0
     public private(set) var responseCount = 0
+    public private(set) var sentPackets = 0
     public private(set) var failureDescription: String?
     public var minimumConfidence: Double { transcript.minimumConfidence }
     private let endpoint: URL
@@ -56,6 +57,7 @@ public final class CloudSpeechStream {
     private var timeout: Task<Void, Never>?
     private var completion: CheckedContinuation<String?, Never>?
     private var transcript = CloudSpeechTranscript()
+    private var packetizer: CloudSpeechAudioPackets?
     private var offset: UInt64 = 0
     private var rate: UInt32 = 0
     private var generation = UUID()
@@ -71,7 +73,7 @@ public final class CloudSpeechStream {
 
     public func start() {
         cancel()
-        transcript = CloudSpeechTranscript(); sentFrames = 0; responseCount = 0
+        transcript = CloudSpeechTranscript(); sentFrames = 0; responseCount = 0; sentPackets = 0
         failureDescription = nil
         active = true; finishing = false; closeSent = false; terminal = false
     }
@@ -89,15 +91,20 @@ public final class CloudSpeechStream {
     public func append(samples: [Float], sampleRate: UInt32) {
         guard active, !finishing, !terminal, !samples.isEmpty else { return }
         guard (8000...48000).contains(sampleRate), rate == 0 || rate == sampleRate,
-              sentFrames + samples.count <= Int(sampleRate) * 300 else { fail(); return }
+              sentFrames + samples.count <= Int(sampleRate) * 300 else {
+            fail(Self.failure("Speech input rate changed or audio limit exceeded")); return
+        }
         if socket == nil { connect(sampleRate: sampleRate) }
         let values: [Int16] = samples.map { value in
             let finite = value.isFinite ? value : 0
             return Int16((min(1, max(-1, finite)) * 32767).rounded()).littleEndian
         }
         let data = values.withUnsafeBytes { Data($0) }
-        guard case .enqueued = outgoing?.yield(data) else { fail(); return }
+        if packetizer == nil { packetizer = CloudSpeechAudioPackets(sampleRate: sampleRate) }
         sentFrames += samples.count
+        for packet in packetizer!.append(data) {
+            guard enqueue(packet) else { return }
+        }
     }
 
     public func finish(from engine: Flow? = nil) async -> String? {
@@ -109,6 +116,7 @@ public final class CloudSpeechStream {
         if sentFrames >= Int(rate) * 2 && transcript.text.isEmpty {
             fail(); return nil
         }
+        if let tail = packetizer?.finish(), !enqueue(tail) { return nil }
         finishing = true; outgoing?.finish()
         let epoch = generation
         timeout = Task { [weak self] in
@@ -130,7 +138,15 @@ public final class CloudSpeechStream {
         sender = nil; receiver = nil; timeout = nil
         socket?.cancel(with: .goingAway, reason: nil); socket = nil
         completion?.resume(returning: nil); completion = nil
-        offset = 0; rate = 0
+        offset = 0; rate = 0; packetizer = nil
+    }
+
+    private func enqueue(_ data: Data) -> Bool {
+        guard case .enqueued = outgoing?.yield(data) else {
+            fail(Self.failure("Real-time audio send queue filled; using recorded audio.")); return false
+        }
+        sentPackets += 1
+        return true
     }
 
     private func connect(sampleRate: UInt32) {

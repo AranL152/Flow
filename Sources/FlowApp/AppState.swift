@@ -585,8 +585,8 @@ final class AppState: ObservableObject {
 
             let engineStart = CFAbsoluteTimeGetCurrent()
             if self.engine.startRecording() {
-                self.startLiveCaptions()
                 self.recordingUsesCloudSpeech = self.recordingUsesStreaming && self.engine.supportsRealtimeCloudSpeech
+                self.startLiveCaptions()
                 if self.recordingUsesCloudSpeech {
                     self.cloudSpeech.onText = { [weak self] text in
                         guard let self, !self.liveTranscriptFinalized else { return }
@@ -597,7 +597,8 @@ final class AppState: ObservableObject {
                     self.cloudSpeech.onFailure = { [weak self] in
                         guard let self else { return }
                         self.cloudHasTranscript = false
-                        self.log("⚠️ [CLOUD SPEECH] \(self.cloudSpeech.failureDescription ?? "Unavailable"); frames=\(self.cloudSpeech.sentFrames), responses=\(self.cloudSpeech.responseCount)")
+                        if !self.speechCaptions.isListening { self.liveCaptionStatus = "Live captions unavailable" }
+                        self.log("⚠️ [CLOUD SPEECH] \(self.cloudSpeech.failureDescription ?? "Unavailable"); frames=\(self.cloudSpeech.sentFrames), packets=\(self.cloudSpeech.sentPackets), responses=\(self.cloudSpeech.responseCount)")
                     }
                     self.cloudSpeech.start()
                 }
@@ -914,7 +915,10 @@ final class AppState: ObservableObject {
             if self.liveCaptionsEnabled { self.liveTranscript = text }
             if final && !self.recordingUsesCloudSpeech { self.finalizeLiveTranscript(text) }
         }
-        speechCaptions.onStatus = { [weak self] status in self?.liveCaptionStatus = status }
+        speechCaptions.onStatus = { [weak self] status in
+            guard let self, !self.recordingUsesCloudSpeech else { return }
+            self.liveCaptionStatus = status
+        }
         captionTask = Task { [weak self] in
             guard let self else { return }
             await self.speechCaptions.start()
