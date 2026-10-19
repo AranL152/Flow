@@ -8,7 +8,7 @@ final class LiveRewritePresentationTests: XCTestCase {
     }
 
     func testPendingAndRecognizedCommandsAreWithheldFromLiveRewrite() {
-        for suffix in ["Flow", "Flow, attach", "Flow, find", "Flow search for", "Flow, find the screenshot"] {
+        for suffix in ["Flow", "Flow, attach", "Flow, find", "Flow search for", "Flow, find the screenshot", "Flow add", "Flow include the image", "Flow look", "Flow look for", "Flow grab the screenshot", "Flow please", "Flow could you", "Flow could you please add"] {
             XCTAssertEqual(LiveRewritePresentation.candidate(from: "Here is the dashboard. " + suffix), "Here is the dashboard.")
         }
         XCTAssertNil(LiveRewritePresentation.candidate(from: "Flow, attach the screenshot"))

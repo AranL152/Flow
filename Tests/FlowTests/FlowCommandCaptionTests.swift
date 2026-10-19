@@ -2,6 +2,17 @@ import XCTest
 @testable import Flow
 
 final class FlowCommandCaptionTests: XCTestCase {
+    func testAttachmentVerbAliasesPreserveBoundariesAndQuotedSpeech() {
+        for verb in ["attach", "add", "include", "insert", "paste", "append", "enclose", "upload", "find", "locate", "fetch", "retrieve", "grab", "get", "select", "pick", "pick out", "search", "search for", "look for", "look up", "pull", "pull up", "pull in", "bring", "bring up", "bring in", "drop", "drop in", "put"] {
+            let command = "Flow, \(verb) the screenshot showing payment error."
+            XCTAssertEqual(FlowCommandCaption.detect(in: "Here's the issue. " + command)?.command, command)
+            XCTAssertNil(FlowCommandCaption.detect(in: "Don't " + command))
+            XCTAssertNil(FlowCommandCaption.detect(in: "The tutorial says \"" + command + "\""))
+        }
+        XCTAssertNotNil(FlowCommandCaption.detect(in: "Flow, could you please add the image on my clipboard"))
+        XCTAssertNil(FlowCommandCaption.detect(in: "Flow additionally explains the image"))
+    }
+
     func testExplicitCommandsPreserveTheExactSpokenBoundary() {
         for (text, message, command) in [
             ("Here's the issue. Flow, find the screenshot showing payment error.", "Here's the issue. ", "Flow, find the screenshot showing payment error."),

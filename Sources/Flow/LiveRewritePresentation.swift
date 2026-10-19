@@ -10,7 +10,9 @@ public enum LiveRewritePresentation {
             text = command.message
         } else {
             // Do not let an unfinished reserved cue reach the rewriting model.
-            let pending = #"(?i)\b(?:hey\s+)?flow\s*[,;:.!?]*(?:\s+(?:attach|find|search(?:\s+for)?))?\s*[,;:.!?]*$"#
+            let pending = #"(?i)\b(?:hey\s+)?flow\s*[,;:.!?]*(?:\s+"#
+                + FlowCommandCaption.commandPolitenessPattern
+                + #"(?:"# + FlowCommandCaption.commandVerbPattern + #"|look|please|can|could|would|can\s+you|could\s+you|would\s+you))?\s*[,;:.!?]*$"#
             if let range = transcript.range(of: pending, options: .regularExpression) {
                 text = String(transcript[..<range.lowerBound])
             } else {

@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest";
 import { parseAttachmentCommand as parse } from "./attachments.js";
 
 describe("explicit attachment boundary", () => {
+  it.each(["attach", "add", "include", "insert", "paste", "append", "enclose", "upload", "find", "locate", "fetch", "retrieve", "grab", "get", "select", "pick", "pick out", "search", "search for", "look for", "look up", "pull", "pull up", "pull in", "bring", "bring up", "bring in", "drop", "drop in", "put"])
+    ("supports %s consistently for clipboard, downloads and search", verb => {
+      expect(parse(`Here's the issue. Flow, ${verb} the image on my clipboard.`)).toMatchObject({message: "Here's the issue.", request: {source: "clipboard", kind: "image"}});
+      expect(parse(`Flow ${verb} the PDF I just downloaded`)).toMatchObject({request: {source: "recent_download", kind: "pdf"}});
+      expect(parse(`Flow ${verb} the screenshot showing payment error`, true)).toMatchObject({request: {source: "file_search", kind: "image", query: "showing payment error"}});
+      expect(parse(`Don't Flow ${verb} my clipboard`)).toBeUndefined();
+      expect(parse(`The tutorial says "Flow ${verb} my clipboard"`)).toBeUndefined();
+    });
+  it("supports polite phrasing and an explicit draft destination", () => {
+    expect(parse("Flow, could you please add the image on my clipboard to this message.")).toMatchObject({request: {source: "clipboard", kind: "image"}});
+    expect(parse("Flow please insert the PDF I just downloaded into the draft")).toMatchObject({request: {source: "recent_download", kind: "pdf"}});
+    expect(parse("Flow additionally explains the image")).toBeUndefined();
+  });
   it.each([
     ["Hey Alex, here's the slideshow. Flow, find my robotics presentation.", "Hey Alex, here's the slideshow.", "robotics", "presentation"],
     ["Flow attach the beach trip photo", "", "beach trip", "image"],

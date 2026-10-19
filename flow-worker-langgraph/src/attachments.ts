@@ -11,9 +11,14 @@ export interface AttachmentPlan {
   clarification?: string;
 }
 
-/** V1 contract: one terminal "Flow, attach …" instruction, after the message. */
+// Keep aligned with FlowCommandCaption.commandVerbPattern on the native client.
+export const attachmentVerbPattern = String.raw`(?:attach|add|include|insert|paste|append|enclose|upload|find|locate|fetch|retrieve|grab|get|select|pick(?:\s+out)?|search(?:\s+for)?|look\s+(?:for|up)|pull(?:\s+(?:up|in))?|bring(?:\s+(?:up|in))?|drop(?:\s+in)?|put)`;
+const politenessPattern = String.raw`(?:(?:please|(?:can|could|would)\s+you)\s+)?(?:please\s+)?`;
+const attachmentCue = new RegExp(String.raw`\b(?:hey\s+)?flow\s*[,;:.!?]*\s+${politenessPattern}${attachmentVerbPattern}\b`, "iu");
+
+/** One terminal explicit Flow attachment instruction, after the message. */
 export function parseAttachmentCommand(text: string, fileSearchEnabled = false): AttachmentPlan | undefined {
-  const cue = /\b(?:hey\s+)?flow\s*[,;:.!?]*\s+(attach|find|search(?:\s+for)?)\b/iu.exec(text);
+  const cue = attachmentCue.exec(text);
   if (!cue) return;
   const prefix = text.slice(0, cue.index);
   // Reported/quoted speech is recipient content. Apostrophes in "here's" aren't quotes.
@@ -23,7 +28,8 @@ export function parseAttachmentCommand(text: string, fileSearchEnabled = false):
   if (quoted || /\b(?:said|says|say|told|tell|quote|quoted|phrase|tutorial|example|type|write|don['’]t|do\s+not|never)\b[^.!?]*$/iu.test(prefix)) return;
   const message = prefix.trim().replace(/[,;:]\s*$/u, "").trim();
   const command = text.slice(cue.index).trim();
-  const object = text.slice(cue.index + cue[0].length).trim().replace(/[.!?]+$/u, "").trim();
+  const object = text.slice(cue.index + cue[0].length).trim().replace(/[.!?]+$/u, "")
+    .replace(/\s+(?:to|into|in)\s+(?:(?:this|the|my)\s+)?(?:message|chat|draft)$/iu, "").trim();
   const choose = (clarification: string): AttachmentPlan => ({ message, command, clarification });
   // Never guess across extra instructions, negation, versions or missing context.
   if (!object || /\b(?:and|then|except|instead|not|don't|without|yesterday|earlier|second|another|other|one\s+i\s+meant|flow)\b/iu.test(object)) {
