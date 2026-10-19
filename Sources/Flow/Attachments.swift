@@ -37,8 +37,12 @@ public struct AttachmentCandidate: Identifiable {
     public let approximateRecency: Bool
     /// Query words found by local OCR; never the image's complete extracted text.
     public let matchedImageText: [String]
+    /// Only the requested words and their location, never a full document excerpt.
+    public let matchedDocumentText: [String]
+    public let matchedLocation: String?
     public var matchDescription: String? {
-        matchedImageText.isEmpty ? nil : "Matches: \"" + matchedImageText.joined(separator: " ") + "\""
+        let words = matchedDocumentText.isEmpty ? matchedImageText : matchedDocumentText
+        return words.isEmpty ? nil : "Matches: \"" + words.joined(separator: " ") + "\"" + (matchedLocation.map { " · \($0)" } ?? "")
     }
     private let fileSize: Int?
     private let modified: Date?
@@ -47,10 +51,10 @@ public struct AttachmentCandidate: Identifiable {
     init(imageData: Data) {
         filename = "Clipboard image"; sourceLabel = "Image from clipboard"
         fileURL = nil; self.imageData = imageData; approximateRecency = false
-        fileSize = nil; modified = nil; identity = nil; matchedImageText = []
+        fileSize = nil; modified = nil; identity = nil; matchedImageText = []; matchedDocumentText = []; matchedLocation = nil
     }
 
-    public init(fileURL: URL, sourceLabel: String, approximateRecency: Bool = false, matchedImageText: [String] = []) throws {
+    public init(fileURL: URL, sourceLabel: String, approximateRecency: Bool = false, matchedImageText: [String] = [], matchedDocumentText: [String] = [], matchedLocation: String? = nil) throws {
         var freshURL = fileURL
         freshURL.removeAllCachedResourceValues()
         let values = try freshURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey, .fileResourceIdentifierKey])
@@ -60,6 +64,7 @@ public struct AttachmentCandidate: Identifiable {
         }
         self.fileURL = fileURL; imageData = nil; filename = fileURL.lastPathComponent
         self.sourceLabel = sourceLabel; self.approximateRecency = approximateRecency; self.matchedImageText = matchedImageText
+        self.matchedDocumentText = matchedDocumentText; self.matchedLocation = matchedLocation
         fileSize = values.fileSize; modified = values.contentModificationDate
         identity = values.fileResourceIdentifier as? NSObject
     }

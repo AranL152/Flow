@@ -19,7 +19,7 @@ public final class AttachmentFileSearch {
               trimmed.rangeOfCharacter(from: .alphanumerics) != nil,
               trimmed.rangeOfCharacter(from: .controlCharacters) == nil,
               !trimmed.contains("/"), !trimmed.contains("\\") else {
-            throw AttachmentFailure.unavailable("Enter part of a filename, for example ‘robotics’ or ‘beach trip’.")
+            throw AttachmentFailure.unavailable("Enter words from a filename or document, for example ‘robotics’ or ‘quarterly revenue’.")
         }
         return words
     }
@@ -48,6 +48,37 @@ public final class AttachmentFileSearch {
             NSPredicate(format: "%K >= %@", NSMetadataItemFSContentChangeDateKey, now.addingTimeInterval(-30 * 86400) as NSDate)])
         let urls = try await gather(metadata, scopes: scopes)
         return Array(urls.filter { Self.eligiblePath($0) && AttachmentDownloads.matches($0, kind: .image) }.prefix(max(0, min(limit, 24))))
+    }
+
+    /// Spotlight searches importer-provided text without exposing the full text.
+    /// Keynote and legacy PowerPoint rely on the installed Spotlight importer.
+    public func documentContents(_ text: String, kind: AttachmentRequest.Kind, scopes: [URL]? = nil) async throws -> [AttachmentCandidate] {
+        let terms = try AttachmentDocumentText.terms(text)
+        let metadata = NSMetadataQuery()
+        let predicates = terms.map { NSPredicate(format: "%K ==[cd] %@", "kMDItemTextContent", $0) }
+        metadata.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [Self.documentTypes(kind)] + predicates)
+        return try await gather(metadata, scopes: scopes).compactMap { url in
+            guard Self.eligiblePath(url), AttachmentDocumentText.supports(url), AttachmentDownloads.matches(url, kind: kind) else { return nil }
+            return try? AttachmentDocumentText.candidate(url, terms: terms)
+        }
+    }
+
+    /// Bounded fallback for PDFs/PPTX whose content Spotlight hasn't indexed yet.
+    /// There is no age cutoff: older indexed content can still match above.
+    public func recentDocuments(kind: AttachmentRequest.Kind, scopes: [URL]? = nil) async throws -> [URL] {
+        let metadata = NSMetadataQuery()
+        metadata.predicate = Self.documentTypes(kind)
+        return Array(try await gather(metadata, scopes: scopes).filter {
+            Self.eligiblePath($0) && ["pdf", "pptx"].contains($0.pathExtension.lowercased()) && AttachmentDownloads.matches($0, kind: kind)
+        }.prefix(32))
+    }
+
+    private static func documentTypes(_ kind: AttachmentRequest.Kind) -> NSPredicate {
+        let extensions = kind == .pdf ? ["pdf"] : kind == .presentation ? ["pptx", "ppt", "key"] : ["pdf", "pptx", "ppt", "key"]
+        let predicates = extensions.map {
+            NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*.\($0)")
+        }
+        return predicates.count == 1 ? predicates[0] : NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
     }
 
     private func gather(_ metadata: NSMetadataQuery, scopes: [URL]?) async throws -> [URL] {

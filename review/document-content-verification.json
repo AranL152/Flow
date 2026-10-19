@@ -1,0 +1,42 @@
+{
+  "checks": {
+    "cache_survives_restart_without_reopening_documents": true,
+    "changed_pdf_invalidates_persistent_cache": true,
+    "direct_readers_find_four_content_matches": true,
+    "filenames_alone_do_not_match": true,
+    "integrated_pdf_content_search_and_type_filter": true,
+    "integrated_slide_content_search_and_type_filter": true,
+    "native_picker_rendered": true,
+    "partial_word_match_excluded": true,
+    "pdf_text_explains_second_page": true,
+    "picker_explains_content_and_slide": true,
+    "production_session_resolves_both_decks": true,
+    "real_spotlight_content_finds_text_pdf": true,
+    "scanned_pdf_found_by_real_ocr": true,
+    "scanned_pdf_is_image_only": true,
+    "slide_text_and_image_ocr_found": true,
+    "spotlight_discovers_five_generic_documents": true
+  },
+  "cold_direct_seconds": 0.35813701152801514,
+  "matches": [
+    {
+      "filename": "Presentation 02.pptx",
+      "reason": "Matches: \"cobalt nebula\" \u00b7 Slide 2"
+    },
+    {
+      "filename": "Presentation 01.pptx",
+      "reason": "Matches: \"cobalt nebula\" \u00b7 Slide 2"
+    },
+    {
+      "filename": "Document 02.pdf",
+      "reason": "Matches: \"cobalt nebula\" \u00b7 Page 1"
+    },
+    {
+      "filename": "Document 01.pdf",
+      "reason": "Matches: \"cobalt nebula\" \u00b7 Page 2"
+    }
+  ],
+  "passed": true,
+  "scope": "Synthetic, generically named PDF and PPTX files; real local Spotlight discovery, PDF text, scanned PDF OCR, slide XML and embedded slide-image OCR, persistent cache and the production attachment picker. No API calls, audio, permission requests or Messages writes.",
+  "warm_direct_seconds": 0.0010489225387573242
+}

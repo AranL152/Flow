@@ -1,16 +1,18 @@
 import Foundation
 
-/// Combines deterministic filenames with locally recognized screenshot words.
-/// Only an explicit image search opens screenshots; other file searches stay fast.
+/// Combines filenames, screenshot OCR and local PDF/presentation content.
+/// Content reads happen only for an explicit file-search command.
 @MainActor
 public final class AttachmentSearch {
     private let filenames = AttachmentFileSearch()
     private let screenshots = AttachmentFileSearch()
     private let index: AttachmentImageTextIndex
+    private let documents = AttachmentFileSearch()
+    private let documentIndex: AttachmentDocumentTextIndex
     private let scopes: [URL]?
 
-    public init(scopes: [URL]? = nil, index: AttachmentImageTextIndex = .shared) {
-        self.scopes = scopes; self.index = index
+    public init(scopes: [URL]? = nil, index: AttachmentImageTextIndex = .shared, documentIndex: AttachmentDocumentTextIndex = .shared) {
+        self.scopes = scopes; self.index = index; self.documentIndex = documentIndex
     }
 
     public func search(_ text: String, kind: AttachmentRequest.Kind) async throws -> [AttachmentCandidate] {
@@ -20,14 +22,31 @@ public final class AttachmentSearch {
         do { filenameMatches = try await filenames.search(text, kind: kind, scopes: scopes) }
         catch is CancellationError { throw CancellationError() }
         catch { filenameError = error }
-        guard kind == .image else {
-            if let filenameError { throw filenameError }
-            return filenameMatches
-        }
         try Task.checkCancellation()
         do {
-            let urls = try await screenshots.recentScreenshots(scopes: scopes)
-            let recognized = try await index.search(text, urls: urls)
+            let recognized: [AttachmentCandidate]
+            if kind == .image {
+                let urls = try await screenshots.recentScreenshots(scopes: scopes)
+                recognized = try await index.search(text, urls: urls)
+            } else {
+                var indexed: [AttachmentCandidate] = []
+                do { indexed = try await documents.documentContents(text, kind: kind, scopes: scopes) }
+                catch is CancellationError { throw CancellationError() }
+                catch { /* A missing importer must not prevent direct reading. */ }
+                var local: [AttachmentCandidate] = []
+                var checked = Set<URL>()
+                do {
+                    let recent = try await documents.recentDocuments(kind: kind, scopes: scopes)
+                    let pool = indexed.compactMap(\.fileURL) + recent
+                    let urls = pool.reduce(into: [URL]()) { result, url in
+                        if !result.contains(url) { result.append(url) }
+                    }
+                    let result = try await documentIndex.searchResult(text, urls: urls, budget: indexed.isEmpty ? 8 : 2)
+                    local = result.matches; checked = result.checkedURLs
+                } catch is CancellationError { throw CancellationError() }
+                catch { /* Preserve validated Spotlight or filename matches. */ }
+                recognized = local + indexed.filter { $0.fileURL.map { !checked.contains($0.standardizedFileURL) } ?? false }
+            }
             try Task.checkCancellation()
             var byURL = Dictionary(uniqueKeysWithValues: filenameMatches.compactMap { candidate in candidate.fileURL.map { ($0.standardizedFileURL, candidate) } })
             for candidate in recognized { if let url = candidate.fileURL { byURL[url.standardizedFileURL] = candidate } }
@@ -40,7 +59,7 @@ public final class AttachmentSearch {
                 guard let url = candidate.fileURL else { return 0 }
                 let name = AttachmentFileSearch.filenameScore(url, terms: terms)
                 if filenameURLs.contains(url.standardizedFileURL), name >= 1000 { return 2000 }
-                if !candidate.matchedImageText.isEmpty { return 1000 }
+                if !candidate.matchedImageText.isEmpty || !candidate.matchedDocumentText.isEmpty { return 1000 }
                 return name
             }
             let ranked = ordered.enumerated().sorted {
@@ -57,5 +76,5 @@ public final class AttachmentSearch {
         }
     }
 
-    public func cancel() { filenames.cancel(); screenshots.cancel() }
+    public func cancel() { filenames.cancel(); screenshots.cancel(); documents.cancel() }
 }

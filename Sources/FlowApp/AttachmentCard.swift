@@ -37,7 +37,7 @@ struct AttachmentCard: View {
                     if session.searching || session.busy { ProgressView().controlSize(.mini) }
                     Menu {
                         if plan.request?.source == .fileSearch {
-                            Button(plan.request?.kind == .image ? "Refine search…" : "Refine filename search…") { showSearch.toggle() }
+                            Button("Refine search…") { showSearch.toggle() }
                                 .disabled(session.pasteRequested)
                             Button("Choose another file…") { session.chooseFile() }
                                 .disabled(session.pasteRequested)
@@ -54,10 +54,10 @@ struct AttachmentCard: View {
                 }
                 if showSearch, plan.request?.source == .fileSearch {
                     HStack(spacing: 6) {
-                        TextField(plan.request?.kind == .image ? "Filename or screenshot text" : "Filename words", text: $session.searchText)
+                        TextField(plan.request?.kind == .image ? "Filename or screenshot text" : "Filename or document text", text: $session.searchText)
                             .textFieldStyle(.roundedBorder).onSubmit { session.searchFiles() }
                         Button { session.searchFiles() } label: { Image(systemName: "magnifyingglass") }
-                            .help(plan.request?.kind == .image ? "Search filenames and visible text in recent screenshots locally" : "Search filenames")
+                            .help(plan.request?.kind == .image ? "Search filenames and visible text in recent screenshots locally" : "Search filenames and PDF or slide text locally")
                     }.disabled(session.busy || session.pasteRequested)
                 }
                 HStack {

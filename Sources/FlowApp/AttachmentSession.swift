@@ -344,7 +344,7 @@ final class AttachmentSession: ObservableObject {
         searchTask?.cancel(); fileSearch.cancel()
         searchGeneration = UUID()
         candidates = []; selectedID = nil; needsChoice = true; searching = true; hasIssue = false
-        status = request.kind == .image ? "Searching filenames and text in recent screenshots…" : "Searching filenames on this Mac…"
+        status = request.kind == .image ? "Searching filenames and text in recent screenshots…" : "Searching filenames and document text…"
         let session = sessionID
         let text = searchText
         searchTask = Task { [weak self] in
@@ -354,7 +354,7 @@ final class AttachmentSession: ObservableObject {
                 guard !Task.isCancelled, self.sessionID == session else { return }
                 self.candidates = found
                 self.status = found.isEmpty
-                    ? (request.kind == .image ? "No matching filenames or recent screenshot text. Try words visible in the screenshot, or choose a file." : "No matching filenames in Spotlight. Try fewer words or choose a file manually.")
+                    ? (request.kind == .image ? "No matching filenames or recent screenshot text. Try words visible in the screenshot, or choose a file." : "No matching filenames or document text. Try fewer words or choose a file.")
                     : "Choose a file to preview or add to Messages."
             } catch {
                 guard !Task.isCancelled, self.sessionID == session else { return }

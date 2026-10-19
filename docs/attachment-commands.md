@@ -36,6 +36,8 @@ because it used “add” instead of “attach”.
 | Flow, attach the latest download. | Newest observed completed/stable regular file |
 | Flow, attach the presentation I just downloaded. | Matching presentation file |
 | Flow, find my robotics presentation. | Ranked local filename matches; top match appended in Messages |
+| Here's the deck. Flow, find the presentation mentioning quarterly revenue. | Local slide text and indexed presentation content |
+| Here's the report. Flow, find the PDF containing quarterly revenue. | Local PDF text, with OCR for image-only pages |
 | Here's the image. Flow, find the beach trip photo. | Image filename matches and matching visible screenshot words |
 | Here's the issue. Flow, find the screenshot showing payment error. | Local OCR finds recent screenshots containing those words |
 
@@ -49,8 +51,9 @@ Quoted/reported instructions and negated cues do not select a file. Unsupported
 or ambiguous objects produce a clarification with no file action. Filename search
 uses an explicit “Flow, find…”, “Flow, search for…” or a named “Flow, attach…”
 command. Image searches also read visible words in recent screenshots locally
-with Apple Vision. General scene recognition, document-content search and remote
-attachment fetching are not implemented. See [screenshot text search](screenshot-text-search.md).
+with Apple Vision. PDF and presentation searches also read document content locally.
+General scene recognition and remote attachment fetching are not implemented.
+See [screenshot text search](screenshot-text-search.md) and [document content search](document-content-search.md).
 
 ## Find an older file
 
@@ -75,7 +78,7 @@ when replacing a file; Flow removes only that proven new separator and verifies
 the original text and unrelated attachment identities again. Choosing a row alone never
 changes the Messages draft. **Done** dismisses the picker and returns to Messages.
 
-The **…** menu exposes filename search refinement, manual file selection and copy.
+The **…** menu exposes search refinement, manual file selection and copy.
 Search refinement and source changes are available before attachment insertion.
 **Choose another file…** opens the native picker if a file is not indexed, is on another
 volume or the search is too broad. Image searches also match visible words in recent screenshots; they do not infer
