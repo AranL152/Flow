@@ -26,9 +26,9 @@
     "attachment_state_retained_in_header": true
   },
   "permissions_match_current_installed_code": {
-    "Accessibility": false,
-    "Microphone": false,
-    "SystemPolicyDesktopFolder": false
+    "Accessibility": true,
+    "Microphone": true,
+    "SystemPolicyDesktopFolder": true
   },
   "send_generated": false,
   "private_review_directory": ".build/status-copy-review",
