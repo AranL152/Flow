@@ -41,6 +41,7 @@ final class AppState: ObservableObject {
     private var cloudHasTranscript = false
     private var lastOnDeviceTranscript = ""
     private var lastOnDeviceFinalTranscript: String?
+    private var lastOnDeviceFinalCandidate: (text: String, confidence: Float)?
     private var recordingBegan = ContinuousClock.now
     private var captionTask: Task<Void, Never>?
     var isVoiceSimulation: Bool { ProcessInfo.processInfo.arguments.contains("--voice-simulation") }
@@ -564,6 +565,7 @@ final class AppState: ObservableObject {
         liveRewriteTask?.cancel(); liveRewriteTranscript = ""
         liveTranscriptFinalized = false; captionPresentationActive = false
         cloudSpeech.cancel(); cloudHasTranscript = false; lastOnDeviceTranscript = ""; lastOnDeviceFinalTranscript = nil
+        lastOnDeviceFinalCandidate = nil
         recordingBegan = .now
         recordingUsesCloudSpeech = false
         liveCaptionStatus = liveCaptionsEnabled ? "Listening…" : "Live captions are off"
@@ -886,9 +888,14 @@ final class AppState: ObservableObject {
             group.addTask { @MainActor [weak self] in
                 do {
                     try await Task.sleep(for: .milliseconds(600))
-                    for _ in 0..<16 {
+                    for _ in 0..<56 {
                         try Task.checkCancellation()
                         if let text = self?.lastOnDeviceFinalTranscript { return (text, "on_device") }
+                        if let self, let candidate = self.lastOnDeviceFinalCandidate,
+                           let text = SpeechFinalTranscript.accepted(candidate.text, final: true, afterAudioEnd: true,
+                               confidence: candidate.confidence, corroboratingTranscript: self.cloudSpeech.currentTranscript) {
+                            return (text, "on_device")
+                        }
                         try await Task.sleep(for: .milliseconds(25))
                     }
                 } catch {}
@@ -1005,8 +1012,12 @@ final class AppState: ObservableObject {
         speechCaptions.onText = { [weak self] text, final in
             guard let self, !self.liveTranscriptFinalized else { return }
             self.lastOnDeviceTranscript = text
+            if final, self.speechCaptions.finalizedAfterAudioEnd {
+                self.lastOnDeviceFinalCandidate = (text, self.speechCaptions.finalizedConfidence)
+            }
             if let accepted = SpeechFinalTranscript.accepted(text, final: final,
-                    afterAudioEnd: self.speechCaptions.finalizedAfterAudioEnd, confidence: self.speechCaptions.finalizedConfidence) {
+                    afterAudioEnd: self.speechCaptions.finalizedAfterAudioEnd, confidence: self.speechCaptions.finalizedConfidence,
+                    corroboratingTranscript: self.cloudSpeech.currentTranscript) {
                 self.lastOnDeviceFinalTranscript = accepted
             }
             if final {

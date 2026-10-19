@@ -62,6 +62,19 @@ final class CloudSpeechTests: XCTestCase {
         XCTAssertNil(SpeechFinalTranscript.accepted(String(repeating: "x", count: 5001), final: true, afterAudioEnd: true, confidence: 0.99))
     }
 
+    func testLowerConfidenceFinalRequiresIndependentAgreementOnEveryWord() {
+        func accept(_ cloud: String, final: Bool = true, confidence: Float = 0.8) -> String? {
+            SpeechFinalTranscript.accepted("Call me Ishmael.", final: final, afterAudioEnd: true,
+                confidence: confidence, corroboratingTranscript: cloud)
+        }
+        XCTAssertEqual(accept("CALL ME ISHMAEL"), "Call me Ishmael.")
+        XCTAssertNil(accept("Call me"))
+        XCTAssertNil(accept("Call me Alex"))
+        XCTAssertNil(accept("Call me Ishmael tomorrow"))
+        XCTAssertNil(accept("Call me Ishmael", final: false))
+        XCTAssertNil(accept("Call me Ishmael", confidence: 0))
+    }
+
     @MainActor
     func testCaptionBurstDeliversNewestRevisionAndCancellationDropsOldSpeech() async throws {
         let delivery = SpeechCaptionDelivery()

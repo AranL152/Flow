@@ -62,6 +62,7 @@ public final class CloudSpeechStream {
     public private(set) var failureDescription: String?
     public private(set) var serviceFailure: CloudSpeechServiceFailure?
     public var minimumConfidence: Double { transcript.minimumConfidence }
+    public var currentTranscript: String { transcript.text }
     private let endpoint: URL
     private var socket: URLSessionWebSocketTask?
     private var outgoing: AsyncStream<Data>.Continuation?
