@@ -80,6 +80,14 @@ After native Messages confirmation, the added file stays pinned by name under
 **Added to draft**, above **Other matches**. Selecting an alternative does not
 move that confirmed row; it changes only after a successful replacement. A
 candidate match or an unconfirmed paste never receives the added label.
+Native verification on 2026-10-19 covered light/dark previews, three recorded
+microphone-to-Messages runs, live captions and multiple streamed draft updates.
+The requested PDF stayed pinned above the alternatives. Copying the actual
+Messages attachment back confirmed its bytes matched the requested source.
+A separate recorded replacement check switched to an alternative and back,
+verified each PDF's bytes, and preserved the draft text. A plain-text clipboard
+marker ruled out accidentally reusing an old copied file. Nothing was sent.
+Recordings, document data and raw verification artifacts remain outside Git.
 Select an alternative and press **Use this file** to replace only the attachment
 Flow added during this session. Native AX object identity anchors the replacement;
 other attachment identities and the draft text must remain intact. If the owned
