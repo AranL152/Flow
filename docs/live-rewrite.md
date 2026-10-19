@@ -55,6 +55,22 @@ See [the report](../review/live-rewrite-verification.json).
 
 A read-only native inspection also confirmed the currently focused Messages
 composer supports the production safe live writer. It did not alter the draft.
-Physical recording with the updated app still needs the user's microphone test.
 The website's existing full Messages runner still uses its Stop-then-format
 sequence; this new synthetic verifier checks the live cloud path separately.
+
+An actual native microphone take subsequently passed on installed build
+`5a916f9`: generated speech played through MacBook speakers into Flow's microphone,
+with helper Fn start/stop events and a private screen recording. Microphone startup
+took 19 ms; the first draft word appeared 3.17 seconds after speech playback began.
+Eighteen word updates entered Messages before Stop. Cloud finalization took 307 ms,
+and the first final-model delta arrived 489 ms after Stop. The final command stayed
+out of the message, a synthetic dashboard screenshot was attached, and the popup
+showed one other match. Recorded frames show the full white command before purple
+styling and no waveform during Transcribing. Nothing was sent.
+
+This was one successful take from an empty draft, not a latency guarantee. A prior
+take used recorded-audio fallback, and a draft already containing an attachment
+deferred insertion until Stop. The app's installed code/signature stayed unchanged
+through reopening and both captures; no additional grants were needed. Raw footage
+includes a real conversation and remains private in `.build/`. See the
+[sanitized native report](../review/native-microphone-demo-verification.json).

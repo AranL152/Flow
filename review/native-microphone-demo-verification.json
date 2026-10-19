@@ -1,0 +1,37 @@
+{
+  "scope": "Recorded the installed normal Flow Attachments.app, using generated voice played through physical speakers into its real microphone. Uses actual helper Fn events and real cloud inference; no injection of transcript or model output.",
+  "installed_build": "5a916f9236a737e41a5bf45ab6f33654110b0c0d",
+  "installed_signature_unchanged": true,
+  "additional_permission_prompts": false,
+  "microphone_start_ms": 19,
+  "total_recording_start_ms": 113,
+  "first_draft_word_seconds_after_speech_start": 3.17,
+  "first_preview_model_word_seconds_after_request": 0.426,
+  "draft_updates_while_recording": 18,
+  "draft_updates_total": 23,
+  "words_arrived_before_stop": true,
+  "cloud_finalization_seconds": 0.307,
+  "used_final_realtime_transcript": true,
+  "stop_to_first_final_model_delta_seconds": 0.489,
+  "attachments_before": 0,
+  "attachments_after": 1,
+  "other_matches_visible": 1,
+  "send_generated": false,
+  "speaker_volume_restored": true,
+  "screen_recording_saved": true,
+  "private_local_recording": ".build/native-live-debug/native-reopen-2047.mov",
+  "visual_checks": [
+    "Live captions visible while speaking",
+    "Recording waveform active during speech",
+    "Message draft gained rewritten words before Stop",
+    "Full white command shown before command styling",
+    "Synthetic dashboard screenshot appeared in composer",
+    "Other matches popup showed an alternative"
+  ],
+  "limitations": [
+    "Single successful native take, not a latency guarantee; previous take used recorded-audio fallback.",
+    "Initial message text appeared about 3.17 seconds after playback began; the 0.426-second model time excludes speech collection and reveal pacing.",
+    "This draft started empty. A prior take with an existing attachment deferred text insertion until after Stop.",
+    "Private video includes a real conversation and remains uncommitted."
+  ]
+}
