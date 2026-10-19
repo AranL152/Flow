@@ -3,6 +3,25 @@ import XCTest
 @testable import Flow
 
 final class AttachmentTests: XCTestCase {
+    @MainActor
+    func testNamedFileAttachmentPreservesFilenameBytesAndURL() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("Business report Q2.pdf")
+        let bytes = Data("Original attachment bytes".utf8)
+        try bytes.write(to: url)
+        let board = NSPasteboard(name: .init("com.flow.test.\(UUID())"))
+        defer { board.releaseGlobally() }
+        try AttachmentCandidate(fileURL: url, sourceLabel: "Test").write(to: board)
+        let data = try XCTUnwrap(board.data(forType: .rtfd))
+        let text = try NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.rtfd], documentAttributes: nil)
+        let attachment = try XCTUnwrap(text.attribute(.attachment, at: 0, effectiveRange: nil) as? NSTextAttachment)
+        XCTAssertEqual(attachment.fileWrapper?.preferredFilename, url.lastPathComponent)
+        XCTAssertEqual(attachment.fileWrapper?.regularFileContents, bytes)
+        XCTAssertEqual(board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], [url])
+    }
+
     func testImageSnapshotSurvivesTextInsertionAndRejectsWrongType() throws {
         let board = NSPasteboard(name: .init("com.flow.test.\(UUID())"))
         defer { board.releaseGlobally() }

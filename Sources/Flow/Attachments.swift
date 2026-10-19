@@ -85,8 +85,19 @@ public struct AttachmentCandidate: Identifiable {
     public func write(to board: NSPasteboard) throws {
         try validate()
         if let fileURL {
+            // Messages imports a bare file URL as FILE_####.pdf. A named file
+            // wrapper carries both the original bytes and the display filename.
+            // Keep the URL representation for other pasteboard consumers.
+            let wrapper = try FileWrapper(url: fileURL, options: .immediate)
+            wrapper.preferredFilename = filename
+            let attachment = NSAttributedString(attachment: NSTextAttachment(fileWrapper: wrapper))
+            let data = try attachment.data(from: NSRange(location: 0, length: attachment.length),
+                documentAttributes: [.documentType: NSAttributedString.DocumentType.rtfd])
             board.clearContents()
-            guard board.writeObjects([fileURL as NSURL]) else { throw AttachmentFailure.unavailable("Couldn't copy the file.") }
+            let item = NSPasteboardItem()
+            item.setData(data, forType: .rtfd)
+            item.setString(fileURL.absoluteString, forType: .fileURL)
+            guard board.writeObjects([item]) else { throw AttachmentFailure.unavailable("Couldn't copy the file.") }
         } else if let imageData, let image = NSImage(data: imageData) {
             board.clearContents()
             guard board.writeObjects([image]) else { throw AttachmentFailure.unavailable("Couldn't copy the image.") }
