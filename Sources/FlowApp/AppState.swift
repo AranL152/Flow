@@ -40,6 +40,7 @@ final class AppState: ObservableObject {
     private var recordingUsesCloudSpeech = false
     private var cloudHasTranscript = false
     private var lastOnDeviceTranscript = ""
+    private var lastOnDeviceFinalTranscript: String?
     private var recordingBegan = ContinuousClock.now
     private var captionTask: Task<Void, Never>?
     var isVoiceSimulation: Bool { ProcessInfo.processInfo.arguments.contains("--voice-simulation") }
@@ -562,7 +563,7 @@ final class AppState: ObservableObject {
         liveTranscript = ""
         liveRewriteTask?.cancel(); liveRewriteTranscript = ""
         liveTranscriptFinalized = false; captionPresentationActive = false
-        cloudSpeech.cancel(); cloudHasTranscript = false; lastOnDeviceTranscript = ""
+        cloudSpeech.cancel(); cloudHasTranscript = false; lastOnDeviceTranscript = ""; lastOnDeviceFinalTranscript = nil
         recordingBegan = .now
         recordingUsesCloudSpeech = false
         liveCaptionStatus = liveCaptionsEnabled ? "Listening…" : "Live captions are off"
@@ -790,11 +791,13 @@ final class AppState: ObservableObject {
                 var lastWrite = Date.distantPast
                 var completed = false
                 let stopped = ContinuousClock.now
-                let transcript = self.recordingUsesCloudSpeech ? await self.cloudSpeech.finish(from: self.engine) : nil
+                let asr = self.recordingUsesCloudSpeech ? await self.finalizeRealtimeSpeech() : (text: nil, source: "recorded_audio")
+                let transcript = asr.text
                 try Task.checkCancellation()
                 if let failure = self.cloudSpeech.serviceFailure, failure.code == "quota_exhausted" { throw failure }
                 if let transcript { self.finalizeLiveTranscript(transcript) }
-                self.log("⏱️ [CLOUD SPEECH] Finalization: \(stopped.duration(to: .now)); real-time transcript: \(transcript != nil)")
+                self.log("⏱️ [CLOUD SPEECH] Finalization: \(stopped.duration(to: .now)); real-time transcript: \(asr.source == "cloud")")
+                self.log("⏱️ [ASR] Final source: \(asr.source)")
                 let bounded = LiveRewritePresentation.bounded(self.engine.transcribeStream(appName: appName, finalTranscript: transcript),
                                                                idle: .seconds(12), total: .seconds(30), failure: { _ in
                     NSError(domain: "Flow.Stream", code: 5, userInfo: [NSLocalizedDescriptionKey:
@@ -868,6 +871,39 @@ final class AppState: ObservableObject {
                     AudioFeedback.shared.playError()
                 }
             }
+        }
+    }
+
+    /// Prefer the cloud final during a short grace period. A genuine local
+    /// final can then bypass a stalled remote final and a redundant batch ASR.
+    /// Both tasks cancel cleanly; partial local captions are never accepted.
+    private func finalizeRealtimeSpeech() async -> (text: String?, source: String) {
+        await withTaskGroup(of: (String?, String).self) { group in
+            group.addTask { @MainActor [weak self] in
+                guard let self else { return (nil, "recorded_audio") }
+                return (await self.cloudSpeech.finish(from: self.engine), "cloud")
+            }
+            group.addTask { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(for: .milliseconds(600))
+                    for _ in 0..<16 {
+                        try Task.checkCancellation()
+                        if let text = self?.lastOnDeviceFinalTranscript { return (text, "on_device") }
+                        try await Task.sleep(for: .milliseconds(25))
+                    }
+                } catch {}
+                return (nil, "recorded_audio")
+            }
+            while let (text, source) = await group.next() {
+                if let text {
+                    group.cancelAll()
+                    return (text, source)
+                }
+                if self.cloudSpeech.serviceFailure?.code == "quota_exhausted" {
+                    group.cancelAll(); break
+                }
+            }
+            return (nil, "recorded_audio")
         }
     }
 
@@ -969,6 +1005,9 @@ final class AppState: ObservableObject {
         speechCaptions.onText = { [weak self] text, final in
             guard let self, !self.liveTranscriptFinalized else { return }
             self.lastOnDeviceTranscript = text
+            if let accepted = SpeechFinalTranscript.accepted(text, final: final, confidence: self.speechCaptions.finalizedConfidence) {
+                self.lastOnDeviceFinalTranscript = accepted
+            }
             self.liveRewriteTranscript = text
             if self.liveCaptionsEnabled { self.liveTranscript = text }
             self.log("⏱️ [LIVE CAPTION] On-device update: \(text.count) characters at \(self.recordingBegan.duration(to: .now))")

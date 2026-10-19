@@ -10,6 +10,7 @@ public final class LiveSpeechCaptions {
     public var onStatus: ((String) -> Void)?
     public private(set) var isListening = false
     public private(set) var finalizedText: String?
+    public private(set) var finalizedConfidence: Float = 0
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognition: SFSpeechRecognitionTask?
@@ -52,9 +53,11 @@ public final class LiveSpeechCaptions {
         recognition = recognizer.recognitionTask(with: request) { [weak self] result, error in
             let text = result?.bestTranscription.formattedString
             let final = result?.isFinal ?? false
+            let confidences = result?.bestTranscription.segments.map(\.confidence) ?? []
+            let confidence = confidences.isEmpty ? 0 : confidences.reduce(0, +) / Float(confidences.count)
             Task { @MainActor in
                 guard let self, self.generation == session else { return }
-                if final { self.finalizedText = text }
+                if final { self.finalizedText = text; self.finalizedConfidence = confidence }
                 if let text { self.onText?(text, final) }
                 if final {
                     self.isListening = false
@@ -131,6 +134,6 @@ public final class LiveSpeechCaptions {
         drain?.cancel(); drain = nil
         request?.endAudio(); recognition?.cancel()
         recognition = nil; request = nil; recognizer = nil
-        isListening = false; finalizedText = nil; offset = 0
+        isListening = false; finalizedText = nil; finalizedConfidence = 0; offset = 0
     }
 }

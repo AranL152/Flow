@@ -101,13 +101,14 @@ def main():
     parser.add_argument('--app-log', type=Path, help='Unbuffered installed-app log, required with --native')
     parser.add_argument('--new-test-draft', action='store_true', help='Create an unsent draft addressed to a unique example.invalid test recipient')
     parser.add_argument('--require-realtime', action='store_true', help='Fail unless native cloud captions and a finalized real-time transcript were observed')
+    parser.add_argument('--require-live', action='store_true', help='Require live captions, streamed model writes while speaking and a finalized cloud/on-device ASR handoff')
     parser.add_argument('--expect-fallback', action='store_true', help='Fail unless native on-device captions survive an intentionally unavailable speech socket')
     parser.add_argument('--expect-attachment', action='store_true', help='Fail unless a native file object is present after the test')
     parser.add_argument('--stall-request', type=int, help='Diagnostic host only: inject one stalled cloud rewrite request')
     args = parser.parse_args()
     if args.native and not args.app_log:
         parser.error('--native requires --app-log')
-    if (args.require_realtime or args.expect_fallback) and not args.native:
+    if (args.require_realtime or args.require_live or args.expect_fallback) and not args.native:
         parser.error('Native caption assertions require --native')
     if args.require_realtime and args.expect_fallback:
         parser.error('Choose either real-time recognition or the forced fallback check')
@@ -164,6 +165,10 @@ def main():
     if args.expect_fallback:
         checks.update(on_device_captions_observed=report['native_on_device_caption_updates'] > 0,
                       fallback_used=not report['native_final_realtime_transcript'])
+    if args.require_live:
+        checks.update(captions_while_speaking=report['native_caption_updates_before_stop'] >= 2,
+                      model_streamed_while_speaking=report['draft_updates_before_stop'] >= 2,
+                      genuine_final_asr_handoff=report['native_asr_source'] in ['cloud', 'on_device'])
     if args.expect_attachment: checks['native_attachment_present'] = report['attachments_after'] > 0
     report['checks'] = checks
     (work / 'timing.json').write_text(json.dumps(report, indent=2) + '\n')

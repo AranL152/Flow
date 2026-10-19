@@ -211,6 +211,9 @@ struct RecordAdaptiveVoice {
         let cloudUpdates = freshLog().components(separatedBy: "\n").filter { $0.contains("[LIVE CAPTION] Cloud update:") }
         let deviceUpdates = freshLog().components(separatedBy: "\n").filter { $0.contains("[LIVE CAPTION] On-device update:") }
         let finalRealtime = freshLog().contains("real-time transcript: true")
+        let asrSource = freshLog().components(separatedBy: "\n")
+            .last(where: { $0.contains("[ASR] Final source: ") })?
+            .components(separatedBy: "[ASR] Final source: ").last ?? "unknown"
         let captionPattern = try NSRegularExpression(pattern: #"\[LIVE CAPTION\] (Cloud|On-device) update: ([0-9]+) characters at ([0-9.]+) seconds"#)
         let log = freshLog() as NSString
         let nativeCaptions: [[String: Any]] = captionPattern.matches(in: log as String, range: NSRange(location: 0, length: log.length)).map {
@@ -222,6 +225,7 @@ struct RecordAdaptiveVoice {
             "native": native, "microphone_ready_seconds": microphoneReady, "speech_start_seconds": speechStart,
             "native_cloud_caption_updates": cloudUpdates.count, "native_final_realtime_transcript": finalRealtime,
             "native_on_device_caption_updates": deviceUpdates.count,
+            "native_asr_source": asrSource,
             "native_caption_updates": nativeCaptions,
             "first_native_caption_after_speech_seconds": nativeCaptions.first.map { ($0["seconds"] as! Double) - speechStart } ?? -1,
             "native_caption_updates_before_stop": nativeCaptions.filter { ($0["seconds"] as! Double) < stopped }.count,
