@@ -124,9 +124,7 @@ struct RecordingIndicatorView: View {
                 if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {
                     CompactWaveformView(isRecording: true, audioLevel: appState.smoothedAudioLevel)
                 }
-                if appState.isRecording && !appState.isProcessing && !appState.isInitializingModel {
-                    ListeningStatusLabel(fontSize: 11, weight: .medium)
-                } else {
+                if !appState.isRecording || appState.isProcessing || appState.isInitializingModel {
                     Text(appState.isInitializingModel ? "Loading model…" : "Transcribing…")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.85))

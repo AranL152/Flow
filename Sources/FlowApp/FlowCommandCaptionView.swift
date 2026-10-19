@@ -49,7 +49,10 @@ struct FlowCommandCaptionView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 Image(systemName: "mic.fill")
-                if !isRecording, recognized, let commandStatus {
+                    .foregroundStyle(isRecording ? FlowCommandBadge.ink : .white.opacity(0.5))
+                if isRecording {
+                    ListeningStatusLabel()
+                } else if recognized, let commandStatus {
                     Text(commandStatus)
                         .foregroundStyle(FlowCommandBadge.ink)
                         .accessibilityIdentifier("flow-command-status")
@@ -111,8 +114,8 @@ struct FlowCommandCaptionView: View {
     }
 
     private var emptyCaption: String {
-        // The sound-capture pill owns the listening indicator. Keep errors/off
-        // states readable here without duplicating its animated status.
+        // The header owns the listening indicator; do not duplicate it in the
+        // otherwise empty transcript. Keep errors/off states readable here.
         ["Listening…", "Listening..."].contains(status) ? "" : status
     }
 

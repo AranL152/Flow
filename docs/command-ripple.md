@@ -14,7 +14,8 @@ This classifier only styles captions; the worker's authoritative command parser,
 message insertion and attachment safeguards are unchanged.
 
 During recording all spoken words remain white. The Listening label and its
-animated purple dots appear only in the sound-capture pill, not the speech box.
+animated purple dots appear beside the mic in the speech-box header. The
+sound-capture pill shows the waveform and duration while recording.
 The dots pulse left to right while audio is captured and remain static with
 Reduce Motion. There is no
 command highlight until the transcript is finalized and completely visible.
