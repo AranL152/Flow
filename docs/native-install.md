@@ -86,6 +86,9 @@ open -n ".build/Flow Attachments.app" --args --privacy-audit \
 `--privacy-read-file /path/to/file` verifies a real file read (one byte, no content
 logged). Use it only for an explicitly authorized test file. Diagnostic mode
 uses in-memory state and exits when the report is saved.
+`--privacy-read-desktop` additionally verifies Desktop directory access without
+logging filenames. This checks folder access separately from an explicitly
+provided file, which can carry its own access grant.
 
 If access is unavailable, enable this Flow app under System Settings → Privacy
 & Security → Accessibility. Microphone permission is requested by recording.

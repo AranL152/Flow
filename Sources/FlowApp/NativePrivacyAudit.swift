@@ -24,6 +24,15 @@ enum NativePrivacyAudit {
                 fileReadable = try file.read(upToCount: 1)?.isEmpty == false
             } catch { fileReadable = false }
         }
+        var desktopReadable: Bool?
+        if arguments.contains("--privacy-read-desktop") {
+            do {
+                let desktop = try FileManager.default.url(for: .desktopDirectory, in: .userDomainMask,
+                                                          appropriateFor: nil, create: false)
+                _ = try FileManager.default.contentsOfDirectory(at: desktop, includingPropertiesForKeys: nil)
+                desktopReadable = true
+            } catch { desktopReadable = false }
+        }
         let report: [String: Any] = [
             "scope": "Actual signed app permissions; no audio recording, model calls or Messages changes.",
             "bundle_id": Bundle.main.bundleIdentifier ?? "",
@@ -31,7 +40,8 @@ enum NativePrivacyAudit {
             "accessibility_authorized": AXIsProcessTrusted(),
             "microphone_authorized": AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
             "microphone_request_made": requesting,
-            "file_readable": fileReadable as Any? ?? NSNull()
+            "file_readable": fileReadable as Any? ?? NSNull(),
+            "desktop_directory_readable": desktopReadable as Any? ?? NSNull()
         ]
         if let output = value("--privacy-report"),
            let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
