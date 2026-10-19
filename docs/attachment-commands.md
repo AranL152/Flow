@@ -326,6 +326,14 @@ pasting. A blocked paste now explains the reason in the attachment card instead
 of silently showing a found file. First-use download resolution is awaited before
 automatic staging; approximate download ordering still requires confirmation.
 
+Saved recipient chips can expose `Name, email, Not registered` through
+Accessibility even though Messages displays only the name. Flow separates the
+display name from the committed address before personalization and draft
+pinning. It validates either named or address-based To-field serialization,
+keeps comma-containing names intact, and still rejects additional uncommitted
+recipient text. Native verification covered three Contacts-backed empty
+Messages drafts without sending or changing existing draft contents.
+
 The regression run verified actual image autopaste into a new Messages draft,
 preservation of the existing draft and native attachment, and replacement of
 only Flow's newly added file with another candidate. No message was sent.

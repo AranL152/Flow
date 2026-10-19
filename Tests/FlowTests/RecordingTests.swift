@@ -2,6 +2,27 @@ import XCTest
 @testable import Flow
 
 final class RecordingTests: XCTestCase {
+    func testSavedContactChipUsesNameWhileValidatingItsCommittedEmail() {
+        typealias Node = MessagesContext.HeaderNode
+        let chip = Node(role: "AXPopUpButton", description: "Morgan, morgan@example.invalid, Not registered")
+        for value in ["\u{FFFC}", "To:\u{FFFC}Morgan", "To:\u{FFFC}morgan@example.invalid", "To:\u{FFFC}Morgan, morgan@example.invalid"] {
+            let to = Node(role: "AXTextField", identifier: "To:", description: "To:", value: value)
+            XCTAssertEqual(MessagesContext.contactFromHeader(Node(children: [to, chip])), "Morgan", "Committed serialization: \(value)")
+        }
+        let uncommitted = Node(role: "AXTextField", identifier: "To:", value: "\u{FFFC}Morgan another@example.invalid")
+        XCTAssertNil(MessagesContext.contactFromHeader(Node(children: [uncommitted, chip])))
+    }
+
+    func testNamedRecipientPhonesAndCommaNamesRemainDistinctFromAddresses() {
+        typealias Node = MessagesContext.HeaderNode
+        let to = Node(role: "AXTextField", identifier: "To:")
+        let phone = Node(role: "AXPopUpButton", description: "Morgan, +1 (202) 555-0148, Not registered")
+        let surname = Node(role: "AXPopUpButton", description: "Chen, Riley")
+        XCTAssertEqual(MessagesContext.contactFromHeader(Node(children: [to, phone, surname])), "Morgan, Chen, Riley")
+        let email = Node(role: "AXPopUpButton", description: "Chen, Riley, riley@example.invalid")
+        XCTAssertEqual(MessagesContext.contactFromHeader(Node(children: [to, email])), "Chen, Riley")
+    }
+
     func testCommittedRecipientsPinNewMessageDraftsWithoutReadingHistory() {
         typealias Node = MessagesContext.HeaderNode
         let to = Node(role: "AXTextField", identifier: "To:")

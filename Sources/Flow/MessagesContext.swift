@@ -59,25 +59,44 @@ enum MessagesContext {
         if let recipients = find(root, matching: { $0.children.contains { $0.identifier == "To:" } }) {
             guard let address = recipients.children.first(where: { $0.identifier == "To:" }) else { return nil }
             let chips = recipients.children.filter { $0.role == "AXPopUpButton" }
-            let names = chips.compactMap { chip -> String? in
+            let recipients = chips.compactMap { chip -> (name: String, serialized: [String])? in
                 var label = [chip.value, chip.title, chip.description].first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? ""
                 if label.hasSuffix(", Not registered") { label.removeLast(", Not registered".count) }
-                return normalizedContact(label)
+                guard let full = normalizedContact(label) else { return nil }
+                // Saved contacts expose “Name, address” in the chip's accessible
+                // description. Keep the display name for personalization; retain
+                // the address only to validate the committed To-field serialization.
+                if let comma = full.range(of: ", ", options: .backwards) {
+                    let address = String(full[comma.upperBound...])
+                    if isRecipientAddress(address), let name = normalizedContact(String(full[..<comma.lowerBound])) {
+                        return (name, [full, address, name])
+                    }
+                }
+                return (full, [full])
             }
-            guard !names.isEmpty, names.count == chips.count else { return nil }
+            guard !recipients.isEmpty, recipients.count == chips.count else { return nil }
             // Modern Messages serializes committed chips into the To field as
             // "To:\u{FFFC}name". Reject any text not represented by those chips.
             var pending = address.value.trimmingCharacters(in: .whitespacesAndNewlines)
             let prefix = address.description.isEmpty ? "To:" : address.description
             if pending.hasPrefix(prefix) { pending.removeFirst(prefix.count) }
-            for name in names {
-                if let range = pending.range(of: name, options: .caseInsensitive) { pending.removeSubrange(range) }
+            for recipient in recipients {
+                for label in recipient.serialized {
+                    if let range = pending.range(of: label, options: .caseInsensitive) { pending.removeSubrange(range); break }
+                }
             }
             guard pending.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FFFC},;"))).isEmpty else { return nil }
-            return names.joined(separator: ", ")
+            return recipients.map(\.name).joined(separator: ", ")
         }
         guard let title = find(root, matching: { $0.identifier == "ConversationTitle" }) else { return nil }
         return normalizedContact([title.value, title.title, title.description].first { !$0.isEmpty } ?? "")
+    }
+
+    private static func isRecipientAddress(_ text: String) -> Bool {
+        if text.range(of: #"^[^\s@,]+@[^\s@,]+\.[^\s@,]+$"#, options: .regularExpression) != nil { return true }
+        let digits = text.filter(\.isNumber)
+        return (text.hasPrefix("+") || text.contains("(")) && (7...15).contains(digits.count)
+            && text.allSatisfy { $0.isNumber || "+()- .".contains($0) }
     }
 
     static func normalizedContact(_ title: String) -> String? {
