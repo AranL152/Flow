@@ -49,13 +49,11 @@ struct FlowCommandCaptionView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 Image(systemName: "mic.fill")
-                if isRecording {
-                    ListeningStatusLabel()
-                } else if recognized, let commandStatus {
+                if !isRecording, recognized, let commandStatus {
                     Text(commandStatus)
                         .foregroundStyle(FlowCommandBadge.ink)
                         .accessibilityIdentifier("flow-command-status")
-                } else {
+                } else if !isRecording {
                     Text("Transcribing…")
                 }
                 Spacer(minLength: 2)
@@ -78,7 +76,7 @@ struct FlowCommandCaptionView: View {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical) {
                             VStack(alignment: .leading, spacing: 0) {
-                                Text(reveal.text.isEmpty ? status : reveal.text)
+                                Text(reveal.text.isEmpty ? emptyCaption : reveal.text)
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(.white.opacity(reveal.text.isEmpty ? 0.5 : 0.95))
                                     .frame(width: FlowCaptionMetrics.textWidth, alignment: .leading)
@@ -110,6 +108,12 @@ struct FlowCommandCaptionView: View {
         .task(id: Input(text: transcript, recording: isRecording, final: isTranscriptFinal)) { await presentCaption() }
         .onDisappear { onPresentationState?(false) }
         .onChange(of: reduceMotion) { _, reduced in if reduced { rippleActive = false } }
+    }
+
+    private var emptyCaption: String {
+        // The sound-capture pill owns the listening indicator. Keep errors/off
+        // states readable here without duplicating its animated status.
+        ["Listening…", "Listening..."].contains(status) ? "" : status
     }
 
     private func presentCaption() async {
