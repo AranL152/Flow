@@ -11,6 +11,8 @@ public final class LiveSpeechCaptions {
     public private(set) var isListening = false
     public private(set) var finalizedText: String?
     public private(set) var finalizedConfidence: Float = 0
+    public private(set) var finalizedAfterAudioEnd = false
+    private var audioEnded = false
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognition: SFSpeechRecognitionTask?
@@ -57,7 +59,10 @@ public final class LiveSpeechCaptions {
             let confidence = confidences.isEmpty ? 0 : confidences.reduce(0, +) / Float(confidences.count)
             Task { @MainActor in
                 guard let self, self.generation == session else { return }
-                if final { self.finalizedText = text; self.finalizedConfidence = confidence }
+                if final {
+                    self.finalizedText = text; self.finalizedConfidence = confidence
+                    self.finalizedAfterAudioEnd = self.audioEnded
+                }
                 if let text { self.onText?(text, final) }
                 if final {
                     self.isListening = false
@@ -120,6 +125,7 @@ public final class LiveSpeechCaptions {
     public func finish(from engine: Flow? = nil) {
         guard isListening else { cancel(); return }
         if let engine { feed(from: engine) }
+        audioEnded = true
         request?.endAudio()
         let session = generation
         drain = Task { [weak self] in
@@ -134,6 +140,7 @@ public final class LiveSpeechCaptions {
         drain?.cancel(); drain = nil
         request?.endAudio(); recognition?.cancel()
         recognition = nil; request = nil; recognizer = nil
-        isListening = false; finalizedText = nil; finalizedConfidence = 0; offset = 0
+        isListening = false; finalizedText = nil; finalizedConfidence = 0
+        finalizedAfterAudioEnd = false; audioEnded = false; offset = 0
     }
 }

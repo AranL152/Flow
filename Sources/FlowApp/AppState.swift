@@ -1005,7 +1005,8 @@ final class AppState: ObservableObject {
         speechCaptions.onText = { [weak self] text, final in
             guard let self, !self.liveTranscriptFinalized else { return }
             self.lastOnDeviceTranscript = text
-            if let accepted = SpeechFinalTranscript.accepted(text, final: final, confidence: self.speechCaptions.finalizedConfidence) {
+            if let accepted = SpeechFinalTranscript.accepted(text, final: final,
+                    afterAudioEnd: self.speechCaptions.finalizedAfterAudioEnd, confidence: self.speechCaptions.finalizedConfidence) {
                 self.lastOnDeviceFinalTranscript = accepted
             }
             self.liveRewriteTranscript = text

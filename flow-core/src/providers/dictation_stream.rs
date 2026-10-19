@@ -71,7 +71,7 @@ pub async fn consume(response: reqwest::Response, duration_ms: u64, on_delta: Di
 pub async fn consume_with_attachments(response: reqwest::Response, duration_ms: u64, on_delta: DictationDelta, require_attachment_protocol: bool) -> Result<TranscriptionResponse> {
     if !response.status().is_success() {
         let status = response.status().as_u16();
-        let detail = response.json::<serde_json::Value>().await.ok()
+        let detail = tokio::time::timeout(std::time::Duration::from_secs(2), response.json::<serde_json::Value>()).await.ok().and_then(|result| result.ok())
             .and_then(|value| value["error"].as_str().map(|text| text.chars().take(500).collect::<String>()));
         return Err(failure(format!("Streaming worker returned HTTP {status}{}", detail.map(|text| format!(": {text}")).unwrap_or_default())));
     }
@@ -154,6 +154,26 @@ mod tests {
         assert!(decoder.line("", &callback).is_err());
         assert!(!decoder.done);
     }
+    #[tokio::test]
+    async fn rejected_worker_reports_actionable_quota_error_before_any_delta() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0; 4096]; socket.read(&mut request).await.unwrap();
+            let body = r#"{"error":"Cloudflare's daily AI allowance is exhausted. Enable Workers Paid."}"#;
+            let response = format!("HTTP/1.1 429 Too Many Requests\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+        let response = reqwest::get(format!("http://{address}")).await.unwrap();
+        let callback: DictationDelta = Arc::new(|_| panic!("A rejected request cannot insert draft text"));
+        let error = consume(response, 1000, callback).await.unwrap_err().to_string();
+        assert!(error.contains("HTTP 429"));
+        assert!(error.contains("Enable Workers Paid"));
+        server.await.unwrap();
+    }
+
     #[tokio::test]
     async fn stalled_network_cancels_without_waiting_for_another_token() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};

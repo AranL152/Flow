@@ -53,12 +53,13 @@ final class CloudSpeechTests: XCTestCase {
     }
 
     func testFinalBackupRejectsPartialUncertainAndInvalidRecognition() {
-        XCTAssertEqual(SpeechFinalTranscript.accepted("  Call me Ishmael. ", final: true, confidence: 0.95), "Call me Ishmael.")
-        XCTAssertNil(SpeechFinalTranscript.accepted("Call me", final: false, confidence: 0.99))
-        XCTAssertNil(SpeechFinalTranscript.accepted("uncertain", final: true, confidence: 0.7))
-        XCTAssertNil(SpeechFinalTranscript.accepted("empty", final: true, confidence: .nan))
-        XCTAssertNil(SpeechFinalTranscript.accepted(" ", final: true, confidence: 0.99))
-        XCTAssertNil(SpeechFinalTranscript.accepted(String(repeating: "x", count: 5001), final: true, confidence: 0.99))
+        XCTAssertEqual(SpeechFinalTranscript.accepted("  Call me Ishmael. ", final: true, afterAudioEnd: true, confidence: 0.95), "Call me Ishmael.")
+        XCTAssertNil(SpeechFinalTranscript.accepted("Call me", final: false, afterAudioEnd: true, confidence: 0.99))
+        XCTAssertNil(SpeechFinalTranscript.accepted("Earlier utterance before a pause", final: true, afterAudioEnd: false, confidence: 0.99))
+        XCTAssertNil(SpeechFinalTranscript.accepted("uncertain", final: true, afterAudioEnd: true, confidence: 0.7))
+        XCTAssertNil(SpeechFinalTranscript.accepted("empty", final: true, afterAudioEnd: true, confidence: .nan))
+        XCTAssertNil(SpeechFinalTranscript.accepted(" ", final: true, afterAudioEnd: true, confidence: 0.99))
+        XCTAssertNil(SpeechFinalTranscript.accepted(String(repeating: "x", count: 5001), final: true, afterAudioEnd: true, confidence: 0.99))
     }
 
     @MainActor
