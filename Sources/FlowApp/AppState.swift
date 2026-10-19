@@ -1009,6 +1009,9 @@ final class AppState: ObservableObject {
                     afterAudioEnd: self.speechCaptions.finalizedAfterAudioEnd, confidence: self.speechCaptions.finalizedConfidence) {
                 self.lastOnDeviceFinalTranscript = accepted
             }
+            if final {
+                self.log("⏱️ [ASR] On-device final: ended=\(self.speechCaptions.finalizedAfterAudioEnd), confidence=\(self.speechCaptions.finalizedConfidence), accepted=\(self.lastOnDeviceFinalTranscript != nil)")
+            }
             self.liveRewriteTranscript = text
             if self.liveCaptionsEnabled { self.liveTranscript = text }
             self.log("⏱️ [LIVE CAPTION] On-device update: \(text.count) characters at \(self.recordingBegan.duration(to: .now))")
