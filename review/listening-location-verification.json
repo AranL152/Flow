@@ -1,0 +1,30 @@
+{
+  "scope": "Compiled production SwiftUI views, native caption/ripple preview and visual review. Updated installed app reopened after cancelling a stalled cloud speech check.",
+  "installed_build": "c7898f6340e481d29a64e8d6a5145f3a0cc24bd7",
+  "native_preview_checks": {
+    "animation_exported": true,
+    "complete_white_caption_preview_rendered": true,
+    "explicit_cue_detected": true,
+    "hide_then_show_preserves_latest_visibility": true,
+    "listening_dots_preview_rendered": true,
+    "long_command_preview_rendered": true,
+    "ordinary_mention_is_not_a_command": true,
+    "real_local_ocr_produces_handoff_candidates": true,
+    "recording_cue_has_no_command_highlight": true,
+    "reduced_motion_preview_rendered": true,
+    "repeated_show_keeps_indicator_opaque": true,
+    "repeated_show_keeps_indicator_position": true,
+    "settling_synced_glow_preview_rendered": true,
+    "status_uses_real_search_state": true
+  },
+  "visual_checks": {
+    "animated_listening_in_streaming_box_header": true,
+    "sound_pill_only_waveform_recording_dot_and_duration": true,
+    "mic_matches_purple_listening_label": true,
+    "transcribing_spinner_and_centered_label_retained": true
+  },
+  "mic_request_interpretation": "User message ended at make the mic also; matching the purple label while listening was stated as an assumption.",
+  "live_speech_check": "Cloud realtime speech returned a bad server response; recorded-audio fallback did not finish during observation. Cancelled by closing and reopening the unchanged installed app. This is not a successful end-to-end voice check.",
+  "send_generated": false,
+  "privacy": "Screenshots and cloud logs stay private under .build/status-copy-review."
+}
