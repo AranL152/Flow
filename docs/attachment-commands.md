@@ -12,6 +12,20 @@ The source request travels separately through the worker and Rust into Swift.
 File paths and clipboard contents are resolved locally, never invented by the
 model or included in the cloud request.
 
+## Natural command wording
+
+The same sources work with **attach, add, include, insert, paste, append, enclose,
+upload, find, locate, fetch, retrieve, grab, get, select, pick (out), search (for),
+look for/up, pull (up/in), bring (up/in), drop (in), put**. For example:
+
+> Hey Alex, here's the page. Flow, add the screenshot showing Call me Ishmael.
+
+“Flow, could you please add the image on my clipboard to this message” works too.
+An explicit Flow cue is still required. These verbs prepare an unsent attachment;
+they never press Send. Captions, provisional rewriting and the deployed worker
+recognize the same verbs, so a command cannot leak into the outgoing text simply
+because it used “add” instead of “attach”.
+
 ## Supported sources
 
 | Say | Local source |
@@ -295,3 +309,18 @@ prior generated message and requires the original single PDF:
 ```sh
 python3 scripts/verify-imessage.py --run --append-image --baseline review/imessage-verification.json
 ```
+
+## New-message recipient capture
+
+A committed recipient in a new Messages draft can leave the window title as
+“Messages”. Flow now reads those recipient chips through Accessibility instead
+of treating the generic title as a missing destination. It excludes conversation
+history and the sidebar and rejects text in the To field that is not represented
+by committed chips. Recipient, focus, composer and draft guards still run before
+pasting. A blocked paste now explains the reason in the attachment card instead
+of silently showing a found file. First-use download resolution is awaited before
+automatic staging; approximate download ordering still requires confirmation.
+
+The regression run verified actual image autopaste into a new Messages draft,
+preservation of the existing draft and native attachment, and replacement of
+only Flow's newly added file with another candidate. No message was sent.

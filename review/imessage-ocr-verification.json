@@ -21,6 +21,6 @@
     "error"
   ],
   "scope": "Supplied local search intent \u2192 actual Spotlight and Apple Vision OCR \u2192 production auto-append and candidate replacement in actual Messages. Synthetic screenshots only. No audio, ASR or LLM API calls. No Send event.",
-  "search_and_native_paste_seconds": 1.0805190801620483,
+  "search_and_native_paste_seconds": 1.0652949810028076,
   "status": "ready"
 }

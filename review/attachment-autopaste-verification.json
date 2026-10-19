@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-18",
+  "implemented_commits": [
+    "0afd494",
+    "b936b2b"
+  ],
+  "installed_build": "b936b2be46583c588e36c3a0f8a696252a0eb62a",
+  "worker_deployed_version": "550aa5e0-e6fc-49a6-98d1-3004e9512eef",
+  "tests": {
+    "swift_passed": 65,
+    "worker_passed": 130,
+    "worker_typecheck_passed": true,
+    "rust_unit_and_integration_passed": 352,
+    "rust_doctests_passed": 1,
+    "rust_ignored": 2
+  },
+  "fixed_causes": [
+    "Attachment parsing recognized attach/find/search but rejected add and other natural verbs.",
+    "Messages new-message drafts retain a generic window title; committed recipient chips were not captured, so automatic attachment staging had no destination.",
+    "The first recent-download resolution was asynchronous but automatic staging did not wait for it."
+  ],
+  "command_coverage": {
+    "verb_variants": 30,
+    "clipboard_download_search_tested_for_every_verb": true,
+    "same_verbs_in_worker_captions_and_provisional_rewrite": true,
+    "polite_phrasing_tested": true,
+    "quoted_and_negated_speech_remains_message_text": true,
+    "uncommitted_recipient_text_blocks_capture": true,
+    "native_serialized_recipient_chip_value_tested": true
+  },
+  "native_voice_test": {
+    "scope": "Installed native app, actual helper Fn events, physical microphone and real cloud inference.",
+    "spoken_command": "Flow, add the screenshot showing Call me Ishmael.",
+    "recipient_scope": "New, unsent Messages draft with committed recipient chips and a generic window title.",
+    "native_attachment_count_before": 0,
+    "native_attachment_count_after": 1,
+    "processing_completed": true,
+    "draft_updates_before_stop": 12,
+    "stop_to_final_text_visible_seconds": 1.410682125,
+    "stop_to_attachment_confirmed_seconds": 2.488389541,
+    "microphone_start_ms": 32,
+    "actual_screenshot_visible_in_draft": true,
+    "popup_added_to_draft_visible": true,
+    "live_preview_stalled_once_then_recovered": true,
+    "private_recording": ".build/adaptive-voice-review/native-add-autopaste-20261018-220116/recording.mov"
+  },
+  "diagnostic_voice_test": {
+    "scope": "Production AppState in an isolated diagnostic host with in-memory history; real microphone, real cloud inference, production HUD and actual Messages insertion. Not the installed bundle or helper.",
+    "native_attachment_count_after": 1,
+    "processing_completed": true,
+    "stop_to_staging_finished_seconds": 1.511424333
+  },
+  "native_ocr_and_replacement_regression": {
+    "scope": "Supplied local search intent \u2192 actual Spotlight and Apple Vision OCR \u2192 production auto-append and candidate replacement in actual Messages. Synthetic screenshots only. No audio, ASR or LLM API calls. No Send event.",
+    "checks": {
+      "alternative_replaces_only_flows_file": true,
+      "best_recent_match_auto_appended": true,
+      "exactly_one_native_file_added": true,
+      "found_visible_words_not_filename": true,
+      "original_choice_restored_without_changing_draft": true,
+      "original_text_preserved": true,
+      "partial_text_match_excluded": true,
+      "unrelated_native_files_preserved": true
+    },
+    "search_and_native_paste_seconds": 1.0652949810028076,
+    "existing_native_attachment_and_text_present_before_test": true
+  },
+  "permissions_match_current_installed_code": {
+    "accessibility": true,
+    "microphone": true,
+    "desktop": true
+  },
+  "send_generated": false,
+  "privacy": "Raw voice recordings, screenshot previews, Messages contents, recipient labels and detailed timing traces remain private under .build/.",
+  "limitations": [
+    "One native microphone take; timings are not median/p95 guarantees.",
+    "The recorded microphone test verifies the add alias and screenshot search. Other aliases and source combinations were covered by parser tests, not separate microphone recordings.",
+    "The first-use recent-download wait was corrected but this recorded run does not claim a download autopaste test.",
+    "No Send was generated, so this run does not train or verify newly saved contact style rules."
+  ]
+}
