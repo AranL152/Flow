@@ -5,6 +5,7 @@ import QuickLookThumbnailing
 
 /// A small picker beside the composer; larger previews are available on demand.
 struct AttachmentCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var session: AttachmentSession
     let engine: Flow
     var onLayoutChange: () -> Void = {}
@@ -31,8 +32,9 @@ struct AttachmentCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Image(systemName: "paperclip").foregroundStyle(FW.accent)
-                    Text("Flow attach").font(.system(size: 13, weight: .semibold))
-                    FlowCommandBadge(title: "Command")
+                    Text("Flow Attach Command")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(colorScheme == .dark ? FlowCommandBadge.ink : FW.accentMuted)
                     Spacer()
                     if session.searching || session.busy { ProgressView().controlSize(.mini) }
                     Menu {
