@@ -194,8 +194,16 @@ final class AppState: ObservableObject {
             self?.handleHotkeyTrigger(globeTrigger)
         }
         helperManager?.onError = { [weak self] message in
-            self?.log("Helper error: \(message)")
+            guard let self else { return }
+            self.log("Helper error: \(message)")
+            // A helper can have a different privacy identity from its parent.
+            // Use the already-authorized app instead of asking for another grant.
+            guard self.isAccessibilityEnabled, self.globeKeyHandler == nil else { return }
+            self.globeKeyHandler = GlobeKeyHandler(hotkey: self.hotkey) { [weak self] trigger in
+                Task { @MainActor in self?.handleHotkeyTrigger(trigger) }
+            }
         }
+        helperManager?.onReady = { [weak self] in self?.globeKeyHandler = nil }
         helperManager?.updateHotkey(hotkey)
         helperManager?.start()
     }

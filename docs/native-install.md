@@ -87,3 +87,9 @@ exact bundle through the Accessibility pane's + file picker (Cmd-Shift-G):
 TCC, edit its database or automatically toggle privacy settings. Rebuilding an
 ad-hoc signed app can require this again; consistent signing remains the durable
 solution.
+
+If the main app is authorized but the helper is denied or unavailable, Flow now
+uses its existing in-process hotkey handler as a fallback, requiring no extra
+helper grant. Helper-ready disables that fallback to avoid duplicate triggers.
+Both paths share the configured hotkey and recording activation mode. This path
+was compiled but still requires a physical-key test after macOS grants access.
