@@ -4,6 +4,26 @@ import XCTest
 @testable import Flow
 
 final class AttachmentDocumentTextTests: XCTestCase {
+    @MainActor
+    func testReportTopicMustBeConsecutiveOnOnePage() async throws {
+        let directory = try folder(); defer { try? FileManager.default.removeItem(at: directory) }
+        let exact = directory.appendingPathComponent("Exact.pdf")
+        let scattered = directory.appendingPathComponent("Scattered.pdf")
+        let acrossPages = directory.appendingPathComponent("Across pages.pdf")
+        let alternative = directory.appendingPathComponent("Alternative.pdf")
+        try pdf(["Quarterly Report (Q2 2026)"], at: exact)
+        try pdf(["Quarterly earnings grew. Annual report Q2 2026"], at: scattered)
+        try pdf(["Quarterly", "Report Q2 2026"], at: acrossPages)
+        try pdf(["Quarterly Report (Q1 2026)"], at: alternative)
+        let found = try await AttachmentDocumentTextIndex(cacheDirectory: nil).search(
+            "quarterly report from Q2 2026", urls: [exact, scattered, acrossPages, alternative])
+        XCTAssertEqual(found.map(\.filename), ["Exact.pdf", "Alternative.pdf"])
+        XCTAssertEqual(found[0].matchedDocumentText, ["quarterly", "report", "q2", "2026"])
+        XCTAssertEqual(found[1].matchedDocumentText, ["quarterly", "report", "2026"])
+        XCTAssertTrue(AttachmentDocumentText.containsPhrase(["quarterly", "report"],
+            in: AttachmentDocumentText.words("QUARTERLY\nReport")))
+    }
+
     private func folder() throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FlowDocuments-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

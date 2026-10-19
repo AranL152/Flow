@@ -35,7 +35,6 @@ public final class AttachmentSearch {
                 catch is CancellationError { throw CancellationError() }
                 catch { /* A missing importer must not prevent direct reading. */ }
                 var local: [AttachmentCandidate] = []
-                var checked = Set<URL>()
                 do {
                     let recent = try await documents.recentDocuments(kind: kind, scopes: scopes)
                     let pool = indexed.compactMap(\.fileURL) + recent
@@ -43,10 +42,15 @@ public final class AttachmentSearch {
                         if !result.contains(url) { result.append(url) }
                     }
                     let result = try await documentIndex.searchResult(text, urls: urls, budget: indexed.isEmpty ? 8 : 2)
-                    local = result.matches; checked = result.checkedURLs
+                    local = result.matches
                 } catch is CancellationError { throw CancellationError() }
                 catch { /* Preserve validated Spotlight or filename matches. */ }
-                recognized = local + indexed.filter { $0.fileURL.map { !checked.contains($0.standardizedFileURL) } ?? false }
+                // Spotlight word hits are discovery hints, not proof of a phrase.
+                // PDF/PPTX candidates must pass direct page/slide validation.
+                recognized = local + indexed.filter {
+                    guard let url = $0.fileURL else { return false }
+                    return !["pdf", "pptx"].contains(url.pathExtension.lowercased())
+                }
             }
             try Task.checkCancellation()
             var byURL = Dictionary(uniqueKeysWithValues: filenameMatches.compactMap { candidate in candidate.fileURL.map { ($0.standardizedFileURL, candidate) } })

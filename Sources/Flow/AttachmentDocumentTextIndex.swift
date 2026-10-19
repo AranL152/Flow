@@ -77,13 +77,15 @@ public actor AttachmentDocumentTextIndex {
                 entries.removeValue(forKey: key); continue
             }
             checked.insert(url.standardizedFileURL)
-            let allWords = Set(AttachmentDocumentText.words(units.map(\.text).joined(separator: " ")))
-            guard required.allSatisfy(allWords.contains) else { continue }
-            let matched = terms.filter(allWords.contains)
-            let location = units.first { unit in
-                let words = Set(AttachmentDocumentText.words(unit.text))
-                return matched.allSatisfy(words.contains)
-            }?.location
+            // The topic must be consecutive on a single page/slide. Rank date
+            // coverage within that same unit so unrelated pages cannot promote it.
+            let matching = units.compactMap { unit -> (Unit, [String])? in
+                let words = AttachmentDocumentText.words(unit.text)
+                guard AttachmentDocumentText.containsPhrase(required, in: words) else { return nil }
+                return (unit, terms.filter(Set(words).contains))
+            }
+            guard let best = matching.max(by: { $0.1.count < $1.1.count }) else { continue }
+            let matched = best.1, location = best.0.location
             if let candidate = try? AttachmentDocumentText.candidate(url, terms: matched, location: location) { matches.append(candidate) }
         }
         try Task.checkCancellation()

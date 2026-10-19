@@ -57,6 +57,15 @@ enum AttachmentDocumentText {
         return topic.isEmpty ? terms : topic
     }
 
+    /// Compare adjacent normalized words, never an unordered set or words
+    /// assembled from different pages. Whitespace/punctuation may separate words.
+    static func containsPhrase(_ phrase: [String], in words: [String]) -> Bool {
+        guard !phrase.isEmpty, words.count >= phrase.count else { return false }
+        return (0...(words.count - phrase.count)).contains { start in
+            words[start..<(start + phrase.count)].elementsEqual(phrase)
+        }
+    }
+
     static func supports(_ url: URL) -> Bool {
         ["pdf", "pptx", "ppt", "key"].contains(url.pathExtension.lowercased())
     }

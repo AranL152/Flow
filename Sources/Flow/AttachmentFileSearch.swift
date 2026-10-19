@@ -59,6 +59,12 @@ public final class AttachmentFileSearch {
         metadata.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [Self.documentTypes(kind)] + predicates)
         return try await gather(metadata, scopes: scopes).compactMap { url in
             guard Self.eligiblePath(url), AttachmentDocumentText.supports(url), AttachmentDownloads.matches(url, kind: kind) else { return nil }
+            // Legacy presentations rely on Spotlight's importer, but its AND
+            // query alone cannot establish adjacency. Validate its extracted text.
+            if !["pdf", "pptx"].contains(url.pathExtension.lowercased()) {
+                guard let content = NSMetadataItem(url: url)?.value(forAttribute: "kMDItemTextContent") as? String,
+                      AttachmentDocumentText.containsPhrase(terms, in: AttachmentDocumentText.words(content)) else { return nil }
+            }
             return try? AttachmentDocumentText.candidate(url, terms: terms)
         }
     }
