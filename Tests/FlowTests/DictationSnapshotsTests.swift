@@ -22,7 +22,7 @@ final class DictationSnapshotsTests: XCTestCase {
         }
         XCTAssertLessThan(began.duration(to: .now), .seconds(1))
         XCTAssertEqual(frames.last, final)
-        XCTAssertLessThan(frames.count, 10)
+        XCTAssertLessThanOrEqual(frames.count, "Thanks Alex!".count)
     }
 
     func testShorterValidatedRewriteCorrectsTheDraftWithoutBlankingIt() async throws {

@@ -6,6 +6,6 @@ public enum TextRevealPacing {
     public static let frameInterval: Duration = .milliseconds(16)
 
     public static func charactersPerFrame(backlog: Int) -> Int {
-        min(backlog, min(6, max(1, (backlog + 47) / 48)))
+        min(backlog, min(32, max(1, (backlog + 23) / 24)))
     }
 }

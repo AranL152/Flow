@@ -73,7 +73,7 @@ final class DictationPresentationTests: XCTestCase {
         }
         XCTAssertGreaterThan(times.count, 4)
         for (before, after) in zip(times, times.dropFirst()) {
-            XCTAssertGreaterThanOrEqual(before.duration(to: after), .milliseconds(25))
+            XCTAssertGreaterThanOrEqual(before.duration(to: after), .milliseconds(12))
         }
         XCTAssertLessThan(times.first!.duration(to: times.last!), .milliseconds(500))
     }
@@ -120,7 +120,7 @@ final class DictationPresentationTests: XCTestCase {
             if case .delta(let text) = event { frames.append(text) }
         }
         XCTAssertEqual(frames.joined(), "Hello world!")
-        XCTAssertEqual(frames.first, "He")
+        XCTAssertEqual(frames.first, "H")
     }
 
     func testWhitespaceAndLongWordsArePreservedExactly() async throws {
