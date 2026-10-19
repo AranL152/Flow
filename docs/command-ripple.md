@@ -7,17 +7,19 @@ is no generic “Flow command” label; the pending state says Transcribing… a
 successful search retains Attachment found. The approved animation is unchanged.
 Ordinary mentions, quoted/reported instructions, negated cues and bare incomplete
 forms such as “Flow, attach” remain normal caption text. Saying “Flow” alone is
-not a command. The reserved pattern is “Flow, attach/find/search…” followed by an
-object. This is a pattern-based cue, not unrestricted intent understanding.
+not a command. The reserved pattern is an explicit Flow cue plus a supported attachment verb
+and an object; see [the supported wording](attachment-commands.md). This is a pattern-based cue, not unrestricted intent understanding.
 Detection runs on the complete transcript before display cropping.
 This classifier only styles captions; the worker's authoritative command parser,
 message insertion and attachment safeguards are unchanged.
 
-During recording all spoken words remain white. Only the Listening label and
-its three dots are purple; the dots pulse in a small left-to-right wave while
-audio is being captured, and remain static with Reduce Motion. There is no
+During recording all spoken words remain white. The Listening label and its
+animated purple dots appear only in the sound-capture pill, not the speech box.
+The dots pulse left to right while audio is captured and remain static with
+Reduce Motion. There is no
 command highlight until the transcript is finalized and completely visible.
-Late final words reveal in complete-word steps 110 ms apart. The complete white
+Late final words use the adaptive character reveal, with caption catch-up
+bounded to four 33 ms frames. The complete white
 command holds for 220 ms before turning purple in the same layout. Fast model
 responses cannot hide the HUD before this recognition animation finishes.
 A single 700 ms highlight and one smooth crest sweep from left to right,

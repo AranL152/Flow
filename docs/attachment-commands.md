@@ -63,8 +63,10 @@ Messages composer, then the popup shows it alongside alternatives. Contact,
 focus and selection are checked before pasting. A changed query or target stops
 automatic insertion. Existing selected text/attachments are never overwritten.
 Outside a verified Messages target, selection and manual copy remain available.
-The compact picker shows three rows at a time, with a distinct **In draft** label
-and a selection indicator. The eye button opens a larger preview on demand.
+The compact picker shows three rows at a time, with draft state in the header
+and a selection indicator. Screenshot text matches show a quoted phrase such
+as **Matches: "payment error"**, rather than combining draft state with isolated
+OCR words. The eye button opens a larger preview on demand.
 Select an alternative and press **Use this file** to replace only the attachment
 Flow added during this session. Native AX object identity anchors the replacement;
 other attachment identities and the draft text must remain intact. If the owned

@@ -1,0 +1,39 @@
+{
+  "scope": "Native production UI with simulated caption/ripple preview and real local OCR, plus visual inspection of the installed app listening state and actual screenshot-match popup.",
+  "installed_build": "2f869776592e5194b907d60bed463b65aff24fe4",
+  "swift_tests_passed": 65,
+  "native_preview_checks": {
+    "animation_exported": true,
+    "complete_white_caption_preview_rendered": true,
+    "explicit_cue_detected": true,
+    "hide_then_show_preserves_latest_visibility": true,
+    "listening_dots_preview_rendered": true,
+    "long_command_preview_rendered": true,
+    "ordinary_mention_is_not_a_command": true,
+    "real_local_ocr_produces_handoff_candidates": true,
+    "recording_cue_has_no_command_highlight": true,
+    "reduced_motion_preview_rendered": true,
+    "repeated_show_keeps_indicator_opaque": true,
+    "repeated_show_keeps_indicator_position": true,
+    "settling_synced_glow_preview_rendered": true,
+    "status_uses_real_search_state": true
+  },
+  "visual_checks": {
+    "no_listening_label_or_dots_in_speech_box": true,
+    "listening_animation_remains_in_sound_capture_pill": true,
+    "screenshot_matches_shown_as_a_quoted_phrase": true,
+    "ocr_row_no_longer_prefixes_in_draft_or_text": true,
+    "attachment_state_retained_in_header": true
+  },
+  "permissions_match_current_installed_code": {
+    "Accessibility": false,
+    "Microphone": false,
+    "SystemPolicyDesktopFolder": false
+  },
+  "send_generated": false,
+  "private_review_directory": ".build/status-copy-review",
+  "limitations": [
+    "The native copy-review take used a draft without a committed recipient; it verified the match wording, not attachment insertion. Actual native autopaste was verified separately in attachment-autopaste-verification.json.",
+    "Raw screenshots and recordings remain private and uncommitted."
+  ]
+}
