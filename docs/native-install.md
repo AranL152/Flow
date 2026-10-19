@@ -90,6 +90,12 @@ uses in-memory state and exits when the report is saved.
 logging filenames. This checks folder access separately from an explicitly
 provided file, which can carry its own access grant.
 
+The first ordinary certificate-signed update retained authorized microphone and
+Accessibility access without requesting either permission again. A native
+Desktop enumeration also succeeded, and all three macOS grants were verified
+read-only as belonging to the persistent certificate-backed requirement. No
+privacy reset or permission-entry replacement was used during this update.
+
 If access is unavailable, enable this Flow app under System Settings → Privacy
 & Security → Accessibility. Microphone permission is requested by recording.
 The explicit Enable action requests access and opens that pane independently
