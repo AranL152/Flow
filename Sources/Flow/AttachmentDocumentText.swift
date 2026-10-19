@@ -2,8 +2,34 @@ import Foundation
 
 /// Shared query handling for local document extraction and Spotlight content search.
 enum AttachmentDocumentText {
+    private static let units = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+                                "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+    private static let tens = ["twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90]
+    private static let spokenYears: [NSRegularExpression] = {
+        let ones = "(?:one|two|three|four|five|six|seven|eight|nine)"
+        let tens = "(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)"
+        let teens = "(?:ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)"
+        let suffix = "(?:\(tens)(?:[ -]+\(ones))?|\(teens)|oh[ -]+\(ones))"
+        return [#"\btwo[ -]+thousand(?:[ -]+and)?(?:[ -]+("# + suffix + "|" + ones + #"))?\b"#,
+                #"\btwenty[ -]+("# + suffix + #")\b"#].map { try! NSRegularExpression(pattern: $0) }
+    }()
+
+    private static func normalizeSpokenYears(_ value: String) -> String {
+        var value = value
+        for pattern in spokenYears {
+            for match in pattern.matches(in: value, range: NSRange(value.startIndex..., in: value)).reversed() {
+                guard let range = Range(match.range, in: value) else { continue }
+                let suffix = Range(match.range(at: 1), in: value).map { String(value[$0]) } ?? ""
+                let parts = suffix.split { $0 == " " || $0 == "-" }.map(String.init)
+                let number = parts.reduce(0) { $0 + (tens[$1] ?? units.firstIndex(of: $1) ?? 0) }
+                value.replaceSubrange(range, with: String(2000 + number))
+            }
+        }
+        return value
+    }
+
     static func words(_ text: String) -> [String] {
-        var normalized = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        var normalized = normalizeSpokenYears(text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX")))
         // Speech recognizers spell the same quarter as Q2, Q two, or second quarter.
         for (number, ordinal, cardinal) in [(1, "first", "one"), (2, "second", "two"), (3, "third", "three"), (4, "fourth", "four")] {
             for pattern in [#"\bq[\s-]*(?:"# + String(number) + "|" + cardinal + #")\b"#,
