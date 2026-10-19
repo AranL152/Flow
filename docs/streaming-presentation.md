@@ -1,47 +1,72 @@
 # Streaming presentation
 
-`DictationPresentation.smooth` sits between genuine Rust/model events and the
-native UI. Receiving continues independently at full speed. Text is presented
-one complete whitespace-delimited word every 180 ms, with an extra 80 ms at
-commas/colons/semicolons and 160 ms at sentence punctuation. A provider token
-that ends mid-word waits for a word boundary, metadata or stream completion.
-Words are never merged into larger catch-up bursts. Leading spaces, newlines,
-punctuation and Unicode are preserved exactly; trailing whitespace flushes at
-completion. Completion waits for all received text to be presented. Errors
-discard queued presentation, and cancellation stops both tasks.
+`DictationPresentation.smooth` receives genuine provider events independently
+of presentation. Every 33 ms it reveals a Unicode character batch proportional
+to the remaining backlog (3–32 characters). It adds no word or punctuation
+pauses. One trailing grapheme is held while the stream is open so split emoji
+and combining characters are not briefly rendered broken. Completion follows
+all text; cancellation stops receiving and presentation. Errors discard queued
+presentation without promoting an incomplete result.
 
-The normal app, isolated voice simulation and full Messages demo share this
-adapter. The simulation's readable-playback toggle bypasses pacing when disabled.
-Raw receipt events remain separate from presentation events in its report.
+`DictationPresentation.reconcile` presents full text snapshots over an already
+owned draft range. Replacement model prefixes are consumed at network speed
+until they catch up to the visible draft; only the new suffix is paced. ASR/model
+corrections can revise the visible prefix once. A validated final result may be
+shorter than its preview. The app never inserts raw captions into the draft.
 
-Speech captions also reveal complete words, 110 ms apart when a recognition
-update contains several. Recognition revisions preserve the number of words
-already shown. The complete white command remains visible for 220 ms before
-the purple ripple. This does not insert raw speech into the recipient's draft.
+## Following speech in the bar
 
-The native app still requires a safe Accessibility insertion path for incremental
-writes into another app. Its existing final-paste fallback remains for rich drafts
-without a writable selected-text range. The Messages demo sends each complete
-word in one native Unicode event, preserving existing attachment objects. Focus,
-selection, draft text and attachment count are checked before each insertion,
-and the acknowledged final text must equal the model output. It never sends.
+Listening captions retain a bounded 512-character history inside a fixed,
+two-line-height viewport. Its bottom anchor follows every rendered change
+without a scrolling animation. Older lines leave the viewport; the newest
+words stay visible instead of being replaced by a trailing ellipsis. ASR bursts
+fast-forward all but 12 trailing characters, limiting catch-up animation to four
+33 ms frames. Model output uses its separate adaptive pacing.
 
-Verification: all 48 Swift tests passed, including fragmented provider tokens,
-Unicode fidelity, exact whitespace, long words, metadata order, paced word
-intervals, cancellation and upstream failure. Fourteen native caption preview
-checks passed; the complete white caption still precedes the purple effect.
-The Messages runner records the actual display words and verifies one word per
-frame, one native write per frame, presentation duration and preserved text and
-attachments. See [the scoped run report](../review/imessage-full-demo-verification.json).
+While recording, the entire speech caption stays white, including possible
+commands. After finalization, the complete white command appears for 220 ms,
+then its single purple ripple and synchronized inner/outer glow run. Recognition
+revisions never replay a whole paragraph before showing its newest words.
 
-The latest real Messages run passed all 14 checks: six provider chunks became
-seven whole-word updates and exactly seven native writes over 1.13 seconds.
-The draft and existing attachments were preserved and a screenshot was appended
-with alternatives. This take used recorded-audio ASR fallback and took 17.82
-seconds overall; word pacing is not an inference-latency improvement. Nothing
-was sent. The updated demo helper remains open without replacing the installed
-app bundle or requesting new permissions.
+## Stalled live rewrites
 
-Cloud Auto microphone dictation now also starts speculative LLM rewriting during
-recording. It shares the word pacing above; final dictation reconciles the same
-owned range after Stop. See [the live rewrite implementation and checks](live-rewrite.md).
+Speculative rewrites have a 2-second text-idle deadline and a 6-second total
+deadline. Cancellation propagates through the Swift receiver to Rust's 100 ms
+cancellation heartbeat, including while waiting for HTTP response headers. The
+latest candidate can retry once; subsequent speech starts a new candidate.
+A failed preview keeps the current draft and cannot enter learning/history as
+a completed result. The final inference request retains its own error handling.
+
+These deadlines apply to speculative rewriting, not cloud speech finalization.
+If the realtime transcript fails to finalize, the recorded-audio fallback can
+still take several seconds. Smoother presentation cannot remove inference waits.
+
+## Verification
+
+All 63 Swift tests pass, including Unicode fragments, whitespace, metadata order,
+corrections, long draft reconciliation, completion, upstream failure, cancellation
+and deadline recovery. The bounded caption catch-up has a regression test.
+
+Use an empty, unsent Messages draft to capture actual voice input and native writes:
+
+```sh
+python3 scripts/record-adaptive-voice.py --speech /path/to/speech.aiff --name review
+# Installed app already running with an unbuffered log:
+python3 scripts/record-adaptive-voice.py --native --app-log /path/to/app.log \
+  --speech /path/to/speech.aiff --name native-review
+# Diagnostic host only: stall one request, forward every other request to the real service.
+python3 scripts/record-adaptive-voice.py --speech /path/to/speech.aiff --stall-request 4
+```
+
+The default diagnostic host uses production AppState with in-memory history;
+`--native` drives the already installed app's actual Fn helper. Neither mode
+installs or signs the app. Both play generated speech through speakers into the
+physical microphone, record the screen, observe actual Messages updates and
+never send. Existing draft text/attachments are never cleared. All footage,
+logs and raw timing points remain private under `.build/adaptive-voice-review/`.
+Obtain first-run microphone/file grants before a measured take: clicking a
+permission dialog intentionally interrupts the draft insertion safety monitor.
+
+Design references: [Deepgram interim results](https://developers.deepgram.com/docs/interim-results),
+[AWS partial-result stabilization](https://docs.aws.amazon.com/transcribe/latest/dg/streaming-partial-results.html),
+[AI SDK stream smoothing](https://ai-sdk.dev/docs/reference/ai-sdk-core/smooth-stream).

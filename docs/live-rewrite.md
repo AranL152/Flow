@@ -17,8 +17,10 @@ The new `flow_preview_rewrite_stream` FFI runs the same cloud provider with text
 current recipient category, scoped personalization and shortcut definitions. It
 never stops capture, consumes saved audio, records an interaction, writes history,
 stages an attachment or replaces pending send-learning state. Only genuine model
-deltas are presented, one complete word at a time. A newer rewrite keeps the
-previous phrase visible until it catches up, avoiding a reset to its first word.
+deltas are presented as adaptive Unicode character batches. Replacement prefixes
+catch up at network speed before the new suffix is revealed. Preview requests
+have a 2-second text-idle / 6-second total deadline and one retry per candidate.
+See [streaming presentation](streaming-presentation.md) for current behavior.
 
 Stop cancels speculative work. The existing final ASR, command/attachment and
 rewriting pipeline validates the full utterance and reconciles only Flow's owned
@@ -37,7 +39,7 @@ usage. Apps without a safe writable Accessibility range retain final-paste fallb
 
 ## Verification
 
-All 52 Swift tests passed, including incomplete command withholding, ASR tail
+At the original implementation, all 52 Swift tests passed, including incomplete command withholding, ASR tail
 handling, replacement behavior, Unicode word framing and edit protections. The
 full Rust suite passed. A new fixture verifies that speculative rewriting uploads
 text without audio, includes recipient context, streams real provider deltas,

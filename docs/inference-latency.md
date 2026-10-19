@@ -36,9 +36,10 @@ Deployed environment overrides have not been inspected for this investigation.
 3. Benchmark a smaller formatting model with only relevant recipient examples.
    Check personalization, command separation and attachment metadata before
    changing the default. Model size alone cannot guarantee better latency.
-4. Keep the smooth reveal independent of inference. Our 40 ms display pacing
-   plus punctuation pauses is deliberate; faster inference should reduce the
-   wait before the first character without forcing abrupt native insertions.
+4. Keep the smooth reveal independent of inference. The current 33 ms adaptive character
+   reveal consumes provider text independently, reconciles replacement prefixes
+   without replay, and keeps listening captions pinned to the newest lines.
+   See [streaming-presentation.md](streaming-presentation.md).
 
 ## Using the RTX 4080
 

@@ -162,9 +162,9 @@ struct RecordAdaptiveVoice {
             "first_draft_change_after_speech_seconds": updates.first.map { ($0["seconds"] as! Double) - speechStart } ?? -1,
             "draft_updates": updates, "caption_updates": captions,
             "draft_updates_before_stop": updates.filter { ($0["seconds"] as! Double) < stopped }.count,
-            "audio_level_minimum": minimum, "audio_level_maximum": maximum,
+            "audio_level_minimum": native ? NSNull() : minimum as Any, "audio_level_maximum": native ? NSNull() : maximum as Any,
             "final_characters": finalCount, "attachments_after": AXEditMonitorService.attachmentCount(in: field) ?? -1,
-            "error": state?.errorMessage ?? "", "processing_completed": processingFinished != nil,
+            "error": native ? NSNull() : (state?.errorMessage ?? "") as Any, "processing_completed": processingFinished != nil,
             "send_generated": false, "movie_saved": FileManager.default.fileExists(atPath: movie.path),
             "privacy": "Private recording and raw timing points stay local. No Send events or user draft clearing."]
         try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: folder.appendingPathComponent("timing.json"))

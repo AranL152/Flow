@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-18",
+  "installed_build": "2f1fefa3e7dbaa767e61b480e9b94ddb4c6c7346",
+  "installed_executable_sha256": "40d5e194795e48db9a63aedd3b598769ff12af3728eb19f73040307dedfe5cf2",
+  "swift_tests_passed": 63,
+  "caption_follow": {
+    "viewport": "Fixed two-line-height viewport following its bottom anchor without scroll animation.",
+    "bounded_trailing_reveal_characters": 12,
+    "maximum_catchup_animation_ms": 132,
+    "native_recorded_frames_reviewed_seconds": [
+      30,
+      55,
+      69.4,
+      69.8,
+      70.1,
+      70.5,
+      71,
+      75.7
+    ],
+    "newest_speech_visible": true,
+    "full_white_command_before_purple": true,
+    "transcribing_without_waveform": true
+  },
+  "native_long_reading": {
+    "scope": "Installed native app, actual helper Fn events, physical microphone and real cloud inference.",
+    "generated_audio_seconds": 66.896,
+    "microphone_start_ms": 20,
+    "first_draft_change_after_speech_seconds": 7.06234610080719,
+    "draft_updates_before_stop": 325,
+    "draft_updates_total": 345,
+    "median_observed_update_gap_ms": 64.51,
+    "cloud_finalization_seconds": 0.25912725,
+    "stop_to_first_final_model_delta_seconds": 0.68358775,
+    "stop_to_final_model_complete_seconds": 5.193658042,
+    "stop_to_final_text_visible_seconds": 6.058074875,
+    "presentation_tail_after_model_complete_seconds": 0.864,
+    "processing_completed": true,
+    "screenshot_ocr_candidate_found": true,
+    "screenshot_auto_appended": false,
+    "private_recording": ".build/adaptive-voice-review/native-long-ready-20261018-214322/recording.mov"
+  },
+  "short_diagnostic": {
+    "scope": "Production AppState in an isolated diagnostic host with in-memory history; real microphone, real cloud inference, production HUD and actual Messages insertion. Not the installed bundle or helper.",
+    "stop_to_final_text_visible_seconds": 0.84,
+    "draft_updates_before_stop": 27
+  },
+  "controlled_stall_diagnostic": {
+    "scope": "Production AppState in an isolated diagnostic host with in-memory history; real microphone, real cloud inference, production HUD and actual Messages insertion. Not the installed bundle or helper.",
+    "request_number": 4,
+    "deliberate_stall_cancelled": true,
+    "upstream_request_cancelled_seconds": 2.141,
+    "next_genuine_model_text_received": true,
+    "separate_cloud_asr_fallback_observed": true,
+    "stop_to_processing_finished_seconds": 12.487495064735413
+  },
+  "permissions": {
+    "updated_app_accessibility_microphone_desktop_requirements_match_installed_code": true,
+    "normal_macos_permission_flow_used": true,
+    "direct_tcc_writes": false,
+    "unchanged_hotkey_helper_signature_preserved": true
+  },
+  "send_generated": false,
+  "original_conversation_draft_preserved": true,
+  "speaker_volume_restored": true,
+  "limitations": [
+    "Single measured takes; no median/p95 latency guarantee.",
+    "First native model output still took 7.06 seconds after speech started; presentation changes do not remove ASR/network/context waits.",
+    "A separate diagnostic run used recorded-audio ASR fallback and took 12.49 seconds after Stop.",
+    "The first native recording included microphone consent; that interrupted insertion as designed and was excluded from performance claims. An initial diagnostic relay attempt failed and was excluded.",
+    "Native test used an unsent draft with an unrecognized recipient. OCR surfaced the real screenshot, but no automatic attachment or contact learning was claimed.",
+    "Raw footage, conversation contents, OCR text and timing points remain private and uncommitted."
+  ]
+}
