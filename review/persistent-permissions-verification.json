@@ -1,0 +1,37 @@
+{
+  "scope": "Persistent local signing, guarded installation and real native permission retention. No recording, model calls or Messages changes.",
+  "tested_at_local_date": "2026-10-18",
+  "update_from": "c2d118bc89dd49340801a3431346eb79a4446471",
+  "update_to": "426d3339ca5df711b6513af429399b14be17511c",
+  "identity_checks": {
+    "certificate_pinned_requirement_unchanged": true,
+    "sealed_build_metadata_changed_code_directory_hash": true,
+    "separately_compiled_different_programs_mutually_authenticated": true,
+    "unrelated_signer_rejected": true,
+    "incompatible_update_rejected_even_with_migration_flag": true,
+    "failed_signing_restores_keychain_search_list": true
+  },
+  "native_update_checks": {
+    "desktop_directory_readable": true,
+    "existing_screenshot_readable": true,
+    "microphone_authorized": true,
+    "accessibility_authorized": true,
+    "microphone_request_made": false,
+    "all_three_existing_grant_requirements_unchanged": true,
+    "tcc_reset_during_signed_updates": false,
+    "permission_entries_replaced_during_signed_updates": false,
+    "normal_app_and_helper_running_afterward": true
+  },
+  "validation": {
+    "swift_tests_passed": 65,
+    "swift_test_failures": 0,
+    "python_scripts_compile": true,
+    "deep_strict_bundle_signature_valid": true
+  },
+  "limitations": [
+    "The one-time migration from the previous ad-hoc identity needed initial permission approvals.",
+    "No physical Fn press, microphone capture or end-to-end cloud dictation was performed in this permission-retention check.",
+    "The actual app update changed sealed build metadata; different executable code was also checked separately using compiled signing probes."
+  ],
+  "privacy": "Private screenshots, paths, permission database blobs, keychain and generated passwords are not committed."
+}

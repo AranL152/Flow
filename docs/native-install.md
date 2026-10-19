@@ -95,6 +95,13 @@ Accessibility access without requesting either permission again. A native
 Desktop enumeration also succeeded, and all three macOS grants were verified
 read-only as belonging to the persistent certificate-backed requirement. No
 privacy reset or permission-entry replacement was used during this update.
+An additional signed update changed the sealed build metadata and code directory
+hash while retaining the exact Desktop, microphone and Accessibility grant
+requirements. The updated app enumerated Desktop and read the existing screenshot
+without requesting microphone access. All 65 Swift tests passed; the normal app
+and Fn helper were reopened. This was a permission-retention check, not a physical
+hotkey or cloud dictation test. See the
+[verification report](../review/persistent-permissions-verification.json).
 
 If access is unavailable, enable this Flow app under System Settings → Privacy
 & Security → Accessibility. Microphone permission is requested by recording.
