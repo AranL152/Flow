@@ -4,7 +4,7 @@ import Foundation
 /// genuine model deltas are revealed, and completion waits for their display.
 public enum DictationPresentation {
     public static func smooth(_ source: AsyncThrowingStream<DictationStreamEvent, Error>) -> AsyncThrowingStream<DictationStreamEvent, Error> {
-        smooth(source, interval: .milliseconds(180))
+        smooth(source, interval: TextRevealPacing.frameInterval)
     }
 
     static func smooth(_ source: AsyncThrowingStream<DictationStreamEvent, Error>, interval: Duration) -> AsyncThrowingStream<DictationStreamEvent, Error> {
@@ -30,14 +30,8 @@ public enum DictationPresentation {
                         guard let event = try await buffer.next() else { break }
                         try Task.checkCancellation()
                         if case .terminated = continuation.yield(event) { break }
-                        if case .delta(let text) = event {
-                            let pause: Duration
-                            switch text.last {
-                            case ".", "!", "?", "\n": pause = .milliseconds(160)
-                            case ",", ";", ":": pause = .milliseconds(80)
-                            default: pause = .zero
-                            }
-                            nextUpdate = clock.now.advanced(by: interval + pause)
+                        if case .delta = event {
+                            nextUpdate = clock.now.advanced(by: interval)
                         } else { nextUpdate = nil }
                     }
                     continuation.finish()
@@ -80,9 +74,13 @@ private actor PresentationBuffer {
             if let error { throw error }
             if let event = events.first {
                 if case .delta(let text) = event {
-                    // Hold unfinished provider tokens until a word boundary or
-                    // metadata/end proves that the last word is complete.
-                    if let end = nextWordEnd(in: text, final: ended || events.count > 1) {
+                    // A later provider fragment can extend the last grapheme
+                    // (an accent, skin tone or emoji joiner). Keep that one
+                    // pending while the stream is open, not the whole word.
+                    let available = text.count - (ended || events.count > 1 ? 0 : 1)
+                    if available > 0 {
+                        let amount = TextRevealPacing.charactersPerFrame(backlog: available)
+                        let end = text.index(text.startIndex, offsetBy: amount)
                         let frame = String(text[..<end])
                         if end == text.endIndex { events.removeFirst() }
                         else { events[0] = .delta(String(text[end...])) }

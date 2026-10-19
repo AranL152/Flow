@@ -104,7 +104,7 @@ struct FlowCommandCaptionView: View {
         reveal.retarget(target)
         do {
             while reveal.advance() {
-                if !reduceMotion { try await Task.sleep(for: .milliseconds(110)) }
+                if !reduceMotion { try await Task.sleep(for: TextRevealPacing.frameInterval) }
                 try Task.checkCancellation()
             }
             guard finalCommand else { return }

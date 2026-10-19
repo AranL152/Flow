@@ -11,9 +11,10 @@ final class CaptionTextRevealTests: XCTestCase {
         XCTAssertEqual(reveal.text, partial)
         XCTAssertFalse(reveal.isComplete)
         while !reveal.isComplete {
-            let before = reveal.text.split(whereSeparator: \.isWhitespace).count
+            let before = reveal.text.count
             reveal.advance()
-            XCTAssertEqual(reveal.text.split(whereSeparator: \.isWhitespace).count, before + 1)
+            XCTAssertGreaterThan(reveal.text.count, before)
+            XCTAssertTrue(reveal.target.hasPrefix(reveal.text))
         }
         XCTAssertEqual(reveal.text, "Here's the issue. Flow find the screenshot showing payment error.")
     }
