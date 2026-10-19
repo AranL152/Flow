@@ -431,6 +431,9 @@ final class AppState: ObservableObject {
     }
 
     private func handleAppActivation(appName: String, bundleId: String?) {
+        // Returning from Privacy settings to Messages must pick up the grant
+        // without requiring the user to activate Flow's own window first.
+        refreshAccessibilityStatus()
         currentApp = appName
 
         // Check if Flow itself became active

@@ -1,0 +1,11 @@
+{
+  "checks" : {
+    "denied_parent_does_not_spawn_or_prompt" : true,
+    "eof_and_exit_use_one_restart_budget" : true,
+    "helper_permission_error_does_not_retry" : true,
+    "old_exit_does_not_clear_replacement" : true,
+    "stop_cancels_pending_restart" : true
+  },
+  "passed" : true,
+  "scope" : "Production helper lifecycle with synthetic child processes and injected access checks. No event taps, permission prompts, microphone capture or Messages changes. Physical Fn input and macOS grants were not tested."
+}

@@ -58,3 +58,32 @@ investigation, at code commit 28e2d38. Signature verification and packaged-resou
 resolution passed, and a live process/window was observed. Its UI reported that
 Accessibility still needed enabling. No microphone or Messages write was tested;
 see [the scoped install report](../review/native-install-verification.json).
+
+## Accessibility grant and helper recovery (October 18)
+
+Restarting the 9c50c96 bundle after a reported grant still returned Accessibility
+permission not granted for both app and helper. The helper manager also had an
+EOF bug: its readable-empty pipe callback repeatedly scheduled cleanup/restarts,
+while the termination callback scheduled the same work again. The app reached
+100% CPU while logging the denied state. The affected process was stopped.
+
+EOF now immediately disables its handler. Only the matching process's termination
+callback owns recovery; stale exits cannot clear a replacement helper. Stopping
+cancels pending retries, and permission denial never automatically retries or
+prompts. Output/state updates are serialized on the main queue. The app checks
+access again on application switches, allowing a recognized grant to start the
+helper when returning from Settings to Messages.
+
+`python3 scripts/verify-helper-lifecycle.py` passed five production lifecycle
+checks with synthetic child processes: denied parent, denied child, cancelled
+restart, rapid stop/start and one bounded restart budget for EOF plus exit.
+All 48 Swift tests also passed. These are not physical Fn/microphone tests and
+do not establish that macOS accepted the user's grant.
+
+When the current running build still reports denied after restart, an enabled
+old Flow entry is insufficient evidence. Remove the stale entry and add this
+exact bundle through the Accessibility pane's + file picker (Cmd-Shift-G):
+`/Users/lumaran/Desktop/Flow/.build/Flow Attachments.app`. The app does not reset
+TCC, edit its database or automatically toggle privacy settings. Rebuilding an
+ad-hoc signed app can require this again; consistent signing remains the durable
+solution.

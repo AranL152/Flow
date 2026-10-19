@@ -25,6 +25,16 @@ final class HelperManager {
     private var pendingHotkey: Hotkey?
     private var restartCount = 0
     private let maxRestarts = 5
+    private var restartWork: DispatchWorkItem?
+    private var wantsRunning = false
+    private var permissionDenied = false
+    private let helperURLOverride: URL?
+    private let hasAccessibilityAccess: () -> Bool
+
+    init(helperURL: URL? = nil, hasAccessibilityAccess: @escaping () -> Bool = { GlobeKeyHandler.isAccessibilityAuthorized() }) {
+        helperURLOverride = helperURL
+        self.hasAccessibilityAccess = hasAccessibilityAccess
+    }
 
     var onHotkeyTriggered: ((Trigger) -> Void)?
     var onReady: (() -> Void)?
@@ -42,6 +52,13 @@ final class HelperManager {
             return
         }
 
+        restartWork?.cancel(); restartWork = nil
+        wantsRunning = true
+        permissionDenied = false
+        guard hasAccessibilityAccess() else {
+            onError?("Accessibility permission not granted")
+            return
+        }
         let process = Process()
 
         // Look for helper in multiple locations
@@ -66,23 +83,23 @@ final class HelperManager {
         inputPipe = input
 
         // Handle helper output (JSON events)
-        output.fileHandleForReading.readabilityHandler = { [weak self] handle in
+        output.fileHandleForReading.readabilityHandler = { [weak self, weak process] handle in
             let data = handle.availableData
             if data.isEmpty {
-                // EOF - helper terminated
-                DispatchQueue.main.async {
-                    self?.handleHelperTerminated()
-                }
+                // EOF stays readable forever. Disable it immediately; only the
+                // process termination callback owns cleanup and restart.
+                handle.readabilityHandler = nil
                 return
             }
-            self?.handleOutput(data)
+            DispatchQueue.main.async { [weak self, weak process] in
+                guard let self, let process, self.helperProcess === process else { return }
+                self.handleOutput(data)
+            }
         }
 
-        // Handle process termination
         process.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async {
-                self?.log("Helper terminated with status: \(proc.terminationStatus)")
-                self?.handleHelperTerminated()
+                self?.handleHelperTerminated(proc)
             }
         }
 
@@ -98,19 +115,15 @@ final class HelperManager {
 
     /// Stop the helper process
     func stop() {
+        wantsRunning = false
+        restartWork?.cancel(); restartWork = nil
         guard let process = helperProcess else { return }
-
         log("Stopping helper")
         sendCommand(["command": "quit"])
-
-        // Give it a moment to exit gracefully, then terminate
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            if process.isRunning {
-                process.terminate()
-            }
-            DispatchQueue.main.async {
-                self?.cleanup()
-            }
+        cleanup()
+        // A delayed stop must never clear a replacement helper's pipes/state.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+            if process.isRunning { process.terminate() }
         }
     }
 
@@ -137,6 +150,7 @@ final class HelperManager {
     // MARK: - Private
 
     private func findHelperURL() -> URL? {
+        if let helperURLOverride { return helperURLOverride }
         // Check multiple locations for the helper binary
 
         // 1. Inside the app bundle (for production)
@@ -220,9 +234,7 @@ final class HelperManager {
 
         switch eventType {
         case "ready":
-            DispatchQueue.main.async { [weak self] in
-                self?.handleReady()
-            }
+            handleReady()
 
         case "hotkey":
             guard let trigger = dict["trigger"] as? String else { return }
@@ -234,17 +246,14 @@ final class HelperManager {
             default: return
             }
 
-            DispatchQueue.main.async { [weak self] in
-                self?.log("Hotkey triggered: \(trigger)")
-                self?.onHotkeyTriggered?(triggerType)
-            }
+            log("Hotkey triggered: \(trigger)")
+            onHotkeyTriggered?(triggerType)
 
         case "error":
             let message = dict["message"] as? String ?? "Unknown error"
-            DispatchQueue.main.async { [weak self] in
-                self?.log("Helper error: \(message)")
-                self?.onError?(message)
-            }
+            if message == "Accessibility permission not granted" { permissionDenied = true }
+            log("Helper error: \(message)")
+            onError?(message)
 
         default:
             break
@@ -265,22 +274,22 @@ final class HelperManager {
         onReady?()
     }
 
-    private func handleHelperTerminated() {
-        log("Helper terminated unexpectedly")
+    private func handleHelperTerminated(_ process: Process) {
+        guard helperProcess === process else { return }
+        log("Helper terminated with status: \(process.terminationStatus)")
         cleanup()
-
+        guard wantsRunning, !permissionDenied, hasAccessibilityAccess() else { return }
         restartCount += 1
-        if restartCount > maxRestarts {
-            log("Helper exceeded max restarts (\(maxRestarts)), giving up")
+        guard restartCount <= maxRestarts else {
             onError?("Helper crashed too many times")
             return
         }
-
-        // Auto-restart after a delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.log("Auto-restarting helper (attempt \(self?.restartCount ?? 0)/\(self?.maxRestarts ?? 0))")
-            self?.start()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.wantsRunning, self.helperProcess == nil else { return }
+            self.start()
         }
+        restartWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
     }
 
     private func cleanup() {
