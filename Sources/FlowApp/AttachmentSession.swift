@@ -56,6 +56,11 @@ final class AttachmentSession: ObservableObject {
     var onDismiss: (() -> Void)?
 
     var selected: AttachmentCandidate? { candidates.first { $0.id == selectedID } }
+    /// Only native Messages confirmation can promote a candidate to "Added".
+    var attached: AttachmentCandidate? {
+        guard attachmentConfirmed else { return nil }
+        return candidates.first { $0.id == attachedID }
+    }
     var recipient: String? { target?.contact }
 
     init(downloads: AttachmentDownloads = AttachmentDownloads(), fileSearch: AttachmentSearch? = nil) {

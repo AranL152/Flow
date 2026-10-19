@@ -13,7 +13,7 @@ struct AttachmentCard: View {
     @State private var showSearch = false
 
     private var showingAlternatives: Bool {
-        session.attachedID != nil && (session.attachmentConfirmed || session.busy) &&
+        session.attached != nil &&
             session.candidates.contains { $0.id != session.attachedID }
     }
 
@@ -62,6 +62,13 @@ struct AttachmentCard: View {
                             .help(plan.request?.kind == .image ? "Search filenames and visible text in recent screenshots locally" : "Search filenames and PDF or slide text locally")
                     }.disabled(session.busy || session.pasteRequested)
                 }
+                if showingAlternatives, let attached = session.attached {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Added to draft")
+                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(FW.accent)
+                        row(attached)
+                    }
+                }
                 HStack {
                     Text(showingAlternatives ? "Other matches" : session.attachmentConfirmed ? "Added to your draft" : session.searching ? "Finding files…" : "Choose an attachment")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(FW.textSecondary)
@@ -77,7 +84,7 @@ struct AttachmentCard: View {
                             ForEach(visibleCandidates) { candidate in row(candidate) }
                         }
                     }
-                    .frame(height: CGFloat(min(visibleCandidates.count, 3)) * 58 - 4)
+                    .frame(height: CGFloat(min(visibleCandidates.count, showingAlternatives ? 2 : 3)) * 58 - 4)
                     .focusable().focusEffectDisabled()
                     .onMoveCommand { direction in
                         guard !session.busy, !visibleCandidates.isEmpty, direction == .up || direction == .down else { return }
@@ -134,8 +141,8 @@ struct AttachmentCard: View {
                             .lineLimit(1)
                     }
                     Spacer(minLength: 4)
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 15)).foregroundStyle(selected ? FW.accent : FW.border)
+                    Image(systemName: selected || attached ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 15)).foregroundStyle(selected || attached ? FW.accent : FW.border)
                 }
                 .contentShape(Rectangle()).padding(.leading, 9).padding(.vertical, 8)
             }.buttonStyle(.plain).disabled(session.busy)

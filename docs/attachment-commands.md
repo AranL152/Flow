@@ -76,6 +76,10 @@ The compact picker shows three rows at a time, with draft state in the header
 and a selection indicator. Screenshot text matches show a quoted phrase such
 as **Matches: "payment error"**, rather than combining draft state with isolated
 OCR words. The eye button opens a larger preview on demand.
+After native Messages confirmation, the added file stays pinned by name under
+**Added to draft**, above **Other matches**. Selecting an alternative does not
+move that confirmed row; it changes only after a successful replacement. A
+candidate match or an unconfirmed paste never receives the added label.
 Select an alternative and press **Use this file** to replace only the attachment
 Flow added during this session. Native AX object identity anchors the replacement;
 other attachment identities and the draft text must remain intact. If the owned
