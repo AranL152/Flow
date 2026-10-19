@@ -62,15 +62,35 @@ Say part of the filename after the message: “Here's the file. Flow, find my
 robotics presentation.” Flow searches the local Spotlight index in your home
 directory, filters by the requested file type, and ranks up to 12 matches.
 Exact filename stems beat longer partial names; recency breaks equal-name ties.
-For document content, the topic still has to match. Quarter/year terms improve
+For document content, topic words must appear consecutively within one page or
+slide (case, whitespace and punctuation are normalized). Scattered words or
+words assembled across pages do not qualify. Spotlight word hits discover files;
+PDF/PPTX content must also pass this local phrase check. Quarter/year terms improve
 ranking rather than hiding reports from other periods. “Q2”, “Q two”, and
 “second quarter” are equivalent. A period-only query remains exact. Match labels
 show only words actually found in each document, so an alternative never claims
 to contain the requested quarter when it does not.
-After the message completes, the top match is appended to the same unsent
+Live rewriting waits for sentence-ending punctuation in provider-finalized cloud
+segments; an interim punctuation guess cannot trigger it. New completed sentences
+append to the live rewrite without regenerating earlier sentences. The final
+dictation corroborates the completed source prefix against final ASR, preserves
+its formatted wording, and formats only the remaining message. A changed source,
+contact, application or writing mode invalidates reuse. Cached sentences expire
+at the next recording and are consumed once. The final history/learning baseline
+uses the exact combined output; preview text alone never trains a rule.
+Captions retain one text layout through recognition: only command glyphs change
+color, and one ripple follows their wrapped lines in reading order. Streamed model
+text uses small character updates at display cadence, with bounded burst catch-up.
+
+After the message completes and command recognition settles, “Attachment found”
+gets a 500 ms handoff before the top match is appended to the same unsent
 Messages composer, then the popup shows it alongside alternatives. Contact,
 focus and selection are checked before pasting. A changed query or target stops
 automatic insertion. Existing selected text/attachments are never overwritten.
+Named file wrappers preserve the source filename and bytes in Messages instead
+of importing a bare URL as a generic `FILE_####` attachment. The original file URL
+remains available to other pasteboard consumers. Native verification checks the
+copied attachment's filename and bytes separately from the candidate's label.
 Outside a verified Messages target, selection and manual copy remain available.
 The compact picker shows three rows at a time, with draft state in the header
 and a selection indicator. Screenshot text matches show a quoted phrase such
@@ -88,6 +108,14 @@ A separate recorded replacement check switched to an alternative and back,
 verified each PDF's bytes, and preserved the draft text. A plain-text clipboard
 marker ruled out accidentally reusing an old copied file. Nothing was sent.
 Recordings, document data and raw verification artifacts remain outside Git.
+Follow-up verification covered the inline ripple, named native attachment,
+sentence-preserving final handoff, 20 observed streamed draft changes, and cursor
+cues recorded by Recordly. The found-to-native-insertion gap was about 0.9 seconds
+(including Messages import time); the configured pre-paste pause is 500 ms.
+The updated file transfer also passed a recorded replacement test with unchanged
+draft text. Validation passed 44 focused Swift tests, 147 worker tests and 355
+Rust tests; two unrelated Rust tests remained ignored. The exported clip retains
+real processing time and trims only leading silence. No message was sent.
 Select an alternative and press **Use this file** to replace only the attachment
 Flow added during this session. Native AX object identity anchors the replacement;
 other attachment identities and the draft text must remain intact. If the owned
