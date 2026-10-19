@@ -26,7 +26,7 @@ struct FlowApp: App {
     var body: some Scene {
         // main window
         WindowGroup {
-            if ProcessInfo.processInfo.arguments.contains("--recording-preview") || ProcessInfo.processInfo.arguments.contains("--stream-insertion-preview") || ProcessInfo.processInfo.arguments.contains("--voice-simulation") {
+            if ProcessInfo.processInfo.arguments.contains("--privacy-audit") || ProcessInfo.processInfo.arguments.contains("--recording-preview") || ProcessInfo.processInfo.arguments.contains("--stream-insertion-preview") || ProcessInfo.processInfo.arguments.contains("--voice-simulation") {
                 EmptyView()
             } else if ProcessInfo.processInfo.arguments.contains("--demo") {
                 DemoView().frame(minWidth: 1000, minHeight: 760)

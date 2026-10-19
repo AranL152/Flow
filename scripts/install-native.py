@@ -10,6 +10,7 @@ import signal
 import subprocess
 import tempfile
 import time
+from native_signing import DEFAULT_CONFIG, SigningIdentity, satisfies
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_APP = ROOT / '.build/Flow Attachments.app'
@@ -47,9 +48,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app', type=Path, default=DEFAULT_APP)
     parser.add_argument('--no-launch', action='store_true')
+    parser.add_argument('--signing-config', type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument('--migrate-signing', action='store_true', help='One-time migration from the old ad-hoc signer')
     args = parser.parse_args()
     app = args.app.resolve()
-    print('This command rebuilds and replaces the app. Ad-hoc signed updates can require new privacy grants.', flush=True)
+    identity = SigningIdentity(args.signing_config)
+    identity.unlock()
+    print('Rebuilding with the persistent Flow signing certificate.', flush=True)
     print('To open the existing app without changing its identity: python3 scripts/launch-native.py', flush=True)
     run('cargo', 'build', '--manifest-path', str(ROOT / 'flow-core/Cargo.toml'), '--quiet', cwd=ROOT)
     binary_dir = Path(subprocess.check_output(['swift', 'build', '--show-bin-path'], cwd=ROOT, text=True).strip())
@@ -60,20 +65,22 @@ def main():
     with tempfile.TemporaryDirectory(prefix='flow-native-install-') as temp:
         scratch = Path(temp)
         staged = scratch / app.name
-        run('python3', str(ROOT / 'scripts/build-demo.py'), '--native', '--skip-build', '--bundle', str(staged), cwd=ROOT)
+        run('python3', str(ROOT / 'scripts/build-demo.py'), '--native', '--skip-build', '--bundle', str(staged),
+            '--signing-config', str(identity.config), cwd=ROOT)
         old_helper = app / 'Contents/Helpers/FlowHelper'
         new_helper = staged / 'Contents/Helpers/FlowHelper'
-        if old_helper.exists() and same_code(old_helper, new_helper, scratch):
+        if old_helper.exists() and satisfies(old_helper, identity.requirement('com.flow.flow.helper')) and same_code(old_helper, new_helper, scratch):
             shutil.copy2(old_helper, new_helper)
             print('Preserved the unchanged hotkey helper and its code signature.')
         info_path = staged / 'Contents/Info.plist'
         info = plistlib.loads(info_path.read_bytes())
         info['FlowBuildCommit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        info['FlowSigningCertificate'] = identity.fingerprint
         info_path.write_bytes(plistlib.dumps(info))
         resource = staged / 'Contents/Resources/Flow_FlowApp.bundle'
         if not resource.is_dir(): raise SystemExit('Packaged app resources are missing; installation stopped.')
-        run('codesign', '--force', '--sign', '-', str(staged))
-        run('codesign', '--verify', '--deep', '--strict', str(staged))
+        identity.sign_bundle(staged)
+        identity.check_upgrade(app, staged, migrate=args.migrate_signing)
         # Replacing the directory leaves a complete rollback copy in this repo.
         backup = ROOT / '.build/native-app-backups' / time.strftime('%Y%m%d-%H%M%S') / app.name
         incoming = app.with_name(app.name + '.incoming')
@@ -92,10 +99,13 @@ def main():
         run('codesign', '--verify', '--deep', '--strict', str(app))
         installed_hash = hashlib.sha256((app / 'Contents/MacOS/Flow').read_bytes()).hexdigest()
         print(f'Updated: {app}\nBuild: {info["FlowBuildCommit"]}\nSHA256: {installed_hash}\nBackup: {backup}')
-        print('Ad-hoc signing: macOS may require permission to be re-enabled for this updated build.')
+        print('Verified certificate-backed identity. Future updates retain this identity and existing privacy grants.')
         if not args.no_launch:
             run('open', str(app))
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except (RuntimeError, OSError, ValueError, KeyError) as error:
+        raise SystemExit(str(error))

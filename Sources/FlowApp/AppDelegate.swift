@@ -14,6 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var streamVerification: StreamInsertionVerification?
     func applicationDidFinishLaunching(_: Notification) {
         DispatchQueue.main.async { @MainActor in
+            if ProcessInfo.processInfo.arguments.contains("--privacy-audit") {
+                NSApp.setActivationPolicy(.accessory)
+                Task { await NativePrivacyAudit.run() }
+                return
+            }
             NSApp.setActivationPolicy(.regular)
             if ProcessInfo.processInfo.arguments.contains("--voice-simulation") {
                 let args = ProcessInfo.processInfo.arguments

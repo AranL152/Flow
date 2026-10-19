@@ -5,6 +5,7 @@ import argparse
 import plistlib
 import shutil
 import subprocess
+from native_signing import DEFAULT_CONFIG, SigningIdentity
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,11 +16,13 @@ def main():
     parser.add_argument("--bundle", type=Path, help="Separate app bundle path, preserving existing running demos")
     parser.add_argument("--open", action="store_true")
     parser.add_argument("--native", action="store_true", help="Build the normal Flow app with live captions")
+    parser.add_argument('--signing-config', type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--recording-preview", action="store_true", help="Open an isolated preview of the real recording UI")
     parser.add_argument("--speech-fixture", type=Path)
     parser.add_argument("--verification-report", type=Path)
     parser.add_argument("--verification-snapshot", type=Path, help="PNG filename prefix for the isolated preview")
     args = parser.parse_args()
+    identity = SigningIdentity(args.signing_config) if args.native else None
     if not args.skip_build:
         subprocess.run(["cargo", "build", "--offline"], cwd=ROOT/"flow-core", check=True)
         # SwiftPM does not track the Rust archive passed as an unsafe linker flag.
@@ -52,7 +55,10 @@ def main():
             "NSSpeechRecognitionUsageDescription":"Flow uses on-device speech recognition for live captions.",
             "FlowDemoEndpoint":args.endpoint}
     with (contents/"Info.plist").open("wb") as output: plistlib.dump(info, output)
-    subprocess.run(["codesign","--force","--deep","--sign","-",str(bundle)], check=True)
+    if identity:
+        identity.sign_bundle(bundle)
+    else:
+        subprocess.run(["codesign","--force","--deep","--sign","-",str(bundle)], check=True)
     print(bundle)
     if args.open:
         launch = ["open", "-n", str(bundle), "--args"]

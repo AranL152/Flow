@@ -120,6 +120,7 @@ final class AppState: ObservableObject {
     init(attachmentDownloads: AttachmentDownloads? = nil) {
         self.attachments = AttachmentSession(downloads: attachmentDownloads ?? AttachmentDownloads())
         let demoOnly = ProcessInfo.processInfo.arguments.contains("--demo")
+            || ProcessInfo.processInfo.arguments.contains("--privacy-audit")
             || ProcessInfo.processInfo.arguments.contains("--recording-preview")
             || ProcessInfo.processInfo.arguments.contains("--stream-insertion-preview")
             || ProcessInfo.processInfo.arguments.contains("--voice-simulation")
