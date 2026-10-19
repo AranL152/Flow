@@ -773,21 +773,18 @@ final class AppState: ObservableObject {
                 try Task.checkCancellation()
                 if let transcript { self.finalizeLiveTranscript(transcript) }
                 self.log("⏱️ [CLOUD SPEECH] Finalization: \(stopped.duration(to: .now)); real-time transcript: \(transcript != nil)")
-                var receivedFirstDelta = false
-                var finalOutput = ""
-                for try await event in DictationPresentation.smooth(self.engine.transcribeStream(appName: appName, finalTranscript: transcript)) {
+                let source = self.measuredStream(self.engine.transcribeStream(appName: appName, finalTranscript: transcript),
+                                                 label: "FINAL MODEL", began: stopped)
+                for try await event in DictationPresentation.reconcile(source, replacing: self.streamedOutput) {
                     try Task.checkCancellation()
                     switch event {
-                    case .delta(let delta):
-                        if !receivedFirstDelta {
-                            receivedFirstDelta = true
-                            self.log("⏱️ [CLOUD SPEECH] Stop to first displayed LLM delta: \(stopped.duration(to: .now))")
-                        }
-                        finalOutput += delta
-                        guard LiveRewritePresentation.canDisplay(finalOutput, replacing: self.streamedOutput) else { continue }
-                        self.streamedOutput = finalOutput
+                    case .text(let text):
+                        // Attachment-only completion restores the captured
+                        // selection once, in the validated completion branch.
+                        guard !text.isEmpty else { continue }
+                        self.streamedOutput = text
                         self.isStreamingOutput = true
-                        if let insertion, Date().timeIntervalSince(lastWrite) >= 0.04 {
+                        if let insertion, Date().timeIntervalSince(lastWrite) >= 0.025 {
                             guard insertion.apply(output: self.streamedOutput) else { throw CancellationError() }
                             lastWrite = Date()
                         }
@@ -822,8 +819,10 @@ final class AppState: ObservableObject {
                         self.streamedOutput = text
                         self.errorMessage = nil
                         completed = true
+                        self.log("⏱️ [PRESENTATION] Final text visible: \(stopped.duration(to: .now)) after Stop")
                         await self.attachments.automaticallyStage(engine: self.engine, insertionUnchanged: self.streamTargetUnchanged)
                         self.showAttachmentPreview()
+                        self.log("⏱️ [ATTACHMENT] Final staging finished: \(stopped.duration(to: .now)) after Stop")
                     }
                 }
                 if !completed { throw NSError(domain: "Flow.Stream", code: 4,
@@ -851,21 +850,22 @@ final class AppState: ObservableObject {
         liveRewriteTask = Task { @MainActor [weak self] in
             guard let self else { return }
             var submitted = ""
+            var retried = ""
             while !Task.isCancelled && self.isRecording && self.streamTargetUnchanged {
                 do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
                 guard let candidate = LiveRewritePresentation.candidate(from: self.liveRewriteTranscript),
                       candidate != submitted else { continue }
                 submitted = candidate
-                var output = ""
                 let began = ContinuousClock.now
                 do {
-                    for try await event in DictationPresentation.smooth(self.engine.previewRewriteStream(text: candidate,
-                            appName: self.targetApplication?.localizedName ?? self.currentApp)) {
+                    let source = self.engine.previewRewriteStream(text: candidate,
+                            appName: self.targetApplication?.localizedName ?? self.currentApp)
+                    let bounded = LiveRewritePresentation.bounded(source)
+                    let measured = self.measuredStream(bounded, label: "LIVE MODEL", began: began)
+                    for try await event in DictationPresentation.reconcile(measured, replacing: self.streamedOutput) {
                         try Task.checkCancellation()
                         guard self.isRecording, self.streamTargetUnchanged else { return }
-                        if case .delta(let delta) = event {
-                            output += delta
-                            guard LiveRewritePresentation.canDisplay(output, replacing: self.streamedOutput) else { continue }
+                        if case .text(let output) = event {
                             if self.streamedOutput.isEmpty { self.log("⏱️ [LIVE REWRITE] First LLM word while recording: \(began.duration(to: .now)) after request") }
                             self.streamedOutput = output
                             self.isStreamingOutput = true
@@ -876,9 +876,38 @@ final class AppState: ObservableObject {
                     }
                 } catch {
                     if Task.isCancelled { return }
-                    self.log("⚠️ [LIVE REWRITE] Preview unavailable; retaining final dictation fallback")
+                    self.log("⚠️ [LIVE REWRITE] Preview ended after \(began.duration(to: .now)): \(error.localizedDescription)")
+                    // Retry an unchanged phrase once, including if the speaker
+                    // pauses. New ASR text always gets a fresh request budget.
+                    if retried != candidate { retried = candidate; submitted = "" }
                 }
             }
+        }
+    }
+
+    /// Log model/network time separately from presentation and native insertion.
+    /// No transcript, model text or contact details are added to these timings.
+    private func measuredStream(_ source: AsyncThrowingStream<DictationStreamEvent, Error>,
+                                label: String, began: ContinuousClock.Instant) -> AsyncThrowingStream<DictationStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { @MainActor [weak self] in
+                var first = true
+                do {
+                    for try await event in source {
+                        try Task.checkCancellation()
+                        if case .delta(let text) = event, !text.isEmpty, first {
+                            first = false
+                            self?.log("⏱️ [\(label)] First actual model text: \(began.duration(to: .now))")
+                        }
+                        if case .completed = event {
+                            self?.log("⏱️ [\(label)] Model complete: \(began.duration(to: .now))")
+                        }
+                        continuation.yield(event)
+                    }
+                    continuation.finish()
+                } catch { continuation.finish(throwing: error) }
+            }
+            continuation.onTermination = { @Sendable _ in task.cancel() }
         }
     }
 
