@@ -16,13 +16,27 @@ public enum LiveRewritePresentation {
             if let range = transcript.range(of: pending, options: .regularExpression) {
                 text = String(transcript[..<range.lowerBound])
             } else {
-                // Recognition often revises its newest word. Leave it in the
-                // live caption until the next update confirms more context.
-                text = transcript.split(whereSeparator: \.isWhitespace).dropLast().joined(separator: " ")
+                text = transcript
             }
         }
-        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.split(whereSeparator: \.isWhitespace).count >= 3 ? text : nil
+        // Only punctuation followed by a word boundary ends a sentence. An
+        // unfinished clause stays in the caption, never in a rewrite request.
+        // Exclude decimal numbers, initials and common spoken abbreviations.
+        let boundary = #"(?i)(?<!\bMr)(?<!\bMrs)(?<!\bMs)(?<!\bDr)(?<!\bProf)(?<!\bSr)(?<!\bJr)(?<!\be\.g)(?<!\bi\.e)[.!?]+[\"”’']*(?=\s|$)"#
+        guard let pattern = try? NSRegularExpression(pattern: boundary),
+              let match = pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).last,
+              let range = Range(match.range, in: text) else { return nil }
+        let end = range.upperBound
+        text = String(text[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.split(whereSeparator: \.isWhitespace).count >= 2 ? text : nil
+    }
+
+    /// Once a completed sentence has been rewritten, only append new completed
+    /// sentences. Earlier ASR revisions wait for authoritative final processing.
+    public static func nextSentence(from transcript: String, after submitted: String) -> String? {
+        guard let complete = candidate(from: transcript), complete.hasPrefix(submitted) else { return nil }
+        let next = complete.dropFirst(submitted.count).trimmingCharacters(in: .whitespacesAndNewlines)
+        return next.isEmpty ? nil : next
     }
 
     /// Keep the previous rewrite visible while a replacement stream catches up;

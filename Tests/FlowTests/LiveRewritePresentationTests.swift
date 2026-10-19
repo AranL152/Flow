@@ -4,7 +4,8 @@ import XCTest
 final class LiveRewritePresentationTests: XCTestCase {
     func testNewestRecognitionWordWaitsForMoreContext() {
         XCTAssertNil(LiveRewritePresentation.candidate(from: "Can you review"))
-        XCTAssertEqual(LiveRewritePresentation.candidate(from: "Can you review the slides"), "Can you review the")
+        XCTAssertNil(LiveRewritePresentation.candidate(from: "Can you review the slides"))
+        XCTAssertEqual(LiveRewritePresentation.candidate(from: "Can you review the slides. And maybe"), "Can you review the slides.")
     }
 
     func testPendingAndRecognizedCommandsAreWithheldFromLiveRewrite() {
@@ -15,8 +16,16 @@ final class LiveRewritePresentationTests: XCTestCase {
     }
 
     func testOrdinaryMentionsAreRetainedAndOversizeSpeechWaitsForFinalPath() {
-        XCTAssertEqual(LiveRewritePresentation.candidate(from: "I use Flow every day"), "I use Flow every")
+        XCTAssertNil(LiveRewritePresentation.candidate(from: "I use Flow every day"))
         XCTAssertNil(LiveRewritePresentation.candidate(from: String(repeating: "word ", count: 1100)))
+    }
+
+    func testOnlyNewCompletedSentencesAreSubmitted() {
+        XCTAssertEqual(LiveRewritePresentation.nextSentence(from: "Here is the report. Let me know.", after: "Here is the report."), "Let me know.")
+        XCTAssertNil(LiveRewritePresentation.nextSentence(from: "Here is the report. Let me", after: "Here is the report."))
+        XCTAssertNil(LiveRewritePresentation.nextSentence(from: "Here are the reports. Let me know.", after: "Here is the report."))
+        XCTAssertNil(LiveRewritePresentation.candidate(from: "Please ask Dr. Smith to review"))
+        XCTAssertNil(LiveRewritePresentation.candidate(from: "The cost is 3.25 dollars"))
     }
 
     func testReplacementDoesNotRestartTheVisiblePhraseFromItsFirstWord() {
