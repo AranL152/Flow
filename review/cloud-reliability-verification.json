@@ -1,0 +1,153 @@
+{
+  "status": "passed",
+  "scope": "Recorded generated speech played through Mac speakers into the physical microphone. Actual installed app, actual Fn helper, real cloud ASR/LLM and native unsent Messages drafts. No local replay or mocked successful inference. The outage case intentionally points only the speech socket at an unavailable loopback port; cloud rewriting remains real.",
+  "installed_client_build": "2840b0e7f6ae1a012c3006e920a898e475f0df6a",
+  "deployed_worker_version": "459d9286-e0e8-4862-9ac2-b68123bcd6a5",
+  "final_normal_runs": [
+    {
+      "label": "normal_1",
+      "checks": {
+        "processing_completed": true,
+        "message_populated": true,
+        "nothing_sent": true,
+        "captions_while_speaking": true,
+        "model_streamed_while_speaking": true,
+        "genuine_final_asr_handoff": true,
+        "native_attachment_present": true
+      },
+      "asr_final_source": "cloud",
+      "first_recognizer_caption_after_speech_seconds": 0.8963212191694336,
+      "stop_to_staging_finished_seconds": 1.7475370168685913,
+      "caption_updates_before_stop": 26,
+      "cloud_updates_received": 8,
+      "on_device_updates_received": 19,
+      "draft_updates_before_stop": 13,
+      "native_attachment_objects_after": 1,
+      "processing_completed": true,
+      "recording_saved_privately": true,
+      "send_generated": false
+    },
+    {
+      "label": "normal_2",
+      "checks": {
+        "processing_completed": true,
+        "message_populated": true,
+        "nothing_sent": true,
+        "captions_while_speaking": true,
+        "model_streamed_while_speaking": true,
+        "genuine_final_asr_handoff": true,
+        "native_attachment_present": true
+      },
+      "asr_final_source": "cloud",
+      "first_recognizer_caption_after_speech_seconds": 0.8996744308395384,
+      "stop_to_staging_finished_seconds": 2.0067639350891113,
+      "caption_updates_before_stop": 30,
+      "cloud_updates_received": 9,
+      "on_device_updates_received": 22,
+      "draft_updates_before_stop": 13,
+      "native_attachment_objects_after": 1,
+      "processing_completed": true,
+      "recording_saved_privately": true,
+      "send_generated": false
+    },
+    {
+      "label": "normal_3",
+      "checks": {
+        "processing_completed": true,
+        "message_populated": true,
+        "nothing_sent": true,
+        "captions_while_speaking": true,
+        "model_streamed_while_speaking": true,
+        "genuine_final_asr_handoff": true,
+        "native_attachment_present": true
+      },
+      "asr_final_source": "cloud",
+      "first_recognizer_caption_after_speech_seconds": 1.1625321729127807,
+      "stop_to_staging_finished_seconds": 1.9304890632629395,
+      "caption_updates_before_stop": 27,
+      "cloud_updates_received": 7,
+      "on_device_updates_received": 21,
+      "draft_updates_before_stop": 13,
+      "native_attachment_objects_after": 1,
+      "processing_completed": true,
+      "recording_saved_privately": true,
+      "send_generated": false
+    }
+  ],
+  "final_outage_run": {
+    "label": "speech_socket_unavailable",
+    "checks": {
+      "processing_completed": true,
+      "message_populated": true,
+      "nothing_sent": true,
+      "on_device_captions_observed": true,
+      "fallback_used": true,
+      "native_attachment_present": true
+    },
+    "asr_final_source": "on_device",
+    "first_recognizer_caption_after_speech_seconds": 1.094473618133728,
+    "stop_to_staging_finished_seconds": 3.0131200551986694,
+    "caption_updates_before_stop": 18,
+    "cloud_updates_received": 0,
+    "on_device_updates_received": 19,
+    "draft_updates_before_stop": 12,
+    "native_attachment_objects_after": 1,
+    "processing_completed": true,
+    "recording_saved_privately": true,
+    "send_generated": false
+  },
+  "earlier_findings": {
+    "daily_free_quota_exhausted": "Confirmed in Cloudflare provider logs; hidden as a generic upgrade error. User enabled paid usage.",
+    "slow_cloud_finalization": {
+      "run_6_stop_to_staging_seconds": 11.47,
+      "run_7_stop_to_staging_seconds": 5.66,
+      "result": "Both ultimately completed but failed the real-time handoff check. Added a completed on-device ASR backup and independent word agreement."
+    },
+    "slow_formatter_start": {
+      "run_8_stop_to_staging_seconds": 5.79,
+      "result": "Real cloud final and output completed; exceeded latency budget. Added one delayed first-token backup request."
+    }
+  },
+  "deployed_numeric_stream": {
+    "checks": {
+      "complete_real_stream": true,
+      "time_preserved": true,
+      "amount_preserved": true,
+      "email_preserved": true,
+      "no_errors": true,
+      "multiple_model_deltas": true
+    },
+    "seconds": 1.150377459,
+    "model_chunks": 20,
+    "output": "Professor Chen, I would like to submit the report by 3:15 tomorrow. The total amount is 204.50 dollars, and you can reach me at my email address, which is aran@example.invalid.",
+    "errors": []
+  },
+  "validation": {
+    "swift_tests_passed": 69,
+    "worker_tests_passed": 140,
+    "worker_typecheck_passed": true,
+    "rust_stream_tests_passed": 5,
+    "native_recorder_typecheck_passed": true,
+    "persistent_grants": {
+      "Accessibility": true,
+      "Microphone": true,
+      "SystemPolicyDesktopFolder": true,
+      "SpeechRecognition": true
+    }
+  },
+  "visual_review": {
+    "live_caption_box_and_active_waveform_visible": true,
+    "ordinary_speech_white_while_listening": true,
+    "completed_flow_command_white_then_purple": true,
+    "transcribing_pill_has_spinner_instead_of_audio_bars": true,
+    "real_moby_dick_screenshot_in_native_composer": true,
+    "popup_shows_quoted_ocr_match": true
+  },
+  "limits": [
+    "Small sequential test on one Mac using one generated voice; not a human-voice accuracy benchmark or an uptime guarantee.",
+    "Caption times are recognizer callback timings, not measured first painted pixels.",
+    "A confidence score is a heuristic; low-confidence disagreeing recognizers still require saved-audio ASR.",
+    "A delayed backup may incur one additional model inference; already-started binding work may continue until cancellation is possible."
+  ],
+  "privacy": "Raw recordings, screenshots, OCR filenames, recipient labels, logs and signing secrets remain outside Git under .build or the private signing directory."
+}

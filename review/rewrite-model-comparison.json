@@ -1,0 +1,78 @@
+{
+  "scope": "Nine sequential real Workers AI REST requests using production formatting prompts and synthetic text. Small diagnostic comparison, not a benchmark. No microphone or Messages edits.",
+  "decision": "Retain Llama 3.3 70B. The 8B model was not consistently faster; the 3B model leaked transcription tags. Numeric output was reconstructed from exact choices.delta.content after identifying the convenience response coercion.",
+  "cases": [
+    {
+      "model": "@cf/meta/llama-3.1-8b-instruct-fp8",
+      "case": "alex",
+      "first_token_ms": 519.568167,
+      "complete_ms": 846.516542,
+      "output": "hey alex, here is the opening page",
+      "exit": 0
+    },
+    {
+      "model": "@cf/meta/llama-3.1-8b-instruct-fp8",
+      "case": "deadline",
+      "first_token_ms": 1314.7480829999997,
+      "complete_ms": 2729.081666,
+      "output": "Professor Chen, I won't be able to complete the report tonight. Would it be possible to submit it by 3:15 tomorrow instead?",
+      "exit": 0
+    },
+    {
+      "model": "@cf/meta/llama-3.1-8b-instruct-fp8",
+      "case": "facts",
+      "first_token_ms": 2876.850666,
+      "complete_ms": 3524.2995,
+      "output": "My email is aran@example.invalid and the total is $204.50.",
+      "exit": 0
+    },
+    {
+      "model": "@cf/meta/llama-3.2-3b-instruct",
+      "case": "alex",
+      "first_token_ms": 226.212125,
+      "complete_ms": 271.18795799999964,
+      "output": "hey alex, just wanted to share the opening page with you",
+      "exit": 0
+    },
+    {
+      "model": "@cf/meta/llama-3.2-3b-instruct",
+      "case": "deadline",
+      "first_token_ms": 209.77566599999963,
+      "complete_ms": 311.46970799999974,
+      "output": "<TRANSCRIPTION>\nProfessor Chen, I am unable to complete the report tonight. Would it be possible to submit it by 3:15 tomorrow instead?",
+      "exit": 0
+    },
+    {
+      "model": "@cf/meta/llama-3.2-3b-instruct",
+      "case": "facts",
+      "first_token_ms": 201.21187500000025,
+      "complete_ms": 370.10812500000065,
+      "output": "<TRANSCRIPTION>\nI'm sending you my email address, aran@example.invalid, and the total comes out to be $204.50.",
+      "exit": 0
+    },
+    {
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "case": "alex",
+      "first_token_ms": 642.5394170000001,
+      "complete_ms": 802.2280419999994,
+      "output": "hey alex, here's the opening page",
+      "exit": 0
+    },
+    {
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "case": "deadline",
+      "first_token_ms": 333.6612920000004,
+      "complete_ms": 719.9125000000013,
+      "output": "Professor Chen, I will not be able to finish the report tonight. May I submit it by 3:15 tomorrow instead?",
+      "exit": 0
+    },
+    {
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "case": "facts",
+      "first_token_ms": 553.8900840000007,
+      "complete_ms": 840.2911670000002,
+      "output": "My email is aran@example.invalid and the total comes out to be $204.50.",
+      "exit": 0
+    }
+  ]
+}
