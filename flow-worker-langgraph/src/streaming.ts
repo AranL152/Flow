@@ -2,6 +2,7 @@ import type { Env } from "./types.js";
 import type { TranscriptionRequestInput } from "./requests.js";
 import { buildFormattingPrompt, buildInstructionPrompt } from "./prompts.js";
 import { aiFailure, boundedAI } from "./ai-availability.js";
+import { responsiveRewrite } from "./rewrite-start.js";
 
 /** Normalize real provider tokens to a small, version-independent SSE contract. */
 export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: AbortSignal): ReadableStream<Uint8Array> {
@@ -29,7 +30,9 @@ export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: A
         if (value.error) throw aiFailure(value.error);
         const choice = value.choices?.[0];
         if (choice?.finish_reason && choice.finish_reason !== "stop") throw new Error("The model stopped before finishing. Please retry with a shorter message.");
-        const delta = value.response ?? choice?.delta?.content;
+        // Workers AI may JSON-coerce its convenience `response` field: e.g.
+        // 204.50 becomes numeric 204.5. The OpenAI delta keeps the exact text.
+        const delta = choice?.delta?.content ?? value.response;
         if (delta !== undefined && delta !== null && typeof delta !== "string") throw new Error("Invalid model token");
         if (delta) {
           text += delta;
@@ -88,7 +91,8 @@ export async function formatStream(env: Env, input: TranscriptionRequestInput, s
     } });
   }
   const model = (env.CHAT_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast") as "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-  const result = await boundedAI(() => env.AI.run(model, {
+  return responsiveRewrite(async attemptSignal => {
+    const result = await boundedAI(() => env.AI.run(model, {
     messages: [
       { role: "system", content: instruction ? buildInstructionPrompt(input.personalization, input.appContext) : buildFormattingPrompt(input.mode, input.appContext, input.shortcutsTriggered, input.personalization) },
       { role: "user", content: instruction ?? `<TRANSCRIPTION>\n${input.text}\n</TRANSCRIPTION>` },
@@ -96,9 +100,14 @@ export async function formatStream(env: Env, input: TranscriptionRequestInput, s
     stream: true,
     max_tokens: 700,
     temperature: 0.2,
-  }), 6000, late => { void (late as ReadableStream<Uint8Array>)?.cancel?.().catch(() => {}); });
-  if (!result || typeof (result as ReadableStream).getReader !== "function") {
-    throw new Error("The provider did not return a stream");
-  }
-  return normalizeStream(result as ReadableStream<Uint8Array>, signal);
+    }), 6000, late => { void (late as ReadableStream<Uint8Array>)?.cancel?.().catch(() => {}); });
+    if (!result || typeof (result as ReadableStream).getReader !== "function") {
+      throw new Error("The provider did not return a stream");
+    }
+    if (attemptSignal.aborted) {
+      await (result as ReadableStream<Uint8Array>).cancel().catch(() => {});
+      throw new Error("Dictation cancelled");
+    }
+    return normalizeStream(result as ReadableStream<Uint8Array>, attemptSignal);
+  }, signal);
 }

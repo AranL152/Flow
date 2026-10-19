@@ -21,6 +21,16 @@ describe("real streaming", () => {
     const text = await read(normalizeStream(source('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n')));
     expect(text).toContain('event: done\ndata: {"text":"Hello"}');
   });
+  it("preserves numeric spelling from exact deltas when Workers AI coerces response", async () => {
+    const text = await read(normalizeStream(source(
+      'data: {"response":3,"choices":[{"delta":{"content":"3"}}]}\n\n' +
+      'data: {"response":":","choices":[{"delta":{"content":":"}}]}\n\n' +
+      'data: {"response":15,"choices":[{"delta":{"content":"15"}}]}\n\n' +
+      'data: {"response":204.5,"choices":[{"delta":{"content":" $204.50"}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n')));
+    expect(text).toContain('event: done\ndata: {"text":"3:15 $204.50"}');
+    expect(text).not.toContain('event: error');
+  });
   it.each([
     'data: {"response":"partial"}\n\n',
     'data: {"error":"failure"}\n\n',
