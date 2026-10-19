@@ -35,8 +35,15 @@ pub struct TranscriptionRequest {
 }
 
 /// Parameters for completion (used in combined transcription+completion flow)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StableRewritePrefix {
+    pub source: String,
+    pub output: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct CompletionParams {
+    pub stable_prefix: Option<StableRewritePrefix>,
     /// Writing mode (e.g., "formal", "casual", "very_casual", "excited")
     pub mode: String,
     /// App context for formatting

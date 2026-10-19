@@ -11,6 +11,37 @@ const finished = (text: string) => new ReadableStream<Uint8Array>({ start(c) {
 } });
 
 describe("native streamed dictation", () => {
+  it("keeps finalized sentence output and formats only the remaining message", async () => {
+    const run = vi.fn().mockResolvedValue(finished("Please send feedback."));
+    const output = await new Response(dictationStream({ AI: { run } } as unknown as Env,
+      { ...input, audioB64: "", text: "Yo here is the report. Lemme know. Flow find quarterly report Q2 2026",
+        attachmentCommandsEnabled: true, attachmentSearchEnabled: true,
+        stablePrefix: { source: "Yo, here is the report.", output: "Here is the report for your review." } })).text();
+    expect(run.mock.calls[0][1].messages[1].content).toBe("<TRANSCRIPTION>\nLemme know.\n</TRANSCRIPTION>");
+    expect(output).toContain('event: done\ndata: {"text":"Here is the report for your review. Please send feedback."}');
+    expect(output).toContain('"query":"quarterly report Q2 2026"');
+  });
+
+  it("skips a second model call when all spoken message sentences were finalized", async () => {
+    const run = vi.fn();
+    const output = await new Response(dictationStream({ AI: { run } } as unknown as Env,
+      { ...input, audioB64: "", text: "Yo here is the report Flow attach my clipboard",
+        attachmentCommandsEnabled: true, stablePrefix: { source: "Yo, here is the report.", output: "Here is the report." } })).text();
+    expect(run).not.toHaveBeenCalled();
+    expect(output).toContain('event: done\ndata: {"text":"Here is the report."}');
+    expect(output).toContain('"source":"clipboard"');
+  });
+
+  it("rejects stale speech prefixes, partial sentences and prefixes containing the command", async () => {
+    for (const source of ["Yo here is the wrong report.", "Yo here is", "Yo here is the report. Flow attach my clipboard."]) {
+      const run = vi.fn().mockResolvedValue(finished("A fresh rewrite."));
+      const output = await new Response(dictationStream({ AI: { run } } as unknown as Env,
+        { ...input, audioB64: "", text: "Yo here is the report. Flow attach my clipboard",
+          attachmentCommandsEnabled: true, stablePrefix: { source, output: "Stale output." } })).text();
+      expect(run.mock.calls[0][1].messages[1].content).toBe("<TRANSCRIPTION>\nYo here is the report.\n</TRANSCRIPTION>");
+      expect(output).not.toContain("Stale output.");
+    }
+  });
   it("streams just the message and preserves search terms outside the model prompt", async () => {
     const run = vi.fn().mockResolvedValue(finished("here's the file"));
     const output = await new Response(dictationStream({ AI: { run } } as unknown as Env,

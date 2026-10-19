@@ -217,6 +217,8 @@ struct WhisperParams {
 
 #[derive(Debug, Serialize)]
 struct WorkerCompletionParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stable_prefix: Option<super::transcription::StableRewritePrefix>,
     mode: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     app_context: Option<String>,
@@ -234,6 +236,7 @@ struct WorkerCompletionParams {
 impl From<CompletionParams> for WorkerCompletionParams {
     fn from(params: CompletionParams) -> Self {
         Self {
+            stable_prefix: params.stable_prefix,
             mode: params.mode,
             app_context: params.app_context,
             shortcuts_triggered: params.shortcuts_triggered,

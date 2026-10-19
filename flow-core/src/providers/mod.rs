@@ -26,6 +26,7 @@ pub use streaming::{
     CompletionChunk, CompletionStream, StreamingCompletionProvider, collect_stream,
 };
 pub use transcription::{
+    StableRewritePrefix,
     CompletionParams as TranscriptionCompletionParams, DictationDelta, TranscriptionProvider, TranscriptionRequest,
     TranscriptionResponse, ShortcutDefinition,
 };

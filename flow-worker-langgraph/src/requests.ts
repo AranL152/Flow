@@ -43,6 +43,7 @@ export interface TranscriptionRequestInput {
   voiceInstruction?: string;
   personalization?: string;
   autoRewritingEnabled?: boolean;
+  stablePrefix?: { source: string; output: string };
 }
 
 export interface StyleProfileRequestInput {
@@ -164,6 +165,15 @@ export function parseTranscriptionRequest(
   }
 
   const mode = completion.mode;
+  let stablePrefix: TranscriptionRequestInput["stablePrefix"];
+  if (completion.stable_prefix !== undefined) {
+    const prefix = asRecord(completion.stable_prefix);
+    if (!prefix || typeof prefix.source !== "string" || !prefix.source.trim() || prefix.source.length > MAX_TEXT_CHARS ||
+        typeof prefix.output !== "string" || !prefix.output.trim() || prefix.output.length > 12000) {
+      return err("completion.stable_prefix must contain bounded source and output text");
+    }
+    stablePrefix = { source: prefix.source, output: prefix.output };
+  }
   if (typeof mode !== "string" || mode.length === 0) {
     return err("missing completion.mode");
   }
@@ -221,6 +231,7 @@ export function parseTranscriptionRequest(
   }
 
   return ok({
+    stablePrefix,
     audioB64,
     ...(completion.attachment_commands_enabled === undefined ? {} : { attachmentCommandsEnabled: completion.attachment_commands_enabled as boolean }),
     ...(completion.attachment_search_enabled === undefined ? {} : { attachmentSearchEnabled: completion.attachment_search_enabled as boolean }),

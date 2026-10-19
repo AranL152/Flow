@@ -11,7 +11,7 @@ use std::os::raw::{c_char, c_void};
 use std::path::PathBuf;
 use std::ptr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -83,6 +83,15 @@ pub struct FlowHandle {
     /// Last dictation, waiting for the text the user finally sent
     pending_dictation: Mutex<Option<PendingDictation>>,
     pending_attachment: Mutex<Option<crate::attachments::AttachmentPlan>>,
+    live_rewrite: Mutex<Option<LiveRewritePrefix>>,
+    live_rewrite_epoch: AtomicU64,
+}
+
+struct LiveRewritePrefix {
+    app: Option<String>,
+    contact: Option<String>,
+    mode: String,
+    prefix: crate::providers::StableRewritePrefix,
 }
 
 /// Demo conversation state, requests and explicit Send receipts. Caller serializes
@@ -392,6 +401,8 @@ pub extern "C" fn flow_init(db_path: *const c_char) -> *mut FlowHandle {
         pending_sample_rate: Mutex::new(None),
         pending_dictation: Mutex::new(None),
         pending_attachment: Mutex::new(None),
+        live_rewrite: Mutex::new(None),
+        live_rewrite_epoch: AtomicU64::new(0),
     };
 
     load_persisted_configuration(&mut handle);
@@ -519,6 +530,8 @@ pub extern "C" fn flow_start_recording_with_contact(handle: *mut FlowHandle, con
 fn start_recording(handle: *mut FlowHandle, native_contact: Option<Option<String>>) -> bool {
     if handle.is_null() { return false; }
     let handle = unsafe { &*handle };
+    handle.live_rewrite_epoch.fetch_add(1, Ordering::SeqCst);
+    *handle.live_rewrite.lock() = None;
 
     // Capture the active Messages contact at recording START (before any focus changes)
     // This ensures we get the correct contact context for the transcription
@@ -714,6 +727,9 @@ fn transcribe_with_audio(
     // Local Whisper ignores these params, but cloud fallback still needs them.
     // The worker receives an explicit switch so raw dictation works in Auto mode.
     let completion_params = Some(TranscriptionCompletionParams {
+        stable_prefix: handle.live_rewrite.lock().take().filter(|cached|
+            cached.app == app_name && cached.contact == captured && cached.mode == mode.worker_name()
+        ).map(|cached| cached.prefix),
         mode: mode.worker_name().to_string(),
         app_context: format_context.clone(),
         shortcuts_triggered: Vec::new(),
@@ -1044,6 +1060,7 @@ pub extern "C" fn flow_preview_rewrite_stream(
 ) -> *mut c_char {
     if handle.is_null() { return ptr::null_mut(); }
     let engine = unsafe { &*handle };
+    let epoch = engine.live_rewrite_epoch.load(Ordering::SeqCst);
     let Some(text) = c_str(text).map(str::trim).filter(|s| !s.is_empty() && s.chars().count() <= 5000) else { return ptr::null_mut(); };
     if !uses_worker(&engine.storage) || engine.storage.get_setting(SETTING_USE_LOCAL_TRANSCRIPTION).ok().flatten().as_deref() == Some("true") { return ptr::null_mut(); }
     let app = c_str(app_name);
@@ -1055,6 +1072,7 @@ pub extern "C" fn flow_preview_rewrite_stream(
     let category = style::category_key(recipient, Some(engine.app_tracker.current_category()));
     let contact = recipient_contact_key(recipient, captured.as_deref());
     let params = TranscriptionCompletionParams {
+        stable_prefix: None,
         mode: mode.worker_name().into(), app_context: format_context(app, recipient),
         shortcuts_triggered: Vec::new(),
         shortcut_definitions: engine.shortcuts.get_all().into_iter().map(|s| crate::providers::ShortcutDefinition {
@@ -1072,7 +1090,25 @@ pub extern "C" fn flow_preview_rewrite_stream(
         callback(delta.as_ptr(), address as *mut c_void)
     }) as crate::providers::DictationDelta;
     match engine.runtime.block_on(engine.transcription.transcribe_stream(request, on_delta)) {
-        Ok(response) => response.completed_text.map(into_c_string).unwrap_or(ptr::null_mut()),
+        Ok(response) => {
+            let Some(output) = response.completed_text.filter(|s| !s.trim().is_empty()) else { return ptr::null_mut(); };
+            let finished_sentence = text.trim_end_matches(|c: char| c.is_whitespace() || ['"', '”', '’', '\''].contains(&c))
+                .ends_with(['.', '!', '?']);
+            if !finished_sentence { return into_c_string(output); }
+            let mut cached = engine.live_rewrite.lock();
+            if engine.live_rewrite_epoch.load(Ordering::SeqCst) != epoch { return into_c_string(output); }
+            if let Some(previous) = cached.as_mut().filter(|c|
+                c.app.as_deref() == app && c.contact == captured && c.mode == mode.worker_name()) {
+                previous.prefix.source.push(' '); previous.prefix.source.push_str(text);
+                previous.prefix.output.push(' '); previous.prefix.output.push_str(output.trim());
+                if previous.prefix.source.chars().count() > 5000 || previous.prefix.output.chars().count() > 12000 { *cached = None; }
+            } else {
+                *cached = Some(LiveRewritePrefix { app: app.map(str::to_owned), contact: captured,
+                    mode: mode.worker_name().into(), prefix: crate::providers::StableRewritePrefix {
+                        source: text.into(), output: output.trim().into() } });
+            }
+            into_c_string(output)
+        },
         Err(_) => ptr::null_mut(), // Preview failure must not overwrite final pipeline errors.
     }
 }
@@ -2743,6 +2779,7 @@ pub extern "C" fn flow_format_text(
 
     let result = if uses_worker(&handle.storage) {
         let params = TranscriptionCompletionParams {
+            stable_prefix: None,
             mode: mode.worker_name().to_string(),
             app_context: context,
             shortcuts_triggered: triggered.into_iter().map(|s| s.replacement).collect(),
@@ -3473,6 +3510,54 @@ mod dictation_stream_tests {
         let text = unsafe { CStr::from_ptr(delta) }.to_str().unwrap();
         if !text.is_empty() { state.chunks.push(text.into()); }
         !state.cancel
+    }
+
+    #[test]
+    fn final_stream_carries_scoped_completed_sentences_into_history() {
+        struct PreservedFixture;
+        #[async_trait::async_trait]
+        impl TranscriptionProvider for PreservedFixture {
+            fn name(&self) -> &'static str { "preserved sentence fixture" }
+            fn is_configured(&self) -> bool { true }
+            async fn transcribe(&self, _: TranscriptionRequest) -> crate::error::Result<TranscriptionResponse> { panic!("buffered fixture"); }
+            async fn transcribe_stream(&self, request: TranscriptionRequest, callback: DictationDelta) -> crate::error::Result<TranscriptionResponse> {
+                let source = request.final_transcript.unwrap();
+                let params = request.completion.unwrap();
+                if request.audio.is_empty() {
+                    assert!(params.stable_prefix.is_none());
+                    assert!(callback("Here is the report."));
+                    Ok(TranscriptionResponse { text: source, completed_text: Some("Here is the report.".into()),
+                        attachment: None, confidence: None, language: None, duration_ms: 0, segments: None })
+                } else {
+                    let prefix = params.stable_prefix.expect("completed sentence was lost");
+                    assert_eq!(prefix.source, "Yo here is the report.");
+                    assert_eq!(prefix.output, "Here is the report.");
+                    assert!(callback(&prefix.output));
+                    Ok(TranscriptionResponse { text: source, completed_text: Some(prefix.output), attachment: None,
+                        confidence: None, language: None, duration_ms: 1000, segments: None })
+                }
+            }
+        }
+        let db = CString::new(":memory:").unwrap();
+        let handle = flow_init(db.as_ptr());
+        let engine = unsafe { &mut *handle };
+        engine.transcription = Arc::new(PreservedFixture);
+        *engine.captured_contact.lock() = Some("Fixture Person".into());
+        let source = CString::new("Yo here is the report.").unwrap();
+        let app = CString::new("Messages").unwrap();
+        let mut state = CallbackState { chunks: vec![], cancel: false };
+        let preview = flow_preview_rewrite_stream(handle, source.as_ptr(), app.as_ptr(), receive, &mut state as *mut _ as *mut c_void);
+        assert!(!preview.is_null()); flow_free_string(preview);
+        assert!(engine.live_rewrite.lock().is_some());
+        assert!(engine.storage.get_recent_history(10).unwrap().is_empty());
+        let result = transcribe_with_audio(engine, vec![0; 32000], 16000, Some("Messages".into()),
+            Some(Arc::new(|_| true)), Some("Yo here is the report.".into())).unwrap();
+        assert_eq!(result, "Here is the report.");
+        assert!(engine.live_rewrite.lock().is_none(), "cache crossed dictation boundaries");
+        assert_eq!(engine.pending_dictation.lock().as_ref().unwrap().flow_output, result);
+        assert_eq!(engine.storage.get_recent_history(10).unwrap()[0].text, result);
+        assert!(engine.storage.get_style_examples(10).unwrap().is_empty(), "dictation alone trained a rule");
+        flow_destroy(handle);
     }
 
     #[test]

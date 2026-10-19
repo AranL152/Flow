@@ -5,7 +5,7 @@ import { aiFailure, boundedAI } from "./ai-availability.js";
 import { responsiveRewrite } from "./rewrite-start.js";
 
 /** Normalize real provider tokens to a small, version-independent SSE contract. */
-export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: AbortSignal): ReadableStream<Uint8Array> {
+export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: AbortSignal, prefix = ""): ReadableStream<Uint8Array> {
   const reader = upstream.getReader();
   const encoder = new TextEncoder();
   let cancelled = false;
@@ -14,7 +14,7 @@ export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: A
   if (signal?.aborted) abort();
   return new ReadableStream<Uint8Array>({
     async start(controller) {
-      let text = "";
+      let text = prefix;
       let buffer = "";
       let data: string[] = [];
       let finished = false;
@@ -47,6 +47,7 @@ export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: A
         else if (value.startsWith("data:")) data.push(value.slice(5).replace(/^ /, ""));
       };
       try {
+        if (prefix) emit("delta", { text: prefix });
         while (!cancelled && !finished) {
           const chunk = await boundedAI(() => reader.read(), 5000);
           if (chunk.done) break;
@@ -81,9 +82,9 @@ export function normalizeStream(upstream: ReadableStream<Uint8Array>, signal?: A
   });
 }
 
-export async function formatStream(env: Env, input: TranscriptionRequestInput, signal?: AbortSignal, instruction?: string) {
-  if (input.autoRewritingEnabled === false) {
-    const text = input.text ?? "";
+export async function formatStream(env: Env, input: TranscriptionRequestInput, signal?: AbortSignal, instruction?: string, prefix = "") {
+  if (input.autoRewritingEnabled === false || (prefix && !input.text?.trim())) {
+    const text = prefix || input.text || "";
     return new ReadableStream<Uint8Array>({ start(controller) {
       const encoder = new TextEncoder();
       controller.enqueue(encoder.encode(`event: delta\ndata: ${JSON.stringify({ text })}\n\nevent: done\ndata: ${JSON.stringify({ text: text.trim() })}\n\n`));
@@ -108,6 +109,6 @@ export async function formatStream(env: Env, input: TranscriptionRequestInput, s
       await (result as ReadableStream<Uint8Array>).cancel().catch(() => {});
       throw new Error("Dictation cancelled");
     }
-    return normalizeStream(result as ReadableStream<Uint8Array>, attemptSignal);
+    return normalizeStream(result as ReadableStream<Uint8Array>, attemptSignal, prefix ? prefix.trimEnd() + " " : "");
   }, signal);
 }
