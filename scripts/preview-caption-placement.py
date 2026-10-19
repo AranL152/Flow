@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Open a silent layout preview using existing native build objects; no app install."""
 from pathlib import Path
+import argparse
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--messages', action='store_true', help='Anchor silent captions to the real Messages composer without editing it.')
+    args = parser.parse_args()
     work = ROOT / '.build/caption-placement-preview'
     work.mkdir(parents=True, exist_ok=True)
     binary_dir = Path(subprocess.check_output(
@@ -27,11 +31,15 @@ def main():
         result = subprocess.run(command, cwd=ROOT, stdout=log, stderr=log)
     if result.returncode:
         raise SystemExit((work / 'compile.log').read_text())
+    arguments = [str(executable), '--voice-simulation']
+    if args.messages:
+        arguments.append('--messages')
     with (work / 'stdout.log').open('w') as out, (work / 'stderr.log').open('w') as err:
-        process = subprocess.Popen([str(executable), '--voice-simulation'], cwd=ROOT,
+        process = subprocess.Popen(arguments, cwd=ROOT,
                                    stdout=out, stderr=err, start_new_session=True)
     (work / 'pid').write_text(str(process.pid))
-    print('Silent preview opened. Use Bottom / Top, Expand draft, and Replay. No audio, capture, or Messages changes.')
+    print('Silent Messages preview opened.' if args.messages else 'Silent layout preview opened. Use Bottom / Top and Expand draft.')
+    print('Replay is available. No audio, capture, or Messages changes.')
 
 
 if __name__ == '__main__':

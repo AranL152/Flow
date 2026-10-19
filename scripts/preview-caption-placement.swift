@@ -128,17 +128,70 @@ struct CaptionPlacementScene: View {
     }
 }
 
+struct MessagesCaptionControls: View {
+    @ObservedObject var model: CaptionPlacementPreview
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "speaker.slash.fill").foregroundStyle(.purple)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Silent Messages preview").font(.system(size: 13, weight: .semibold))
+                Text("Simulated captions · your draft stays unchanged")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Button("Replay") { model.replay() }
+            Button("Close") { NSApplication.shared.terminate(nil) }
+        }.padding(14)
+    }
+}
+
 @main
 struct CaptionPlacementRunner {
     @MainActor private static var window: NSWindow?
     @MainActor private static var model: CaptionPlacementPreview?
+    @MainActor private static var indicator: RecordingIndicatorWindow?
     @MainActor static func main() {
         // AppState's simulation mode disables global hotkeys and production observers.
         guard ProcessInfo.processInfo.arguments.contains("--voice-simulation") else { return }
         let app = NSApplication.shared
-        app.setActivationPolicy(.regular)
+        let messagesPreview = ProcessInfo.processInfo.arguments.contains("--messages")
+        app.setActivationPolicy(messagesPreview ? .accessory : .regular)
         let model = CaptionPlacementPreview()
         Self.model = model
+        if messagesPreview {
+            Task { @MainActor in
+                guard let messages = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.MobileSMS").first else {
+                    fputs("Messages must be open with a conversation selected.\n", stderr)
+                    app.terminate(nil); return
+                }
+                messages.activate(options: [.activateAllWindows])
+                try? await Task.sleep(for: .milliseconds(350))
+                guard let anchor = RecordingComposerAnchor(app: messages), anchor.frame != nil else {
+                    fputs("Cannot locate the Messages composer; no draft was changed.\n", stderr)
+                    app.terminate(nil); return
+                }
+                let indicator = RecordingIndicatorWindow(appState: model.state)
+                Self.indicator = indicator
+                indicator.prepare(near: messages)
+                model.replay()
+                indicator.show(near: messages)
+                let controls = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 490, height: 65),
+                    styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
+                controls.title = "Flow · Silent preview"
+                controls.contentView = NSHostingView(rootView: MessagesCaptionControls(model: model))
+                controls.level = .floating
+                controls.hidesOnDeactivate = false
+                controls.isReleasedWhenClosed = false
+                if let screen = NSScreen.main {
+                    controls.setFrameTopLeftPoint(NSPoint(x: screen.visibleFrame.minX + 24,
+                                                         y: screen.visibleFrame.maxY - 24))
+                }
+                controls.orderFrontRegardless()
+                Self.window = controls
+                print("Silent captions are anchored to the actual Messages composer. No audio or draft writes.")
+            }
+            app.run()
+            return
+        }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 700),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
