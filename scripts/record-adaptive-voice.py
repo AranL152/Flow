@@ -99,10 +99,18 @@ def main():
     parser.add_argument('--name', default='voice-review')
     parser.add_argument('--native', action='store_true')
     parser.add_argument('--app-log', type=Path, help='Unbuffered installed-app log, required with --native')
+    parser.add_argument('--new-test-draft', action='store_true', help='Create an unsent draft addressed to a unique example.invalid test recipient')
+    parser.add_argument('--require-realtime', action='store_true', help='Fail unless native cloud captions and a finalized real-time transcript were observed')
+    parser.add_argument('--expect-fallback', action='store_true', help='Fail unless native on-device captions survive an intentionally unavailable speech socket')
+    parser.add_argument('--expect-attachment', action='store_true', help='Fail unless a native file object is present after the test')
     parser.add_argument('--stall-request', type=int, help='Diagnostic host only: inject one stalled cloud rewrite request')
     args = parser.parse_args()
     if args.native and not args.app_log:
         parser.error('--native requires --app-log')
+    if (args.require_realtime or args.expect_fallback) and not args.native:
+        parser.error('Native caption assertions require --native')
+    if args.require_realtime and args.expect_fallback:
+        parser.error('Choose either real-time recognition or the forced fallback check')
     if args.stall_request is not None and (args.native or args.stall_request < 1):
         parser.error('--stall-request must be positive and is limited to diagnostic mode')
     if not args.native:
@@ -131,6 +139,7 @@ def main():
     duration = float(re.search(r'estimated duration:\s*([0-9.]+)', detail).group(1))
     command = [str(executable), '--recording-preview', '--output', str(work), '--speech', str(args.speech.resolve()), '--duration', str(duration)]
     if args.native: command += ['--native', '--app-log', str(args.app_log.resolve())]
+    if args.new_test_draft: command.append('--new-test-draft')
     environment = {**os.environ, 'NSUnbufferedIO': 'YES'}
     server, events = None, []
     if args.stall_request:
@@ -145,7 +154,22 @@ def main():
             (work / 'injected-fault.json').write_text(json.dumps(events, indent=2) + '\n')
     if not (work / 'timing.json').is_file():
         raise SystemExit(f'Voice test did not finish. Inspect private log: {work / "errors.log"}')
+    report = json.loads((work / 'timing.json').read_text())
+    checks = {'processing_completed': report['processing_completed'],
+              'message_populated': report['final_characters'] > 0,
+              'nothing_sent': report['send_generated'] is False}
+    if args.require_realtime:
+        checks.update(cloud_captions_observed=report['native_cloud_caption_updates'] > 0,
+                      real_time_final_transcript=report['native_final_realtime_transcript'])
+    if args.expect_fallback:
+        checks.update(on_device_captions_observed=report['native_on_device_caption_updates'] > 0,
+                      fallback_used=not report['native_final_realtime_transcript'])
+    if args.expect_attachment: checks['native_attachment_present'] = report['attachments_after'] > 0
+    report['checks'] = checks
+    (work / 'timing.json').write_text(json.dumps(report, indent=2) + '\n')
     print(f'Recording and timings: {work}')
+    if not all(checks.values()):
+        raise SystemExit('Voice verification failed: ' + ', '.join(k for k, v in checks.items() if not v))
 
 
 if __name__ == '__main__':

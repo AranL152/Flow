@@ -78,10 +78,12 @@ public final class CloudSpeechStream {
     private var finishing = false
     private var closeSent = false
     private var terminal = false
+    private let captions = SpeechCaptionDelivery()
 
     public init(endpoint: URL? = nil) {
         let configured = ProcessInfo.processInfo.environment["FLOW_SPEECH_ENDPOINT"].flatMap(URL.init(string:))
         self.endpoint = endpoint ?? configured ?? URL(string: "wss://base10-proxy.old-resonance-ed75.workers.dev/speech-stream")!
+        captions.onText = { [weak self] text in self?.onText?(text) }
     }
 
     public func start() {
@@ -146,6 +148,7 @@ public final class CloudSpeechStream {
 
     public func cancel() {
         generation = UUID(); active = false; terminal = true
+        captions.cancel()
         outgoing?.finish(); outgoing = nil
         sender?.cancel(); receiver?.cancel(); timeout?.cancel()
         sender = nil; receiver = nil; timeout = nil
@@ -204,7 +207,7 @@ public final class CloudSpeechStream {
                     let previous = self.transcript.text
                     try self.transcript.receive(data, closing: self.closeSent)
                     self.responseCount += 1
-                    if !self.transcript.text.isEmpty, self.transcript.text != previous { self.onText?(self.transcript.text) }
+                    if !self.transcript.text.isEmpty, self.transcript.text != previous { self.captions.submit(self.transcript.text) }
                     if self.transcript.closed {
                         guard let final = self.transcript.finalText else { self.fail(); return }
                         self.terminal = true; self.timeout?.cancel()

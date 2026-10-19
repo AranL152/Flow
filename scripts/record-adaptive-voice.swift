@@ -36,6 +36,50 @@ private func fnTap() {
     }
 }
 
+/// Native New Message preserves the previous addressed draft. Never clear it,
+/// type Return, or use a real recipient for an automated voice check.
+@MainActor
+private func newTestDraft(_ messages: NSRunningApplication) async throws {
+    func failure(_ text: String) -> NSError { NSError(domain: "Flow.VoiceReview", code: 2, userInfo: [NSLocalizedDescriptionKey: text]) }
+    let root = AXUIElementCreateApplication(messages.processIdentifier)
+    func findRecipient(_ element: AXUIElement, _ depth: Int = 0) -> AXUIElement? {
+        guard depth < 18 else { return nil }
+        if attribute(element, kAXIdentifierAttribute) as? String == "To:" { return element }
+        if ["messageBodyField", "ConversationList", "TranscriptCollectionView"].contains(attribute(element, kAXIdentifierAttribute) as? String ?? "") { return nil }
+        for child in attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+            if let found = findRecipient(child, depth + 1) { return found }
+        }
+        return nil
+    }
+    let oldWindows = attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? []
+    if let oldField = oldWindows.compactMap({ composer(in: $0) }).first,
+       AXEditMonitorService.textValueIncludingEmpty(oldField)?.isEmpty == false,
+       Flow(dbPath: ":memory:").activeMessagesContact == nil {
+        throw failure("Address the existing draft before making a new one; its text was left unchanged.")
+    }
+    func key(_ code: CGKeyCode, flags: CGEventFlags = []) {
+        for down in [true, false] {
+            let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)
+            event?.flags = flags; event?.post(tap: .cghidEventTap)
+        }
+    }
+    key(45, flags: .maskCommand)
+    let release = CGEvent(keyboardEventSource: nil, virtualKey: 55, keyDown: false)
+    release?.type = .flagsChanged; release?.flags = []; release?.post(tap: .cghidEventTap)
+    try await Task.sleep(for: .milliseconds(400))
+    guard let recipient = findRecipient(root),
+          (attribute(recipient, kAXValueAttribute) as? String ?? "").isEmpty else {
+        throw failure("New Message did not expose an empty recipient field. No text was cleared.")
+    }
+    let address = "flow-voice-check-\(UUID().uuidString.lowercased())@example.invalid"
+    guard AXUIElementSetAttributeValue(recipient, kAXValueAttribute as CFString, address as CFString) == .success else {
+        throw failure("Could not set the test recipient.")
+    }
+    AXUIElementSetAttributeValue(recipient, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+    key(48)
+    try await Task.sleep(for: .milliseconds(400))
+}
+
 @main
 struct RecordAdaptiveVoice {
     @MainActor static func main() {
@@ -67,6 +111,7 @@ struct RecordAdaptiveVoice {
         }
         messages.activate(options: [.activateAllWindows])
         try await Task.sleep(for: .milliseconds(350))
+        if args.contains("--new-test-draft") { try await newTestDraft(messages) }
         let root = AXUIElementCreateApplication(messages.processIdentifier)
         let windows = attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? []
         guard let field = windows.compactMap({ composer(in: $0) }).first,
@@ -86,6 +131,13 @@ struct RecordAdaptiveVoice {
         try await Task.sleep(for: .milliseconds(180))
         guard let focused = AXEditMonitorService.getFocusedTextElement(pid: messages.processIdentifier), CFEqual(focused, field) else {
             throw failure("Could not focus the message body safely.")
+        }
+        // Click establishes native focus, then put the caret precisely at the
+        // end. A coordinate click alone can land inside the first word.
+        var caret = CFRange(location: (AXEditMonitorService.textValueIncludingEmpty(field)! as NSString).length, length: 0)
+        guard let caretValue = AXValueCreate(.cfRange, &caret),
+              AXUIElementSetAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, caretValue) == .success else {
+            throw failure("Could not position the draft cursor safely.")
         }
         let (volumeTask, volumePipe) = try process(["/usr/bin/osascript", "-e", "output volume of (get volume settings)", "-e", "output muted of (get volume settings)"], capture: true)
         let volumeText = String(decoding: volumePipe!.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
@@ -131,6 +183,7 @@ struct RecordAdaptiveVoice {
         }
         defer { observer.cancel() }
         try await Task.sleep(for: .milliseconds(600))
+        let recordingRequested = Date().timeIntervalSince(began)
         if let state { state.startRecording() } else { fnTap() }
         let micDeadline = Date().addingTimeInterval(12)
         while state?.engine.isRecording != true && !freshLog().contains("engine.startRecording:") {
@@ -155,8 +208,23 @@ struct RecordAdaptiveVoice {
         }
         observer.cancel(); await observer.value
         let finalCount = AXEditMonitorService.textValueIncludingEmpty(field)?.count ?? -1
+        let cloudUpdates = freshLog().components(separatedBy: "\n").filter { $0.contains("[LIVE CAPTION] Cloud update:") }
+        let deviceUpdates = freshLog().components(separatedBy: "\n").filter { $0.contains("[LIVE CAPTION] On-device update:") }
+        let finalRealtime = freshLog().contains("real-time transcript: true")
+        let captionPattern = try NSRegularExpression(pattern: #"\[LIVE CAPTION\] (Cloud|On-device) update: ([0-9]+) characters at ([0-9.]+) seconds"#)
+        let log = freshLog() as NSString
+        let nativeCaptions: [[String: Any]] = captionPattern.matches(in: log as String, range: NSRange(location: 0, length: log.length)).map {
+            ["source": log.substring(with: $0.range(at: 1)),
+             "characters": Int(log.substring(with: $0.range(at: 2))) ?? 0,
+             "seconds": (Double(log.substring(with: $0.range(at: 3))) ?? 0) + recordingRequested]
+        }
         let report: [String: Any] = ["scope": native ? "Installed native app, actual helper Fn events, physical microphone and real cloud inference." : "Production AppState in an isolated diagnostic host with in-memory history; real microphone, real cloud inference, production HUD and actual Messages insertion. Not the installed bundle or helper.",
             "native": native, "microphone_ready_seconds": microphoneReady, "speech_start_seconds": speechStart,
+            "native_cloud_caption_updates": cloudUpdates.count, "native_final_realtime_transcript": finalRealtime,
+            "native_on_device_caption_updates": deviceUpdates.count,
+            "native_caption_updates": nativeCaptions,
+            "first_native_caption_after_speech_seconds": nativeCaptions.first.map { ($0["seconds"] as! Double) - speechStart } ?? -1,
+            "native_caption_updates_before_stop": nativeCaptions.filter { ($0["seconds"] as! Double) < stopped }.count,
             "stop_seconds": stopped, "processing_finished_seconds": processingFinished ?? -1,
             "stop_to_processing_finished_seconds": processingFinished.map { $0 - stopped } ?? -1,
             "first_draft_change_after_speech_seconds": updates.first.map { ($0["seconds"] as! Double) - speechStart } ?? -1,

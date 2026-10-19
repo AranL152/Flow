@@ -847,6 +847,7 @@ final class AppState: ObservableObject {
                 if !completed { throw NSError(domain: "Flow.Stream", code: 4,
                     userInfo: [NSLocalizedDescriptionKey: "The stream ended before the draft was complete"]) }
             } catch {
+                self.log("⚠️ [CLOUD DICTATION] Ended without completion: \(error.localizedDescription)")
                 self.attachments.dismiss()
                 self.attachmentPreview?.hide()
                 let restored = insertion?.cancel(restoringOriginal: true) ?? false
@@ -963,10 +964,11 @@ final class AppState: ObservableObject {
             guard !self.cloudHasTranscript else { return }
             self.liveRewriteTranscript = text
             if self.liveCaptionsEnabled { self.liveTranscript = text }
+            self.log("⏱️ [LIVE CAPTION] On-device update: \(text.count) characters at \(self.recordingBegan.duration(to: .now))")
             if final && !self.recordingUsesCloudSpeech { self.finalizeLiveTranscript(text) }
         }
         speechCaptions.onStatus = { [weak self] status in
-            guard let self, !self.recordingUsesCloudSpeech else { return }
+            guard let self, !self.recordingUsesCloudSpeech || self.cloudSpeech.failureDescription != nil else { return }
             self.liveCaptionStatus = status
         }
         captionTask = Task { [weak self] in

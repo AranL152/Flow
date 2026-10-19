@@ -52,6 +52,24 @@ final class CloudSpeechTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testCaptionBurstDeliversNewestRevisionAndCancellationDropsOldSpeech() async throws {
+        let delivery = SpeechCaptionDelivery()
+        var displayed: [String] = []
+        delivery.onText = { displayed.append($0) }
+        delivery.submit("Here is the opening page. Flow add")
+        delivery.submit("Here is the opening page.")
+        delivery.submit("Here is the opening page. Flow add the screenshot")
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(displayed, ["Here is the opening page. Flow add the screenshot"])
+        delivery.submit("Old recording")
+        delivery.cancel()
+        delivery.submit("New recording")
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(displayed.last, "New recording")
+        XCTAssertFalse(displayed.contains("Old recording"))
+    }
+
     func testUnicodeAndOutputLimit() throws {
         var speech = CloudSpeechTranscript()
         try speech.receive(result("Hey Alex 👋 — café?", final: true), closing: true)

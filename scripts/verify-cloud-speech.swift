@@ -11,11 +11,12 @@ struct VerifyCloudSpeech {
         let report = URL(fileURLWithPath: args[2])
         let expectedWord = args.count > 3 ? args[3] : "issue"
         let speech = CloudSpeechStream()
-        var updates = 0, revisions: [String] = []
-        speech.onText = { text in updates += 1; revisions.append(text) }
-        speech.start()
         let clock = ContinuousClock()
         let began = clock.now
+        var updates = 0, revisions: [String] = []
+        var updateTimes: [Double] = []
+        speech.onText = { text in updates += 1; revisions.append(text); updateTimes.append(milliseconds(began.duration(to: clock.now))) }
+        speech.start()
         let values: [Float] = stride(from: 0, to: pcm.count, by: 2).map {
             Float(Int16(bitPattern: UInt16(pcm[$0]) | UInt16(pcm[$0 + 1]) << 8)) / 32767
         }
@@ -56,6 +57,7 @@ struct VerifyCloudSpeech {
         let success = results.allSatisfy { $0["valid"] as? Bool == true } && (transcript == nil || liveUpdates > 0)
         let result: [String: Any] = ["status": success ? "passed" : "failed", "final_cloud_transcript": transcript ?? "",
             "live_updates_before_stop": liveUpdates, "finalization_ms": finalize,
+            "first_live_caption_ms": updateTimes.first ?? -1, "caption_update_times_ms": updateTimes,
             "cloud_failure": speech.failureDescription ?? "", "minimum_confidence": speech.minimumConfidence,
             "revisions": revisions,
             "audio_seconds": Double(values.count) / 16000, "cases": results,
