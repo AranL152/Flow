@@ -69,7 +69,12 @@ pub async fn consume(response: reqwest::Response, duration_ms: u64, on_delta: Di
 }
 
 pub async fn consume_with_attachments(response: reqwest::Response, duration_ms: u64, on_delta: DictationDelta, require_attachment_protocol: bool) -> Result<TranscriptionResponse> {
-    if !response.status().is_success() { return Err(failure(format!("Streaming worker returned HTTP {}", response.status().as_u16()))); }
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let detail = response.json::<serde_json::Value>().await.ok()
+            .and_then(|value| value["error"].as_str().map(|text| text.chars().take(500).collect::<String>()));
+        return Err(failure(format!("Streaming worker returned HTTP {status}{}", detail.map(|text| format!(": {text}")).unwrap_or_default())));
+    }
     if !response.headers().get("content-type").and_then(|s| s.to_str().ok()).is_some_and(|s| s.contains("text/event-stream")) {
         return Err(failure("The worker did not return an event stream"));
     }

@@ -1,5 +1,17 @@
 import Foundation
 
+public struct CloudSpeechServiceFailure: LocalizedError {
+    public let code: String
+    public var errorDescription: String? {
+        switch code {
+        case "quota_exhausted": return "Cloudflare's daily AI allowance is exhausted. Enable Workers Paid or wait for the daily reset."
+        case "rate_limited": return "Cloudflare is temporarily rate limited. Please retry shortly."
+        case "timeout": return "Cloudflare speech did not respond in time. Using recorded audio."
+        default: return "Cloudflare speech is temporarily unavailable. Using recorded audio."
+        }
+    }
+}
+
 /// Revisions replace the current interim segment; finalized segments accumulate.
 /// Only the server's closing Metadata can promote the result to final dictation.
 struct CloudSpeechTranscript {
@@ -14,7 +26,7 @@ struct CloudSpeechTranscript {
         guard data.count <= 131072,
               let event = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = event["type"] as? String else { throw CloudSpeechStream.failure("Invalid speech response") }
-        if type == "Error" { throw CloudSpeechStream.failure("Cloud speech failed") }
+        if type == "Error" { throw CloudSpeechServiceFailure(code: event["code"] as? String ?? "unavailable") }
         if type == "Metadata" {
             if closing { closed = true }
             return
@@ -48,6 +60,7 @@ public final class CloudSpeechStream {
     public private(set) var responseCount = 0
     public private(set) var sentPackets = 0
     public private(set) var failureDescription: String?
+    public private(set) var serviceFailure: CloudSpeechServiceFailure?
     public var minimumConfidence: Double { transcript.minimumConfidence }
     private let endpoint: URL
     private var socket: URLSessionWebSocketTask?
@@ -74,7 +87,7 @@ public final class CloudSpeechStream {
     public func start() {
         cancel()
         transcript = CloudSpeechTranscript(); sentFrames = 0; responseCount = 0; sentPackets = 0
-        failureDescription = nil
+        failureDescription = nil; serviceFailure = nil
         active = true; finishing = false; closeSent = false; terminal = false
     }
 
@@ -170,6 +183,10 @@ public final class CloudSpeechStream {
                 self.closeSent = true
                 try await socket.send(.string("{\"type\":\"CloseStream\"}"))
             } catch {
+                // An upgraded service may send an actionable Error frame then
+                // close. Let the receiver consume it before a failed audio send
+                // replaces that reason with a generic transport error.
+                if self?.responseCount == 0 { try? await Task.sleep(for: .milliseconds(150)) }
                 guard let self, self.generation == epoch else { return }; self.fail(error)
             }
         }
@@ -184,9 +201,10 @@ public final class CloudSpeechStream {
                     case .string(let value): data = Data(value.utf8)
                     @unknown default: throw Self.failure("Unsupported speech response")
                     }
+                    let previous = self.transcript.text
                     try self.transcript.receive(data, closing: self.closeSent)
                     self.responseCount += 1
-                    if !self.transcript.text.isEmpty { self.onText?(self.transcript.text) }
+                    if !self.transcript.text.isEmpty, self.transcript.text != previous { self.onText?(self.transcript.text) }
                     if self.transcript.closed {
                         guard let final = self.transcript.finalText else { self.fail(); return }
                         self.terminal = true; self.timeout?.cancel()
@@ -204,6 +222,7 @@ public final class CloudSpeechStream {
     private func fail(_ error: Error? = nil) {
         guard !terminal else { return }
         failureDescription = error?.localizedDescription ?? "Cloud speech did not finish; using recorded audio."
+        serviceFailure = error as? CloudSpeechServiceFailure
         cancel(); onFailure?()
     }
 

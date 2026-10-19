@@ -39,6 +39,8 @@ final class AppState: ObservableObject {
     private var liveRewriteTranscript = ""
     private var recordingUsesCloudSpeech = false
     private var cloudHasTranscript = false
+    private var lastOnDeviceTranscript = ""
+    private var recordingBegan = ContinuousClock.now
     private var captionTask: Task<Void, Never>?
     var isVoiceSimulation: Bool { ProcessInfo.processInfo.arguments.contains("--voice-simulation") }
     var liveCaptionsEnabled: Bool {
@@ -560,7 +562,8 @@ final class AppState: ObservableObject {
         liveTranscript = ""
         liveRewriteTask?.cancel(); liveRewriteTranscript = ""
         liveTranscriptFinalized = false; captionPresentationActive = false
-        cloudSpeech.cancel(); cloudHasTranscript = false
+        cloudSpeech.cancel(); cloudHasTranscript = false; lastOnDeviceTranscript = ""
+        recordingBegan = .now
         recordingUsesCloudSpeech = false
         liveCaptionStatus = liveCaptionsEnabled ? "Listening…" : "Live captions are off"
 
@@ -594,11 +597,20 @@ final class AppState: ObservableObject {
                         self.cloudHasTranscript = true
                         self.liveRewriteTranscript = text
                         if self.liveCaptionsEnabled { self.liveTranscript = text }
+                        self.log("⏱️ [LIVE CAPTION] Cloud update: \(text.count) characters at \(self.recordingBegan.duration(to: .now))")
                     }
                     self.cloudSpeech.onFailure = { [weak self] in
                         guard let self else { return }
                         self.cloudHasTranscript = false
-                        if !self.speechCaptions.isListening { self.liveCaptionStatus = "Live captions unavailable" }
+                        if !self.lastOnDeviceTranscript.isEmpty {
+                            self.liveRewriteTranscript = self.lastOnDeviceTranscript
+                            if self.liveCaptionsEnabled { self.liveTranscript = self.lastOnDeviceTranscript }
+                        }
+                        self.liveCaptionStatus = self.speechCaptions.isListening ? "Listening…" : "Live captions unavailable"
+                        if self.cloudSpeech.serviceFailure?.code == "quota_exhausted" {
+                            self.liveRewriteTask?.cancel()
+                            self.errorMessage = self.cloudSpeech.failureDescription
+                        }
                         self.log("⚠️ [CLOUD SPEECH] \(self.cloudSpeech.failureDescription ?? "Unavailable"); frames=\(self.cloudSpeech.sentFrames), packets=\(self.cloudSpeech.sentPackets), responses=\(self.cloudSpeech.responseCount)")
                     }
                     self.cloudSpeech.start()
@@ -772,9 +784,15 @@ final class AppState: ObservableObject {
                 let stopped = ContinuousClock.now
                 let transcript = self.recordingUsesCloudSpeech ? await self.cloudSpeech.finish(from: self.engine) : nil
                 try Task.checkCancellation()
+                if let failure = self.cloudSpeech.serviceFailure, failure.code == "quota_exhausted" { throw failure }
                 if let transcript { self.finalizeLiveTranscript(transcript) }
                 self.log("⏱️ [CLOUD SPEECH] Finalization: \(stopped.duration(to: .now)); real-time transcript: \(transcript != nil)")
-                let source = self.measuredStream(self.engine.transcribeStream(appName: appName, finalTranscript: transcript),
+                let bounded = LiveRewritePresentation.bounded(self.engine.transcribeStream(appName: appName, finalTranscript: transcript),
+                                                               idle: .seconds(12), total: .seconds(30), failure: { _ in
+                    NSError(domain: "Flow.Stream", code: 5, userInfo: [NSLocalizedDescriptionKey:
+                        "Cloud dictation stopped responding. The draft was not completed; please retry."])
+                })
+                let source = self.measuredStream(bounded,
                                                  label: "FINAL MODEL", began: stopped)
                 for try await event in DictationPresentation.reconcile(source, replacing: self.streamedOutput) {
                     try Task.checkCancellation()
@@ -940,7 +958,9 @@ final class AppState: ObservableObject {
         captionTask?.cancel(); speechCaptions.cancel()
         guard liveCaptionsEnabled || recordingUsesStreaming else { return }
         speechCaptions.onText = { [weak self] text, final in
-            guard let self, !self.cloudHasTranscript, !self.liveTranscriptFinalized else { return }
+            guard let self, !self.liveTranscriptFinalized else { return }
+            self.lastOnDeviceTranscript = text
+            guard !self.cloudHasTranscript else { return }
             self.liveRewriteTranscript = text
             if self.liveCaptionsEnabled { self.liveTranscript = text }
             if final && !self.recordingUsesCloudSpeech { self.finalizeLiveTranscript(text) }

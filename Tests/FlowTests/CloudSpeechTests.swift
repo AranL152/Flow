@@ -40,6 +40,18 @@ final class CloudSpeechTests: XCTestCase {
         }
     }
 
+    func testQuotaAndTransientFailuresKeepTheirActionableReason() throws {
+        for code in ["quota_exhausted", "rate_limited", "timeout", "unavailable"] {
+            var speech = CloudSpeechTranscript()
+            let data = try JSONSerialization.data(withJSONObject: ["type": "Error", "code": code])
+            XCTAssertThrowsError(try speech.receive(data, closing: false)) { error in
+                XCTAssertEqual((error as? CloudSpeechServiceFailure)?.code, code)
+                if code == "quota_exhausted" { XCTAssertTrue(error.localizedDescription.contains("Workers Paid")) }
+            }
+            XCTAssertNil(speech.finalText)
+        }
+    }
+
     func testUnicodeAndOutputLimit() throws {
         var speech = CloudSpeechTranscript()
         try speech.receive(result("Hey Alex 👋 — café?", final: true), closing: true)

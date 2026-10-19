@@ -14,7 +14,8 @@ extension LiveRewritePresentation {
     /// A speculative request must not hold newer speech hostage to a long HTTP
     /// timeout. Cancellation reaches the native receiver and Rust's heartbeat.
     public static func bounded(_ source: AsyncThrowingStream<DictationStreamEvent, Error>,
-                               idle: Duration = .seconds(2), total: Duration = .seconds(6)) -> AsyncThrowingStream<DictationStreamEvent, Error> {
+                               idle: Duration = .seconds(2), total: Duration = .seconds(6),
+                               failure: @escaping @Sendable (LiveRewriteStreamError) -> Error = { $0 }) -> AsyncThrowingStream<DictationStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let progress = PreviewProgress()
             let receiving = Task {
@@ -32,9 +33,9 @@ extension LiveRewritePresentation {
             let watching = Task {
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
-                    if let failure = await progress.expiration(idle: idle, total: total) {
+                    if let expired = await progress.expiration(idle: idle, total: total) {
                         receiving.cancel()
-                        continuation.finish(throwing: failure)
+                        continuation.finish(throwing: failure(expired))
                         return
                     }
                     if await progress.hasEnded { return }
