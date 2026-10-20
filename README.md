@@ -17,7 +17,7 @@ want it to do. You review the result and press Send yourself.
 
 ## Demo
 
-**[Watch / download the Flow demo — 28 seconds, MP4](https://github.com/AranL152/Flow/releases/download/demo/FLOW-DEMO.mp4)**
+https://github.com/user-attachments/assets/804ffa1a-71e1-47f6-8d7b-9a12a432a3a5
 
 A walkthrough in Messages: casual speech becomes a professional reply, a Flow
 Command finds the Q2 report by its contents, and the named PDF appears in the
@@ -28,6 +28,7 @@ The recording uses scripted speech captions and formatted text for consistent
 presentation. Document search and native Messages attachment insertion are real;
 the clip is a product walkthrough, not an inference-latency benchmark.
 
+[Full-quality MP4](https://github.com/AranL152/Flow/releases/download/demo/FLOW-DEMO.mp4) ·
 [Demo release](https://github.com/AranL152/Flow/releases/tag/demo) ·
 [Demo and verification notes](docs/demo.md)
 

@@ -2,8 +2,10 @@
 
 ## Messages walkthrough
 
-[Watch / download the 28-second demo](https://github.com/AranL152/Flow/releases/download/demo/FLOW-DEMO.mp4)
-([release page](https://github.com/AranL152/Flow/releases/tag/demo)).
+https://github.com/user-attachments/assets/804ffa1a-71e1-47f6-8d7b-9a12a432a3a5
+
+[Full-quality MP4](https://github.com/AranL152/Flow/releases/download/demo/FLOW-DEMO.mp4) ·
+[Release page](https://github.com/AranL152/Flow/releases/tag/demo).
 
 The current recording shows the native transcription overlay, a Flow Attach
 Command, local PDF content search, a named attachment in an unsent Messages
