@@ -1,4 +1,22 @@
-# Flow conversation demo
+# Flow demos
+
+## Messages walkthrough
+
+[Watch / download the 28-second demo](https://github.com/AranL152/Flow/releases/download/demo/FLOW-DEMO.mp4)
+([release page](https://github.com/AranL152/Flow/releases/tag/demo)).
+
+The current recording shows the native transcription overlay, a Flow Attach
+Command, local PDF content search, a named attachment in an unsent Messages
+draft, and alternative matches with bold matching phrases. Speech captions and
+the formatted reply are scripted for presentation; local search and native
+attachment insertion use the app components. It is not a live inference or
+latency benchmark. The private recording fixtures are not committed.
+
+The cloud-backed implementation and its separate verification are documented in
+[real-time speech](cloud-speech.md), [streamed dictation](streamed-dictation.md),
+and [attachment commands](attachment-commands.md).
+
+## Isolated conversation prototype
 
 The three-card screen is an **internal test harness**, not a replacement for
 Flow's product UI. It is available only by launching with `--demo`. The website
@@ -131,5 +149,5 @@ than presenting it as an end-to-end latency demonstration.
 Hyperframes source and capabilities checked on 2026-10-17:
 https://github.com/heygen-com/hyperframes
 
-No video has been rendered yet; the user's voice take and native footage are
-still needed for the final website video.
+The recording direction above describes the earlier three-recipient concept.
+The completed Messages walkthrough is linked at the top of this page.
